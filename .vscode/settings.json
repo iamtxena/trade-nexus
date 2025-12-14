@@ -1,0 +1,167 @@
+{
+  // ============================================
+  // TypeScript Settings (Frontend)
+  // ============================================
+  "typescript.tsdk": "frontend/node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "typescript.preferences.importModuleSpecifier": "non-relative",
+  "typescript.updateImportsOnFileMove.enabled": "always",
+
+  // ESLint
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
+  "eslint.workingDirectories": ["frontend"],
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+
+  // TypeScript/JavaScript formatting
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+
+  // ============================================
+  // Python Settings (Backend)
+  // ============================================
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+
+  // Ruff (Python linter/formatter)
+  "ruff.path": ["backend/.venv/bin/ruff"],
+  "ruff.lint.args": ["--config=backend/pyproject.toml"],
+  "ruff.format.args": ["--config=backend/pyproject.toml"],
+
+  // Python interpreter
+  "python.defaultInterpreterPath": "backend/.venv/bin/python",
+  "python.analysis.typeCheckingMode": "strict",
+  "python.analysis.autoImportCompletions": true,
+
+  // ============================================
+  // YAML formatting
+  // ============================================
+  "[yaml]": {
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2,
+    "editor.autoIndent": "advanced"
+  },
+
+  // ============================================
+  // Markdown settings
+  // ============================================
+  "[markdown]": {
+    "editor.defaultFormatter": "DavidAnson.vscode-markdownlint",
+    "editor.formatOnSave": true,
+    "editor.wordWrap": "on",
+    "editor.acceptSuggestionOnEnter": "off",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.markdownlint": "explicit"
+    }
+  },
+  "markdownlint.config": {
+    "default": true,
+    "MD013": false,
+    "MD024": false,
+    "MD033": false,
+    "MD041": false,
+    "MD046": false,
+    "MD029": false,
+    "MD007": { "indent": 2 },
+    "no-hard-tabs": true,
+    "whitespace": false
+  },
+
+  // ============================================
+  // File exclusions
+  // ============================================
+  "files.exclude": {
+    "**/.next": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "**/node_modules": false,
+    "**/*.tsbuildinfo": true,
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/.pytest_cache": true,
+    "**/.mypy_cache": true,
+    "**/.ruff_cache": true,
+    "**/backend/.venv": false
+  },
+
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/.next/**": true,
+    "**/node_modules/**": true,
+    "**/backend/.venv/**": true,
+    "**/__pycache__/**": true,
+    "**/.pytest_cache/**": true,
+    "**/.mypy_cache/**": true,
+    "**/.ruff_cache/**": true
+  },
+
+  // ============================================
+  // Search exclusions
+  // ============================================
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/bun.lock": true,
+    "**/uv.lock": true,
+    "**/out": true,
+    "**/build": true,
+    "**/dist": true,
+    "**/backend/.venv": true,
+    "**/__pycache__": true,
+    "**/.pytest_cache": true
+  },
+
+  // ============================================
+  // Package manager (Bun for frontend)
+  // ============================================
+  "npm.packageManager": "bun"
+}

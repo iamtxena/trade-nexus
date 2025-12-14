@@ -1,146 +1,185 @@
 # Trade Nexus Architecture
 
-## System Overview
+## Overview
 
-Trade Nexus is an AI orchestrator that connects multiple trading systems to enable autonomous trading with ML capabilities.
+Trade Nexus is an AI orchestrator for autonomous trading that connects Lona (strategy generator/backtester) with Live Engine (real-time execution) through ML-powered agents.
+
+## Infrastructure
+
+### Azure Resources (West Europe)
+
+| Resource | Name | Type | Purpose |
+|----------|------|------|---------|
+| Resource Group | `trade-nexus` | Microsoft.Resources/resourceGroups | Container for all resources |
+| Container Registry | `tradenexusacr` | Microsoft.ContainerRegistry/registries | Docker image storage |
+| Container Apps Environment | `trade-nexus-env` | Microsoft.App/managedEnvironments | Serverless container hosting |
+| Container App | `trade-nexus-backend` | Microsoft.App/containerApps | FastAPI backend service |
+| Log Analytics Workspace | `workspace-tradenexus1Uq1` | Microsoft.OperationalInsights/workspaces | Logging and monitoring |
+
+### Resource Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                          Trade Nexus                                 │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ┌─────────────────────┐          ┌─────────────────────┐          │
-│  │   Frontend (Next.js) │          │   Backend (FastAPI)  │          │
-│  │                      │   HTTP   │                      │          │
-│  │  - Dashboard         │◄────────►│  - ML Models         │          │
-│  │  - Agent Management  │          │  - LangGraph Agents  │          │
-│  │  - AI SDK v5 Agents  │          │  - API Endpoints     │          │
-│  └──────────┬───────────┘          └──────────┬───────────┘          │
-│             │                                  │                      │
-└─────────────┼──────────────────────────────────┼──────────────────────┘
-              │                                  │
-              │                                  │
-    ┌─────────▼───────────┐          ┌──────────▼──────────┐
-    │    External APIs     │          │      Databases       │
-    │                      │          │                      │
-    │  - Lona (MCP)        │          │  - Supabase          │
-    │  - Live Engine       │          │  - Redis (Upstash)   │
-    │  - Market Data       │          │                      │
-    └──────────────────────┘          └──────────────────────┘
-```
-
-## Data Flow
-
-### 1. Data Ingestion
-```
-Market Data APIs ──► Live Engine ──► Trade Nexus ──► ML Processing
-       │                                    │
-       └──────────► Redis Cache ◄───────────┘
-```
-
-### 2. Prediction Pipeline
-```
-Raw Data ──► Feature Engineering ──► ML Model ──► Prediction
-                                         │
-                                         ▼
-                              LLM Enhancement (Grok)
-                                         │
-                                         ▼
-                              Strategy Generation
-```
-
-### 3. Trading Decision Flow
-```
-Strategy Signal ──► Decision Agent ──► Risk Check ──► Execute/Reject
-        │                                    │
-        └────────── ML Predictions ──────────┘
+                                    ┌─────────────────────────────────────────────┐
+                                    │           Azure (West Europe)                │
+                                    │                                              │
+┌──────────────┐                    │  ┌─────────────────────────────────────┐    │
+│   GitHub     │                    │  │     Container Apps Environment       │    │
+│   Actions    │────deploy─────────▶│  │         trade-nexus-env              │    │
+└──────────────┘                    │  │                                       │    │
+       │                            │  │  ┌─────────────────────────────────┐ │    │
+       │                            │  │  │   Container App                  │ │    │
+       │ push                       │  │  │   trade-nexus-backend            │ │    │
+       ▼                            │  │  │   ┌───────────────────────────┐  │ │    │
+┌──────────────┐                    │  │  │   │  FastAPI + LangGraph      │  │ │    │
+│   Container  │                    │  │  │   │  - Predictor Agent        │  │ │    │
+│   Registry   │◀────────pull──────▶│  │  │   │  - Anomaly Agent          │  │ │    │
+│tradenexusacr │                    │  │  │   │  - Optimizer Agent        │  │ │    │
+└──────────────┘                    │  │  │   └───────────────────────────┘  │ │    │
+                                    │  │  └─────────────────────────────────┘ │    │
+                                    │  └─────────────────────────────────────┘    │
+                                    └─────────────────────────────────────────────┘
+                                                          │
+                                                          │
+                    ┌─────────────────────────────────────┼─────────────────────────────────────┐
+                    │                                     │                                     │
+                    ▼                                     ▼                                     ▼
+           ┌──────────────┐                      ┌──────────────┐                      ┌──────────────┐
+           │   Supabase   │                      │    xAI       │                      │  LangSmith   │
+           │  PostgreSQL  │                      │    Grok      │                      │ Observability│
+           └──────────────┘                      └──────────────┘                      └──────────────┘
 ```
 
-## Component Details
+## Application Architecture
 
 ### Frontend (Next.js 16)
 
-**Tech Stack:**
-- Bun runtime
-- TailwindCSS v4
-- TanStack Query v5 for server state
-- Zustand for client state
-- AI SDK v5 for TypeScript agents
+```
+frontend/
+├── src/
+│   ├── app/                    # Next.js App Router
+│   │   ├── (auth)/             # Clerk authentication routes
+│   │   ├── (dashboard)/        # Protected dashboard
+│   │   │   ├── agents/         # AI agents monitoring
+│   │   │   ├── strategies/     # Trading strategies
+│   │   │   ├── portfolio/      # Portfolio management
+│   │   │   └── settings/       # User settings
+│   │   └── api/                # API routes
+│   ├── components/             # React components
+│   │   ├── ui/                 # shadcn/ui components
+│   │   ├── agents/             # Agent-specific components
+│   │   ├── charts/             # TradingView, Recharts
+│   │   └── dashboard/          # Dashboard widgets
+│   ├── hooks/                  # TanStack Query hooks
+│   ├── stores/                 # Zustand stores
+│   ├── lib/                    # Business logic
+│   │   ├── ai/                 # AI SDK agents
+│   │   ├── supabase/           # Database client
+│   │   └── redis/              # Cache client
+│   └── types/                  # TypeScript definitions
+```
 
-**Key Components:**
-- `Orchestrator`: Coordinates multi-agent workflows
-- `StrategyAgent`: Generates trading strategies
-- `DecisionAgent`: Makes trade decisions
+**Key Technologies:**
+- Runtime: Bun
+- Framework: Next.js 16 (App Router)
+- Auth: Clerk
+- State: TanStack Query v5 (server), Zustand (client)
+- UI: TailwindCSS v4, shadcn/ui
+- Charts: TradingView, Recharts
+- AI: AI SDK v5 with xAI Grok
 
 ### Backend (FastAPI)
 
-**Tech Stack:**
-- uv package manager
-- PyTorch for ML models
-- LangGraph for agent orchestration
-- LangChain for LLM interactions
-
-**Key Components:**
-- `PredictorAgent`: LSTM/Prophet forecasts
-- `AnomalyAgent`: Anomaly detection
-- `OptimizerAgent`: Portfolio optimization
-
-## Agent Architecture
-
-### Multi-Agent System
-
 ```
-┌────────────────────────────────────────────────────────┐
-│                     Orchestrator                        │
-├────────────────────────────────────────────────────────┤
-│                          │                              │
-│  ┌────────────┐  ┌──────▼──────┐  ┌────────────┐      │
-│  │  Predictor │  │   Strategy  │  │  Decision  │      │
-│  │   Agent    │  │    Agent    │  │   Agent    │      │
-│  └─────┬──────┘  └──────┬──────┘  └─────┬──────┘      │
-│        │                │               │              │
-│        └────────────────┼───────────────┘              │
-│                         │                              │
-│                  ┌──────▼──────┐                       │
-│                  │    Trade    │                       │
-│                  │  Execution  │                       │
-│                  └─────────────┘                       │
-└────────────────────────────────────────────────────────┘
+backend/
+├── src/
+│   ├── agents/                 # LangGraph agents
+│   │   ├── predictor.py        # Price prediction agent
+│   │   ├── anomaly.py          # Anomaly detection agent
+│   │   ├── optimizer.py        # Portfolio optimization agent
+│   │   └── graph.py            # LangGraph orchestration
+│   ├── models/                 # ML models
+│   │   ├── lstm.py             # LSTM price predictor
+│   │   ├── sentiment.py        # News sentiment analyzer
+│   │   └── volatility.py       # Volatility forecaster
+│   ├── api/                    # FastAPI routes
+│   ├── services/               # Business logic
+│   └── schemas/                # Pydantic models
+├── notebooks/                  # Jupyter prototyping
+└── tests/                      # Test suite
 ```
 
-### Agent Communication
+**Key Technologies:**
+- Runtime: Python 3.11 (uv)
+- Framework: FastAPI + Uvicorn
+- ML: PyTorch, scikit-learn, pandas
+- Agents: LangGraph, LangChain
+- AI: xAI Grok (langchain-xai)
+- Observability: LangSmith
 
-Agents communicate through:
-1. **Shared State**: Predictions and context passed between agents
-2. **Event Bus**: Async events for real-time updates
-3. **Database**: Persistent storage in Supabase
-
-## Security Considerations
-
-1. **API Authentication**: Clerk for user auth, API keys for service-to-service
-2. **Database Security**: Row Level Security (RLS) in Supabase
-3. **Trade Safety**: Paper trading mode by default
-4. **Risk Limits**: Configurable position size and drawdown limits
-
-## Scaling Strategy
-
-1. **Horizontal Scaling**: Stateless services allow multiple instances
-2. **Caching**: Redis for frequently accessed data
-3. **Background Processing**: Async agents for heavy ML computations
-4. **Database**: Supabase handles connection pooling
-
-## Deployment Architecture
+## Data Flow
 
 ```
-┌─────────────────┐     ┌─────────────────┐
-│     Vercel      │     │  Azure/Railway  │
-│   (Frontend)    │────►│   (ML Backend)  │
-└────────┬────────┘     └────────┬────────┘
-         │                       │
-         └───────────┬───────────┘
-                     │
-         ┌───────────▼───────────┐
-         │      Supabase         │
-         │  (PostgreSQL + Auth)  │
-         └───────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                                  Trade Nexus                                     │
+│                                                                                  │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
+│  │    Lona      │───▶│   Predictor  │───▶│   Anomaly    │───▶│  Optimizer   │  │
+│  │  (Signals)   │    │    Agent     │    │    Agent     │    │    Agent     │  │
+│  └──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘  │
+│         │                   │                   │                   │           │
+│         │                   ▼                   ▼                   ▼           │
+│         │            ┌─────────────────────────────────────────────────┐        │
+│         │            │              LangGraph Orchestrator              │        │
+│         │            └─────────────────────────────────────────────────┘        │
+│         │                                      │                                 │
+│         ▼                                      ▼                                 │
+│  ┌──────────────┐                      ┌──────────────┐                         │
+│  │ Live Engine  │◀─────────────────────│   Decision   │                         │
+│  │ (Execution)  │                      │    Output    │                         │
+│  └──────────────┘                      └──────────────┘                         │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+## Deployment Pipeline
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Push to     │────▶│   Build      │────▶│   Push to    │────▶│  Deploy to   │
+│  main branch │     │   Docker     │     │   ACR        │     │  Container   │
+│              │     │   Image      │     │              │     │  Apps        │
+└──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
+```
+
+**GitHub Actions Workflow:**
+1. Trigger: Push to `main` branch (backend changes)
+2. Build: Multi-stage Docker build
+3. Push: Tag with commit SHA + `latest`
+4. Deploy: Update Azure Container App
+
+## Scaling Configuration
+
+| Setting | Value |
+|---------|-------|
+| Min Replicas | 0 (scale to zero) |
+| Max Replicas | 3 |
+| CPU | 1 core |
+| Memory | 2 Gi |
+| Workload Profile | Consumption |
+
+## External Services
+
+| Service | Purpose | Environment Variables |
+|---------|---------|----------------------|
+| Supabase | PostgreSQL database | `SUPABASE_URL`, `SUPABASE_KEY` |
+| Upstash | Redis cache | `UPSTASH_REDIS_URL`, `UPSTASH_REDIS_TOKEN` |
+| xAI | Grok LLM | `XAI_API_KEY` |
+| LangSmith | Agent observability | `LANGSMITH_API_KEY` |
+| Clerk | Authentication | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` |
+
+## Security
+
+- All secrets stored as Azure Container App secrets
+- Service Principal with minimal permissions (Contributor on resource group only)
+- HTTPS-only ingress
+- Admin-enabled ACR for CI/CD (consider switching to managed identity for production)

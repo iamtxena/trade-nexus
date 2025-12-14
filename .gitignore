@@ -67,3 +67,6 @@ models/saved/
 
 # Bun
 bun.lockb
+
+# Azure secrets (sensitive credentials)
+.azure-secrets.md

@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.api.lona_routes import router as lona_router
 from src.api.routes import router
 from src.config import get_settings
 
@@ -16,6 +17,7 @@ load_dotenv()
 settings = get_settings()
 if settings.langsmith_tracing:
     os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_ENDPOINT"] = settings.langsmith_endpoint
     os.environ["LANGCHAIN_API_KEY"] = settings.langsmith_api_key
     os.environ["LANGCHAIN_PROJECT"] = settings.langsmith_project
 
@@ -36,6 +38,7 @@ app.add_middleware(
 
 # Include routes
 app.include_router(router, prefix="/api")
+app.include_router(lona_router, prefix="/api")
 
 
 @app.get("/")

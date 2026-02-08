@@ -13,12 +13,29 @@ class Settings(BaseSettings):
 
     # LangSmith
     langsmith_api_key: str = ""
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
     langsmith_project: str = "trade-nexus-backend"
     langsmith_tracing: bool = True
 
     # Supabase
     supabase_url: str = ""
     supabase_key: str = ""
+
+    # Lona Gateway
+    lona_gateway_url: str = "https://gateway.lona.agency"
+    lona_agent_id: str = "trade-nexus"
+    lona_agent_name: str = "Trade Nexus Orchestrator"
+    lona_agent_registration_secret: str = ""
+    lona_agent_token: str = ""
+    lona_token_ttl_days: int = 30
+
+    # Live Engine
+    live_engine_url: str = "https://engine.lona.agency"
+
+    # Portfolio
+    initial_capital: float = 100_000.0
+    max_position_pct: float = 5.0
+    max_drawdown_pct: float = 15.0
 
     # Server
     host: str = "0.0.0.0"

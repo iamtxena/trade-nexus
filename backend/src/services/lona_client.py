@@ -3,6 +3,7 @@
 import asyncio
 import csv
 import io
+import json as json_mod
 import logging
 from datetime import UTC, datetime
 from types import TracebackType
@@ -219,8 +220,6 @@ class LonaClient:
 
         POST /api/v1/symbols (multipart/form-data)
         """
-        import json as json_mod
-
         files = {"file": ("data.csv", csv_content, "text/csv")}
         form_data = {"metadata": json_mod.dumps(metadata)}
 

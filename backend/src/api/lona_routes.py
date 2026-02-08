@@ -1,12 +1,9 @@
 """Lona Gateway API routes."""
 
 import logging
-from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 
-from src.agents.graph import get_strategist_agent
 from src.schemas.lona import (
     LonaBacktestRequest,
     LonaBacktestResponse,
@@ -35,16 +32,6 @@ def _get_client() -> LonaClient:
     if _cached_token:
         client._token = _cached_token
     return client
-
-
-class StrategistRunRequest(BaseModel):
-    """Request body for running the Strategist Brain pipeline."""
-
-    asset_classes: list[str] = Field(
-        default=["crypto", "stocks", "forex"],
-        description="Asset classes to analyze",
-    )
-    capital: float = Field(default=100000.0, description="Capital to allocate")
 
 
 @router.post("/register", response_model=LonaRegistrationResponse)
@@ -150,19 +137,6 @@ async def download_market_data(request: LonaDataDownloadRequest) -> LonaSymbol:
             raise HTTPException(status_code=e.status_code or 502, detail=str(e))
 
 
-@router.post("/strategist/run")
-async def run_strategist(request: StrategistRunRequest) -> dict[str, Any]:
-    """Run the full Strategist Brain pipeline.
 
-    Returns market analysis, generated strategies, and portfolio allocation.
-    """
-    try:
-        agent = get_strategist_agent()
-        result = await agent.run(
-            asset_classes=request.asset_classes,
-            capital=request.capital,
-        )
-        return result
-    except Exception as e:
-        logger.exception("Strategist pipeline failed")
-        raise HTTPException(status_code=500, detail=f"Strategist pipeline failed: {e}")
+# Note: The Strategist Brain pipeline has been moved to the TypeScript frontend.
+# Use the Next.js API route POST /api/strategist instead.

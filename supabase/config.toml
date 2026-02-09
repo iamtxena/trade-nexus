@@ -1,0 +1,10 @@
+[project]
+id = "trade-nexus"
+name = "Trade Nexus"
+
+[db]
+major_version = 15
+
+[api]
+enabled = true
+port = 54321

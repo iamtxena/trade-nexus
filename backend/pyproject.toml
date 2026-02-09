@@ -17,11 +17,15 @@ dependencies = [
     "numpy",
     "langgraph",
     "langchain",
+    "langchain-core>=1.2.5",
     "langchain-xai",
     "langsmith",
     "supabase",
     "typer[all]",
     "rich",
+    "aiohttp>=3.13.3",
+    "urllib3>=2.6.3",
+    "filelock>=3.20.3",
 ]
 
 [project.optional-dependencies]

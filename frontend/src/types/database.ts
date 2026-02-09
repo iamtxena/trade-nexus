@@ -37,6 +37,7 @@ export interface Database {
           confidence?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
       agent_runs: {
         Row: {
@@ -69,6 +70,7 @@ export interface Database {
           created_at?: string;
           completed_at?: string | null;
         };
+        Relationships: [];
       };
       strategies: {
         Row: {
@@ -98,6 +100,7 @@ export interface Database {
           is_active?: boolean;
           created_at?: string;
         };
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

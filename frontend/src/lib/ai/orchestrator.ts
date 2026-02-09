@@ -2,7 +2,14 @@ import { generateText } from 'ai';
 import { xai } from '@ai-sdk/xai';
 import { wrapAISDKModel } from 'langsmith/wrappers/vercel';
 
+import { getPrediction, checkAnomaly, optimizePortfolio } from '@/lib/ai/predictor-agent';
+import { generateStrategy } from '@/lib/ai/strategy-agent';
+import { makeDecision } from '@/lib/ai/decision-agent';
+import { runStrategist } from '@/lib/ai/strategist';
 import type { AgentContext, AgentResult, OrchestratorTask } from '@/types/agents';
+import type { StrategyContext } from '@/types/strategies';
+import type { DecisionContext } from '@/types/agents';
+import type { PredictionRequest } from '@/types/predictions';
 
 const model = wrapAISDKModel(xai('grok-2-latest'));
 
@@ -22,23 +29,17 @@ export async function orchestrate(tasks: OrchestratorTask[]): Promise<AgentResul
   return results;
 }
 
-async function executeTask(task: OrchestratorTask): Promise<AgentResult> {
+export async function executeTask(task: OrchestratorTask): Promise<AgentResult> {
   const startTime = Date.now();
 
   try {
-    const response = await generateText({
-      model,
-      system: `You are the Trade Nexus orchestrator. Your role is to coordinate
-               trading agents and make decisions based on their outputs.
-               Current task: ${task.type}`,
-      prompt: JSON.stringify(task.context),
-    });
+    const output = await dispatchAgent(task);
 
     return {
       taskId: task.id,
       type: task.type,
       success: true,
-      output: response.text,
+      output: typeof output === 'string' ? output : JSON.stringify(output),
       duration: Date.now() - startTime,
     };
   } catch (error) {
@@ -49,6 +50,89 @@ async function executeTask(task: OrchestratorTask): Promise<AgentResult> {
       error: error instanceof Error ? error.message : 'Unknown error',
       duration: Date.now() - startTime,
     };
+  }
+}
+
+async function dispatchAgent(task: OrchestratorTask): Promise<unknown> {
+  const ctx = task.context;
+
+  switch (task.type) {
+    case 'predictor': {
+      const request: PredictionRequest = {
+        symbol: ctx.symbol,
+        predictionType: 'price',
+        timeframe: '1d',
+      };
+      return getPrediction(request);
+    }
+
+    case 'anomaly': {
+      return checkAnomaly(ctx.symbol, ctx.priceHistory);
+    }
+
+    case 'optimizer': {
+      const holdings: Record<string, number> = {};
+      if (ctx.portfolio?.holdings) {
+        for (const [symbol, pos] of Object.entries(ctx.portfolio.holdings)) {
+          holdings[symbol] = pos.quantity;
+        }
+      }
+      const predictions = (ctx.predictions ?? []).map((p) => ({
+        id: '',
+        userId: '',
+        symbol: ctx.symbol,
+        predictionType: 'price' as const,
+        value: {
+          predicted: p.value,
+          timeframe: '1d',
+        },
+        confidence: p.confidence,
+        createdAt: p.timestamp,
+      }));
+      return optimizePortfolio(holdings, predictions);
+    }
+
+    case 'strategy': {
+      const strategyCtx: StrategyContext = {
+        symbol: ctx.symbol,
+        currentPrice: ctx.currentPrice,
+        priceChange24h: 0,
+        predictions: ctx.predictions ?? [],
+        portfolio: ctx.portfolio ?? { holdings: {}, availableBalance: 0, totalValue: 0 },
+        newsSentiment: ctx.newsSentiment ?? 0,
+      };
+      return generateStrategy(strategyCtx);
+    }
+
+    case 'decision': {
+      const decisionCtx: DecisionContext = {
+        symbol: ctx.symbol,
+        strategySignal: 'neutral',
+        predictions: ctx.predictions ?? [],
+        currentPosition: {
+          quantity: ctx.portfolio?.holdings?.[ctx.symbol]?.quantity ?? 0,
+          avgPrice: ctx.portfolio?.holdings?.[ctx.symbol]?.avgPrice ?? 0,
+          unrealizedPnl: 0,
+        },
+        currentPrice: ctx.currentPrice,
+        volume24h: ctx.volume ?? 0,
+        volatility: 0,
+        riskLimits: {
+          maxPositionSize: 10000,
+          maxDrawdown: 15,
+        },
+      };
+      return makeDecision(decisionCtx);
+    }
+
+    case 'strategist': {
+      return runStrategist();
+    }
+
+    default: {
+      const _exhaustive: never = task.type;
+      throw new Error(`Unknown agent type: ${_exhaustive}`);
+    }
   }
 }
 

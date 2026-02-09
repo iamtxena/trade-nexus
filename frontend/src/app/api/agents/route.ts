@@ -5,6 +5,12 @@ import type { Agent, AgentType } from '@/types/agents';
 
 const AGENTS: Agent[] = [
   {
+    id: 'agent-strategist',
+    type: 'strategist' as AgentType,
+    name: 'Strategist Brain',
+    status: 'idle',
+  },
+  {
     id: 'agent-predictor',
     type: 'predictor' as AgentType,
     name: 'Price Predictor',

@@ -1,4 +1,4 @@
-export type AgentType = 'predictor' | 'anomaly' | 'optimizer' | 'strategy' | 'decision';
+export type AgentType = 'predictor' | 'anomaly' | 'optimizer' | 'strategy' | 'decision' | 'strategist';
 
 export type AgentStatus = 'idle' | 'running' | 'completed' | 'failed';
 

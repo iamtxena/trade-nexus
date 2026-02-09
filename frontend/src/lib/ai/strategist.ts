@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { getLonaClient } from '@/lib/lona/client';
 import type { LonaBacktestRequest, LonaReport } from '@/lib/lona/types';
 
-const model = wrapAISDKModel(xai('grok-2-latest'));
+const model = wrapAISDKModel(xai('grok-4-1-fast-non-reasoning'));
 
 const STRATEGIST_SYSTEM_PROMPT = `You are the Trade Nexus Strategist Brain — an elite quantitative portfolio strategist.
 

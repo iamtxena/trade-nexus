@@ -11,7 +11,7 @@ import type { StrategyContext } from '@/types/strategies';
 import type { DecisionContext } from '@/types/agents';
 import type { PredictionRequest } from '@/types/predictions';
 
-const model = wrapAISDKModel(xai('grok-2-latest'));
+const model = wrapAISDKModel(xai('grok-4-1-fast-non-reasoning'));
 
 export async function orchestrate(tasks: OrchestratorTask[]): Promise<AgentResult[]> {
   const results: AgentResult[] = [];
@@ -67,7 +67,7 @@ async function dispatchAgent(task: OrchestratorTask): Promise<unknown> {
     }
 
     case 'anomaly': {
-      return checkAnomaly(ctx.symbol, ctx.priceHistory);
+      return checkAnomaly(ctx.symbol, ctx.priceHistory ?? []);
     }
 
     case 'optimizer': {

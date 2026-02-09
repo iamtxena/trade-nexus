@@ -26,7 +26,7 @@ class OptimizerAgent:
     def __init__(self) -> None:
         settings = get_settings()
         self.llm = ChatXAI(
-            model="grok-2-latest",
+            model="grok-4-1-fast-non-reasoning",
             api_key=settings.xai_api_key,
         )
 

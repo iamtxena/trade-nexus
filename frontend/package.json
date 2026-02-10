@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "strategist": "bun run cli/strategist.ts"
+    "strategist": "bun run cli/strategist.ts",
+    "nexus": "bun run cli/nexus.ts"
   },
   "dependencies": {
     "@ai-sdk/xai": "^3",

@@ -1,5 +1,5 @@
 export const LONA_GATEWAY_URL = process.env.LONA_GATEWAY_URL ?? 'https://gateway.lona.agency';
-export const LIVE_ENGINE_URL = process.env.LIVE_ENGINE_URL ?? 'https://engine.lona.agency';
+export const LIVE_ENGINE_URL = process.env.LIVE_ENGINE_URL ?? 'https://live.lona.agency';
 export const LIVE_ENGINE_SERVICE_KEY = process.env.LIVE_ENGINE_SERVICE_KEY ?? '';
 
 export function getLonaConfig() {

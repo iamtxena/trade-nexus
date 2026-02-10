@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     lona_token_ttl_days: int = 30
 
     # Live Engine
-    live_engine_url: str = "https://engine.lona.agency"
+    live_engine_url: str = "https://live.lona.agency"
 
     # Portfolio
     initial_capital: float = 100_000.0

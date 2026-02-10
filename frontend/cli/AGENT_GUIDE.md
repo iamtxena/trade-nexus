@@ -19,7 +19,7 @@ The CLI reads environment variables from `frontend/.env.local`. These must be se
 | `LONA_AGENT_TOKEN` | All Lona commands | Run `bun run nexus register` |
 | `LONA_AGENT_REGISTRATION_SECRET` | Registration only | Provided by Lona platform admin |
 | `XAI_API_KEY` | research, news, report, adjust, pipeline | xAI console |
-| `LIVE_ENGINE_URL` | deploy, portfolio, report, pipeline | Default: `https://engine.lona.agency` |
+| `LIVE_ENGINE_URL` | deploy, portfolio, report, pipeline | Default: `https://live.lona.agency` |
 | `LIVE_ENGINE_SERVICE_KEY` | deploy, portfolio, report, pipeline | Must match `SERVICE_API_KEY` on live-engine |
 
 ## Commands Reference
@@ -203,7 +203,7 @@ AI Agent
         │     ├── Backtesting engine
         │     └── Market data storage
         │
-        ├── live-engine (engine.lona.agency)
+        ├── live-engine (live.lona.agency)
         │     ├── Paper/live trading
         │     ├── Strategy execution (Vercel cron)
         │     └── Python→TS code conversion
@@ -232,7 +232,7 @@ Only strategies scoring above **0.3** are eligible for deployment.
 | Issue | Fix |
 |-------|-----|
 | `Missing required env vars` | Check `.env.local` has the required keys |
-| `live-engine DOWN` | Verify `LIVE_ENGINE_URL` and that engine.lona.agency is deployed |
+| `live-engine DOWN` | Verify `LIVE_ENGINE_URL` and that live.lona.agency is deployed |
 | `Lona API error 401` | Token expired — run `bun run nexus register` to get a new one |
 | `live-engine API error 401` | `LIVE_ENGINE_SERVICE_KEY` doesn't match `SERVICE_API_KEY` on live-engine |
 | Backtest timeout | Increase wait time or check Lona Gateway status |

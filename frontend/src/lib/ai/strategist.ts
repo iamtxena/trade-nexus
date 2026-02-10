@@ -1,12 +1,14 @@
-import { generateText, streamText, tool, zodSchema, stepCountIs } from 'ai';
+import * as ai from 'ai';
+import { tool, zodSchema, stepCountIs } from 'ai';
 import { xai } from '@ai-sdk/xai';
-import { wrapAISDKModel } from 'langsmith/wrappers/vercel';
+import { wrapAISDK } from 'langsmith/experimental/vercel';
 import { z } from 'zod';
 
 import { getLonaClient } from '@/lib/lona/client';
 import type { LonaBacktestRequest, LonaReport } from '@/lib/lona/types';
 
-const model = wrapAISDKModel(xai('grok-4-1-fast-non-reasoning'));
+const { generateText, streamText } = wrapAISDK(ai);
+const model = xai('grok-4-1-fast-non-reasoning');
 
 const STRATEGIST_SYSTEM_PROMPT = `You are the Trade Nexus Strategist Brain — an elite quantitative portfolio strategist.
 

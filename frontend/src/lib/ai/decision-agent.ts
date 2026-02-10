@@ -1,10 +1,11 @@
-import { generateText } from 'ai';
+import * as ai from 'ai';
 import { xai } from '@ai-sdk/xai';
-import { wrapAISDKModel } from 'langsmith/wrappers/vercel';
+import { wrapAISDK } from 'langsmith/experimental/vercel';
 
 import type { DecisionContext, TradeDecision } from '@/types/agents';
 
-const model = wrapAISDKModel(xai('grok-4-1-fast-non-reasoning'));
+const { generateText } = wrapAISDK(ai);
+const model = xai('grok-4-1-fast-non-reasoning');
 
 export async function makeDecision(context: DecisionContext): Promise<TradeDecision> {
   const response = await generateText({

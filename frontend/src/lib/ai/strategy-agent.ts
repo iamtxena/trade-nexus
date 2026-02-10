@@ -1,10 +1,11 @@
-import { generateText } from 'ai';
+import * as ai from 'ai';
 import { xai } from '@ai-sdk/xai';
-import { wrapAISDKModel } from 'langsmith/wrappers/vercel';
+import { wrapAISDK } from 'langsmith/experimental/vercel';
 
 import type { StrategyContext, StrategyOutput } from '@/types/strategies';
 
-const model = wrapAISDKModel(xai('grok-4-1-fast-non-reasoning'));
+const { generateText } = wrapAISDK(ai);
+const model = xai('grok-4-1-fast-non-reasoning');
 
 export async function generateStrategy(context: StrategyContext): Promise<StrategyOutput> {
   const response = await generateText({

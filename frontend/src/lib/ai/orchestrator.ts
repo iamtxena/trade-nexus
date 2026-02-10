@@ -1,6 +1,6 @@
-import { generateText } from 'ai';
+import * as ai from 'ai';
 import { xai } from '@ai-sdk/xai';
-import { wrapAISDKModel } from 'langsmith/wrappers/vercel';
+import { wrapAISDK } from 'langsmith/experimental/vercel';
 
 import { getPrediction, checkAnomaly, optimizePortfolio } from '@/lib/ai/predictor-agent';
 import { generateStrategy } from '@/lib/ai/strategy-agent';
@@ -11,7 +11,8 @@ import type { StrategyContext } from '@/types/strategies';
 import type { DecisionContext } from '@/types/agents';
 import type { PredictionRequest } from '@/types/predictions';
 
-const model = wrapAISDKModel(xai('grok-4-1-fast-non-reasoning'));
+const { generateText } = wrapAISDK(ai);
+const model = xai('grok-4-1-fast-non-reasoning');
 
 export async function orchestrate(tasks: OrchestratorTask[]): Promise<AgentResult[]> {
   const results: AgentResult[] = [];

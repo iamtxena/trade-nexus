@@ -73,17 +73,20 @@ interface LogRow {
 export class LiveEngineClient {
   private baseUrl: string;
   private serviceKey: string;
+  private userId: string;
 
-  constructor(config?: { url?: string; serviceKey?: string }) {
+  constructor(config?: { url?: string; serviceKey?: string; userId?: string }) {
     const c = { ...getLiveEngineConfig(), ...config };
     this.baseUrl = c.url;
     this.serviceKey = c.serviceKey;
+    this.userId = config?.userId ?? process.env.LIVE_ENGINE_USER_ID ?? 'cli-agent';
   }
 
   private headers(): Record<string, string> {
     return {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${this.serviceKey}`,
+      'X-User-Id': this.userId,
     };
   }
 

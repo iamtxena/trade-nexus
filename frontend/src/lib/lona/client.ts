@@ -270,10 +270,17 @@ export class LonaClient {
   }
 
   async findSymbolByName(name: string): Promise<LonaSymbol | null> {
-    // Note: no server-side filter by name, so we fetch a large page and search locally.
-    // If the user has more than 500 symbols, this may miss matches.
-    const symbols = await this.listSymbols(false, 500);
-    return symbols.find((s) => s.name === name) ?? null;
+    // No server-side filter by name — paginate through all user symbols.
+    const PAGE_SIZE = 50;
+    let skip = 0;
+    for (;;) {
+      const page = await this.listSymbols(false, PAGE_SIZE, skip);
+      const match = page.find((s) => s.name === name);
+      if (match) return match;
+      if (page.length < PAGE_SIZE) break;
+      skip += PAGE_SIZE;
+    }
+    return null;
   }
 
   async uploadSymbol(csvContent: Blob, metadata: Record<string, unknown>): Promise<{ id: string }> {

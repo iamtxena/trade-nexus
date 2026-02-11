@@ -174,7 +174,7 @@ describe('LonaClient', () => {
       expect(result).toBeNull();
     });
 
-    test('passes limit of 500 to listSymbols', async () => {
+    test('paginates with limit=50 instead of one large request', async () => {
       fetchMock = mock(() => Promise.resolve(mockResponse({ data: { items: [] } })));
       globalThis.fetch = fetchMock as unknown as typeof fetch;
 
@@ -183,8 +183,54 @@ describe('LonaClient', () => {
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
       const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
-      expect(url).toContain('limit=500');
+      expect(url).toContain('limit=50');
       expect(url).toContain('skip=0');
+    });
+
+    test('paginates through multiple pages until match found', async () => {
+      const page1 = Array.from({ length: 50 }, (_, i) => ({
+        id: `id-${i}`,
+        name: `SYM_${i}`,
+        description: '',
+        is_global: false,
+        data_range: null,
+        frequencies: [],
+        type_metadata: null,
+        created_at: '',
+        updated_at: '',
+      }));
+      const page2 = [
+        {
+          id: 'target-id',
+          name: 'TARGET_SYMBOL',
+          description: '',
+          is_global: false,
+          data_range: null,
+          frequencies: [],
+          type_metadata: null,
+          created_at: '',
+          updated_at: '',
+        },
+      ];
+
+      let callCount = 0;
+      fetchMock = mock(() => {
+        callCount++;
+        if (callCount === 1) return Promise.resolve(mockResponse({ data: { items: page1 } }));
+        return Promise.resolve(mockResponse({ data: { items: page2 } }));
+      });
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const client = createClient();
+      const result = await client.findSymbolByName('TARGET_SYMBOL');
+
+      expect(result).not.toBeNull();
+      expect(result!.id).toBe('target-id');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      const [url2] = (fetchMock.mock.calls as Array<[string, RequestInit]>)[1];
+      expect(url2).toContain('skip=50');
+      expect(url2).toContain('limit=50');
     });
   });
 

@@ -64,12 +64,7 @@ export interface LonaBacktestResponse {
   report_id: string;
 }
 
-export type LonaReportStatusValue =
-  | 'PENDING'
-  | 'EXECUTING'
-  | 'PROCESSING'
-  | 'COMPLETED'
-  | 'FAILED';
+export type LonaReportStatusValue = 'PENDING' | 'EXECUTING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 
 export interface LonaReportStatus {
   status: LonaReportStatusValue;

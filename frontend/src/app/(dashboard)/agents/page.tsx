@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Bot } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface Agent {
   id: string;
@@ -36,9 +36,7 @@ export default function AgentsPage() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Agents</h2>
-        <p className="text-muted-foreground">
-          Monitor your AI trading agents and their activity
-        </p>
+        <p className="text-muted-foreground">Monitor your AI trading agents and their activity</p>
       </div>
 
       {loading ? (
@@ -71,9 +69,7 @@ export default function AgentsPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-muted-foreground">
-                  Type: {agent.type}
-                </p>
+                <p className="text-xs text-muted-foreground">Type: {agent.type}</p>
               </CardContent>
             </Card>
           ))}

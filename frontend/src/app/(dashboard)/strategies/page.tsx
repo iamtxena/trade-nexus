@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { LineChart, Plus } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface Strategy {
   id: string;
@@ -31,9 +31,7 @@ export default function StrategiesPage() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Strategies</h2>
-        <p className="text-muted-foreground">
-          View, manage, and monitor your trading strategies
-        </p>
+        <p className="text-muted-foreground">View, manage, and monitor your trading strategies</p>
       </div>
 
       {loading ? (
@@ -72,16 +70,12 @@ export default function StrategiesPage() {
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <LineChart className="size-3" />
-                  <span>
-                    Created {new Date(strategy.createdAt).toLocaleDateString()}
-                  </span>
+                  <span>Created {new Date(strategy.createdAt).toLocaleDateString()}</span>
                 </div>
               </CardHeader>
               {strategy.backtestResults && (
                 <CardContent>
-                  <p className="text-xs text-muted-foreground">
-                    Backtest results available
-                  </p>
+                  <p className="text-xs text-muted-foreground">Backtest results available</p>
                 </CardContent>
               )}
             </Card>

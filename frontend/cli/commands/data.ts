@@ -1,11 +1,8 @@
-import { parseArgs } from 'util';
+import { parseArgs } from 'node:util';
 
-import {
-  printHeader, printError, printSuccess, printTable,
-  dim, bold, cyan, spinner,
-} from '../lib/output';
-import { validateConfig } from '../lib/config';
 import { getLonaClient } from '../../src/lib/lona/client';
+import { validateConfig } from '../lib/config';
+import { bold, cyan, dim, printError, printHeader, printTable, spinner } from '../lib/output';
 
 export async function dataCommand(args: string[]) {
   const subcommand = args[0];
@@ -18,6 +15,7 @@ export async function dataCommand(args: string[]) {
   const handlers: Record<string, (a: string[]) => Promise<void>> = {
     list: listSymbols,
     download: downloadData,
+    delete: deleteSymbol,
   };
 
   const handler = handlers[subcommand];
@@ -35,10 +33,19 @@ function printHelp() {
   console.log(`${bold('Usage:')}  nexus data <subcommand> [options]\n`);
   console.log(`${bold('Subcommands:')}`);
   console.log(`  ${cyan('list')}       List available market data symbols`);
-  console.log(`  ${cyan('download')}   Download market data from Binance to Lona\n`);
+  console.log(`  ${cyan('download')}   Download market data from Binance to Lona`);
+  console.log(`  ${cyan('delete')}     Delete a symbol by ID\n`);
   console.log(`${bold('Examples:')}`);
-  console.log(`  ${dim('nexus data list --global')}                                    List pre-loaded symbols`);
-  console.log(`  ${dim('nexus data download --symbol BTCUSDT --interval 1h --start 2025-01-01 --end 2025-06-01')}\n`);
+  console.log(
+    `  ${dim('nexus data list --global')}                                    List pre-loaded symbols`,
+  );
+  console.log(
+    `  ${dim('nexus data download --symbol BTCUSDT --interval 1h --start 2025-01-01 --end 2025-06-01')}`,
+  );
+  console.log(
+    `  ${dim('nexus data download --symbol BTCUSDT --interval 1h --start 2025-01-01 --end 2025-06-01 --force')}`,
+  );
+  console.log(`  ${dim('nexus data delete --id <symbol-id>')}\n`);
 }
 
 async function listSymbols(args: string[]) {
@@ -67,7 +74,7 @@ async function listSymbols(args: string[]) {
   printTable(
     ['ID', 'Name', 'Exchange', 'Asset Class', 'Frequencies', 'Date Range'],
     symbols.map((s) => [
-      s.id.slice(0, 8) + '...',
+      s.id,
       s.name?.slice(0, 20) ?? '-',
       s.type_metadata?.exchange ?? '-',
       s.type_metadata?.asset_class ?? '-',
@@ -88,6 +95,7 @@ async function downloadData(args: string[]) {
       interval: { type: 'string', default: '1h' },
       start: { type: 'string' },
       end: { type: 'string' },
+      force: { type: 'boolean', default: false },
     },
     allowPositionals: false,
   });
@@ -99,17 +107,39 @@ async function downloadData(args: string[]) {
 
   validateConfig(['LONA_AGENT_TOKEN']);
   const client = getLonaClient();
+  const interval = values.interval ?? '1h';
 
   printHeader('Download Market Data');
   console.log(`  ${cyan('Symbol:')}   ${values.symbol}`);
-  console.log(`  ${cyan('Interval:')} ${values.interval}`);
-  console.log(`  ${cyan('Period:')}   ${values.start} to ${values.end}\n`);
+  console.log(`  ${cyan('Interval:')} ${interval}`);
+  console.log(`  ${cyan('Period:')}   ${values.start} to ${values.end}`);
+  if (values.force) console.log(`  ${cyan('Force:')}    enabled`);
+  console.log();
+
+  // If --force, delete existing symbol with same name
+  if (values.force) {
+    const expectedName = `${values.symbol}_${interval}_${values.start.replace(/-/g, '')}_${values.end.replace(/-/g, '')}`;
+    const existing = await client.findSymbolByName(expectedName);
+    if (existing) {
+      const delSpin = spinner(`Deleting existing symbol ${expectedName}...`);
+      try {
+        await client.deleteSymbol(existing.id);
+        delSpin.stop(`Deleted ${expectedName}`);
+      } catch (error) {
+        delSpin.stop();
+        printError(
+          `Failed to delete existing symbol: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        process.exit(1);
+      }
+    }
+  }
 
   const spin = spinner('Downloading from Binance and uploading to Lona...');
   try {
     const result = await client.downloadMarketData(
       values.symbol,
-      values.interval ?? '1h',
+      interval,
       values.start,
       values.end,
     );
@@ -120,7 +150,37 @@ async function downloadData(args: string[]) {
     if (result.description) {
       console.log(`  ${bold('Info:')}      ${dim(result.description)}`);
     }
-    console.log(`\n  ${dim('Use this ID for backtesting: nexus strategy backtest --data ' + result.id)}\n`);
+    console.log(
+      `\n  ${dim(`Use this ID for backtesting: nexus strategy backtest --data ${result.id}`)}\n`,
+    );
+  } catch (error) {
+    spin.stop();
+    printError(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
+async function deleteSymbol(args: string[]) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      id: { type: 'string' },
+    },
+    allowPositionals: false,
+  });
+
+  if (!values.id) {
+    printError('--id is required (symbol ID from "nexus data list")');
+    process.exit(1);
+  }
+
+  validateConfig(['LONA_AGENT_TOKEN']);
+  const client = getLonaClient();
+
+  const spin = spinner(`Deleting symbol ${values.id}...`);
+  try {
+    await client.deleteSymbol(values.id);
+    spin.stop(`Symbol ${values.id} deleted`);
   } catch (error) {
     spin.stop();
     printError(error instanceof Error ? error.message : String(error));

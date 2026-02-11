@@ -1,13 +1,21 @@
-import { generateText } from 'ai';
+import { parseArgs } from 'node:util';
 import { xai } from '@ai-sdk/xai';
-import { parseArgs } from 'util';
+import { generateText } from 'ai';
 
-import {
-  printHeader, printError, printSuccess,
-  dim, bold, cyan, green, red, yellow, spinner,
-} from '../lib/output';
 import { validateConfig } from '../lib/config';
 import { getLiveEngineClient } from '../lib/live-engine';
+import {
+  bold,
+  cyan,
+  dim,
+  green,
+  printError,
+  printHeader,
+  printSuccess,
+  red,
+  spinner,
+  yellow,
+} from '../lib/output';
 
 const ADJUSTMENT_PROMPT = `You are a senior portfolio manager reviewing live trading operations. Analyze portfolio performance, current positions, and market conditions to suggest adjustments.
 
@@ -41,8 +49,8 @@ export async function adjustCommand(args: string[]) {
     printHeader('Adjust Command');
     console.log(`${bold('Usage:')}  nexus adjust [options]\n`);
     console.log(`${bold('Options:')}`);
-    console.log(`  --portfolio-id   Portfolio to analyze (optional, analyzes all if omitted)`);
-    console.log(`  --help           Show this help\n`);
+    console.log('  --portfolio-id   Portfolio to analyze (optional, analyzes all if omitted)');
+    console.log('  --help           Show this help\n');
     return;
   }
 
@@ -68,7 +76,13 @@ export async function adjustCommand(args: string[]) {
         try {
           details.push(await engine.getPortfolio(p.id));
         } catch {
-          details.push({ portfolio: p, positions: [], totalValue: p.balance, pnl: 0, pnlPercent: 0 });
+          details.push({
+            portfolio: p,
+            positions: [],
+            totalValue: p.balance,
+            pnl: 0,
+            pnlPercent: 0,
+          });
         }
       }
       portfolioData = JSON.stringify(details, null, 2);
@@ -123,12 +137,13 @@ Provide specific, actionable recommendations.`,
         if (data.recommendations?.length) {
           console.log(`\n${bold('Recommendations:')}\n`);
           for (const [i, rec] of data.recommendations.entries()) {
-            const priorityColor = rec.priority === 'high' ? red
-              : rec.priority === 'medium' ? yellow : dim;
-            const actionColor = rec.action === 'stop' ? red
-              : rec.action === 'start' ? green : cyan;
+            const priorityColor =
+              rec.priority === 'high' ? red : rec.priority === 'medium' ? yellow : dim;
+            const actionColor = rec.action === 'stop' ? red : rec.action === 'start' ? green : cyan;
 
-            console.log(`  ${bold(`${i + 1}.`)} ${actionColor(rec.action.toUpperCase())} ${rec.target} ${priorityColor(`[${rec.priority}]`)}`);
+            console.log(
+              `  ${bold(`${i + 1}.`)} ${actionColor(rec.action.toUpperCase())} ${rec.target} ${priorityColor(`[${rec.priority}]`)}`,
+            );
             console.log(`     ${dim(rec.rationale)}\n`);
           }
         } else {
@@ -149,7 +164,9 @@ Provide specific, actionable recommendations.`,
       console.log(`\n${text}`);
     }
 
-    console.log(`\n${dim(`Completed in ${elapsed}s | ${usage?.totalTokens?.toLocaleString() ?? '?'} tokens`)}`);
+    console.log(
+      `\n${dim(`Completed in ${elapsed}s | ${usage?.totalTokens?.toLocaleString() ?? '?'} tokens`)}`,
+    );
     console.log(`${yellow('!')} These are suggestions only. Review before taking action.\n`);
   } catch (error) {
     aiSpin.stop();

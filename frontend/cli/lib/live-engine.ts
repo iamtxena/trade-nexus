@@ -198,13 +198,17 @@ export class LiveEngineClient {
     parameters?: Record<string, unknown>;
     portfolio_id?: string;
   }) {
-    const resp = await this.request<{ strategy: StrategyRow }>('POST', '/api/strategies', { body: data });
+    const resp = await this.request<{ strategy: StrategyRow }>('POST', '/api/strategies', {
+      body: data,
+    });
     return resp.strategy;
   }
 
   /** Update strategy fields (e.g. status). */
   async updateStrategy(id: string, data: Record<string, unknown>) {
-    const resp = await this.request<{ strategy: StrategyRow }>('PATCH', '/api/strategies', { body: { id, ...data } });
+    const resp = await this.request<{ strategy: StrategyRow }>('PATCH', '/api/strategies', {
+      body: { id, ...data },
+    });
     return resp.strategy;
   }
 
@@ -226,11 +230,9 @@ export class LiveEngineClient {
 
   /** Get paginated strategy logs. */
   async getStrategyLogs(id: string, limit = 50, offset = 0) {
-    return this.request<{ logs: LogRow[]; total: number }>(
-      'GET',
-      `/api/strategies/${id}/logs`,
-      { params: { limit: String(limit), offset: String(offset) } },
-    );
+    return this.request<{ logs: LogRow[]; total: number }>('GET', `/api/strategies/${id}/logs`, {
+      params: { limit: String(limit), offset: String(offset) },
+    });
   }
 
   // ── Code conversion ────────────────────────────────────

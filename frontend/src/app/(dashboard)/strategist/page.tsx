@@ -1,9 +1,9 @@
 'use client';
 
-import { Brain } from 'lucide-react';
 import { StrategistConfig } from '@/components/strategist/strategist-config';
 import { StrategistResults } from '@/components/strategist/strategist-results';
 import { useStrategist } from '@/hooks/use-strategist';
+import { Brain } from 'lucide-react';
 
 export default function StrategistPage() {
   const { run, streamedText, isRunning, error, reset } = useStrategist();
@@ -28,11 +28,7 @@ export default function StrategistPage() {
       {/* Two-column layout */}
       <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
         <StrategistConfig onRun={run} onReset={reset} isRunning={isRunning} />
-        <StrategistResults
-          streamedText={streamedText}
-          isRunning={isRunning}
-          error={error}
-        />
+        <StrategistResults streamedText={streamedText} isRunning={isRunning} error={error} />
       </div>
     </div>
   );

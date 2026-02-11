@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { auth } from '@clerk/nextjs/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import type { Json } from '@/types/database';
 import type { Prediction, PredictionType } from '@/types/predictions';

@@ -1,11 +1,16 @@
-import { parseArgs } from 'util';
+import { parseArgs } from 'node:util';
 
-import {
-  printHeader, printError, printSuccess, printTable, printJSON,
-  dim, bold, cyan, green, red, yellow, spinner,
-} from '../lib/output';
-import { validateConfig } from '../lib/config';
 import { getLonaClient } from '../../src/lib/lona/client';
+import { validateConfig } from '../lib/config';
+import {
+  bold,
+  cyan,
+  dim,
+  printError,
+  printHeader,
+  printTable,
+  spinner,
+} from '../lib/output';
 
 export async function strategyCommand(args: string[]) {
   const subcommand = args[0];
@@ -62,7 +67,7 @@ async function listStrategies(_args: string[]) {
   printTable(
     ['ID', 'Name', 'Version', 'Language', 'Created'],
     strategies.map((s) => [
-      s.id.slice(0, 8) + '...',
+      s.id,
       s.name.slice(0, 30),
       s.version ?? '-',
       s.language ?? 'python',
@@ -84,7 +89,9 @@ async function createStrategy(args: string[]) {
 
   if (!values.description) {
     printError('--description is required');
-    console.log(dim('  Example: nexus strategy create --description "RSI mean reversion on BTCUSDT 1h"'));
+    console.log(
+      dim('  Example: nexus strategy create --description "RSI mean reversion on BTCUSDT 1h"'),
+    );
     process.exit(1);
   }
 
@@ -108,7 +115,9 @@ async function createStrategy(args: string[]) {
     console.log(`\n  ${bold('Strategy ID:')} ${cyan(result.strategyId)}`);
     console.log(`  ${bold('Name:')}        ${result.name}`);
     console.log(`  ${bold('Explanation:')}\n${dim(result.explanation.slice(0, 500))}`);
-    console.log(`\n  ${dim(`Code: ${result.code.length} chars (use 'nexus strategy code --id ${result.strategyId}' to view)`)}\n`);
+    console.log(
+      `\n  ${dim(`Code: ${result.code.length} chars (use 'nexus strategy code --id ${result.strategyId}' to view)`)}\n`,
+    );
   } catch (error) {
     spin.stop();
     printError(error instanceof Error ? error.message : String(error));
@@ -218,7 +227,10 @@ async function runBacktest(args: string[]) {
       console.log(`\n${bold('Results:')}`);
       printTable(
         ['Metric', 'Value'],
-        Object.entries(stats).map(([k, v]) => [k, typeof v === 'number' ? v.toFixed(4) : String(v)]),
+        Object.entries(stats).map(([k, v]) => [
+          k,
+          typeof v === 'number' ? v.toFixed(4) : String(v),
+        ]),
       );
     }
 
@@ -251,7 +263,12 @@ async function scoreStrategies(args: string[]) {
   printHeader('Score Strategies');
 
   const spin = spinner(`Fetching ${reportIds.length} reports...`);
-  const results: Array<{ reportId: string; name: string; score: number; metrics: Record<string, number> }> = [];
+  const results: Array<{
+    reportId: string;
+    name: string;
+    score: number;
+    metrics: Record<string, number>;
+  }> = [];
 
   for (const reportId of reportIds) {
     try {
@@ -294,7 +311,7 @@ async function scoreStrategies(args: string[]) {
     ['Rank', 'Report', 'Score', 'Sharpe', 'Max DD', 'Win Rate', 'Return'],
     results.map((r, i) => [
       `#${i + 1}`,
-      r.reportId.slice(0, 12) + '...',
+      r.reportId,
       r.score.toFixed(4),
       r.metrics.sharpe.toFixed(2),
       `${r.metrics.maxDd.toFixed(2)}%`,

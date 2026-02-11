@@ -1,11 +1,31 @@
 #!/usr/bin/env bun
-import { bold, cyan, dim, green, yellow, printError, printHeader, printSuccess, printWarning, red } from './lib/output';
-import { getLonaConfig, getLiveEngineConfig, LONA_GATEWAY_URL, LIVE_ENGINE_URL } from './lib/config';
-import { getLiveEngineClient } from './lib/live-engine';
 import { getLonaClient } from '../src/lib/lona/client';
+import {
+  LIVE_ENGINE_URL,
+  LONA_GATEWAY_URL,
+  getLiveEngineConfig,
+  getLonaConfig,
+} from './lib/config';
+import { getLiveEngineClient } from './lib/live-engine';
+import {
+  bold,
+  cyan,
+  dim,
+  green,
+  printError,
+  printHeader,
+  printInfo,
+  printWarning,
+  red,
+  spinner,
+  yellow,
+} from './lib/output';
 
 // Command registry
-const COMMANDS: Record<string, { description: string; handler: (args: string[]) => Promise<void> }> = {
+const COMMANDS: Record<
+  string,
+  { description: string; handler: (args: string[]) => Promise<void> }
+> = {
   status: {
     description: 'Health check all systems (Lona Gateway + live-engine)',
     handler: statusCommand,
@@ -118,9 +138,7 @@ async function statusCommand(_args: string[]) {
 
   // Auth status
   console.log(`\n${bold('Auth:')}`);
-  console.log(
-    `  Lona token:        ${lonaConfig.token ? green('configured') : yellow('missing')}`,
-  );
+  console.log(`  Lona token:        ${lonaConfig.token ? green('configured') : yellow('missing')}`);
   console.log(
     `  Lona reg secret:   ${lonaConfig.registrationSecret ? green('configured') : yellow('missing')}`,
   );
@@ -137,24 +155,50 @@ async function registerCommand(_args: string[]) {
   printHeader('Lona Gateway Registration');
 
   const lonaConfig = getLonaConfig();
-  if (!lonaConfig.registrationSecret) {
-    printError('LONA_AGENT_REGISTRATION_SECRET not set in .env.local');
-    process.exit(1);
-  }
+  const client = getLonaClient();
 
-  const spin = (await import('./lib/output')).spinner('Registering with Lona Gateway...');
   try {
-    const client = getLonaClient();
-    const result = await client.register();
-    spin.stop('Registered successfully!');
+    let result: import('../src/lib/lona/types').LonaRegistrationResponse;
+    if (lonaConfig.registrationSecret) {
+      // Secret-based registration (existing flow)
+      const spin = spinner('Registering with Lona Gateway...');
+      try {
+        result = await client.register();
+        spin.stop('Registered successfully!');
+      } catch (error) {
+        spin.stop();
+        throw error;
+      }
+    } else {
+      // Invite code fallback (zero-config)
+      printInfo('No registration secret found, using invite code flow...');
+      const inviteSpin = spinner('Requesting invite code...');
+      let invite_code: string;
+      try {
+        const inviteResult = await client.requestInvite();
+        invite_code = inviteResult.invite_code;
+        inviteSpin.stop(`Got invite code: ${dim(invite_code)}`);
+      } catch (error) {
+        inviteSpin.stop();
+        throw error;
+      }
 
-    console.log(`\n  ${bold('Token:')}       ${dim(result.token.slice(0, 20) + '...')}`);
+      const regSpin = spinner('Registering with invite code...');
+      try {
+        result = await client.registerWithInviteCode(invite_code);
+        regSpin.stop('Registered successfully!');
+      } catch (error) {
+        regSpin.stop();
+        throw error;
+      }
+    }
+
+    console.log(`\n  ${bold('Token:')}       ${dim(`${result.token.slice(0, 20)}...`)}`);
     console.log(`  ${bold('Partner ID:')} ${result.partner_id}`);
     console.log(`  ${bold('Expires:')}    ${result.expires_at}`);
     console.log(`\n${bold('Next step:')} Add this to your ${cyan('.env.local')}:`);
     console.log(`  ${dim(`LONA_AGENT_TOKEN=${result.token}`)}\n`);
   } catch (error) {
-    spin.stop();
     printError(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }

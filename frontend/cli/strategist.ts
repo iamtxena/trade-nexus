@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { parseArgs } from 'util';
+import { parseArgs } from 'node:util';
 
 import { runStrategist } from '../src/lib/ai/strategist';
 
@@ -38,9 +38,7 @@ ${bold('Options:')}
   process.exit(0);
 }
 
-const assetClasses = (values.assets ?? 'crypto,stocks,forex')
-  .split(',')
-  .map((s) => s.trim());
+const assetClasses = (values.assets ?? 'crypto,stocks,forex').split(',').map((s) => s.trim());
 const capital = Number(values.capital);
 const maxPositionPct = Number(values['max-position']);
 const maxDrawdownPct = Number(values['max-drawdown']);

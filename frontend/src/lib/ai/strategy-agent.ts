@@ -1,5 +1,5 @@
-import * as ai from 'ai';
 import { xai } from '@ai-sdk/xai';
+import * as ai from 'ai';
 import { wrapAISDK } from 'langsmith/experimental/vercel';
 
 import type { StrategyContext, StrategyOutput } from '@/types/strategies';
@@ -27,7 +27,7 @@ export async function generateStrategy(context: StrategyContext): Promise<Strate
 
 export async function modifyStrategy(
   existingStrategy: string,
-  context: StrategyContext
+  context: StrategyContext,
 ): Promise<StrategyOutput> {
   const response = await generateText({
     model,
@@ -72,10 +72,10 @@ function parseStrategyOutput(text: string): StrategyOutput {
     entryConditions: extractField(text, 'Entry conditions') || '',
     exitConditions: extractField(text, 'Exit conditions') || '',
     riskParameters: {
-      stopLoss: parseFloat(extractField(text, 'Stop loss') || '5'),
-      positionSize: parseFloat(extractField(text, 'Position size') || '10'),
+      stopLoss: Number.parseFloat(extractField(text, 'Stop loss') || '5'),
+      positionSize: Number.parseFloat(extractField(text, 'Position size') || '10'),
     },
-    confidence: parseInt(extractField(text, 'Confidence') || '50', 10),
+    confidence: Number.parseInt(extractField(text, 'Confidence') || '50', 10),
     rawOutput: text,
   };
 }

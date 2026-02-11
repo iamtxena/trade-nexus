@@ -1,22 +1,7 @@
-import Link from 'next/link';
-import {
-  Brain,
-  LineChart,
-  Bot,
-  Wallet,
-  TrendingUp,
-  Activity,
-  Zap,
-  ArrowRight,
-} from 'lucide-react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Activity, ArrowRight, Bot, Brain, LineChart, TrendingUp, Wallet, Zap } from 'lucide-react';
+import Link from 'next/link';
 
 const stats = [
   {
@@ -57,7 +42,8 @@ const sections = [
   {
     href: '/strategist',
     title: 'Strategist',
-    description: 'AI-powered strategy generation. Describe your trading thesis and get backtested strategies.',
+    description:
+      'AI-powered strategy generation. Describe your trading thesis and get backtested strategies.',
     icon: Brain,
     status: 'Ready',
     statusColor: 'bg-emerald-500',
@@ -94,9 +80,7 @@ export default function DashboardPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Your autonomous trading command center
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">Your autonomous trading command center</p>
       </div>
 
       {/* Stats Grid */}
@@ -104,7 +88,9 @@ export default function DashboardPage() {
         {stats.map((stat) => (
           <Card key={stat.label} className="border-border/50 py-4">
             <CardContent className="flex items-center gap-4">
-              <div className={`flex size-10 items-center justify-center rounded-lg ${stat.bgColor}`}>
+              <div
+                className={`flex size-10 items-center justify-center rounded-lg ${stat.bgColor}`}
+              >
                 <stat.icon className={`size-5 ${stat.color}`} />
               </div>
               <div className="min-w-0 flex-1">
@@ -131,10 +117,7 @@ export default function DashboardPage() {
                     <div className="flex size-10 items-center justify-center rounded-lg bg-secondary">
                       <section.icon className="size-5 text-foreground/80" />
                     </div>
-                    <Badge
-                      variant="secondary"
-                      className="gap-1.5 text-[11px] font-normal"
-                    >
+                    <Badge variant="secondary" className="gap-1.5 text-[11px] font-normal">
                       <span className={`size-1.5 rounded-full ${section.statusColor}`} />
                       {section.status}
                     </Badge>

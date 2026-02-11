@@ -1,11 +1,18 @@
-import { parseArgs } from 'util';
+import { parseArgs } from 'node:util';
 
-import {
-  printHeader, printError, printSuccess, printTable,
-  dim, bold, cyan, green, red, spinner,
-} from '../lib/output';
 import { validateConfig } from '../lib/config';
 import { getLiveEngineClient } from '../lib/live-engine';
+import {
+  bold,
+  cyan,
+  dim,
+  green,
+  printError,
+  printHeader,
+  printTable,
+  red,
+  spinner,
+} from '../lib/output';
 
 export async function portfolioCommand(args: string[]) {
   const subcommand = args[0];
@@ -41,7 +48,9 @@ function printHelp() {
   console.log(`${bold('Examples:')}`);
   console.log(`  ${dim('nexus portfolio list')}`);
   console.log(`  ${dim('nexus portfolio show --id <portfolioId>')}`);
-  console.log(`  ${dim('nexus portfolio trade --portfolio-id <id> --symbol BTCUSDT --side buy --quantity 0.1')}\n`);
+  console.log(
+    `  ${dim('nexus portfolio trade --portfolio-id <id> --symbol BTCUSDT --side buy --quantity 0.1')}\n`,
+  );
 }
 
 async function listPortfolios(_args: string[]) {
@@ -60,7 +69,7 @@ async function listPortfolios(_args: string[]) {
   printTable(
     ['ID', 'Name', 'Balance', 'Created'],
     portfolios.map((p) => [
-      p.id.slice(0, 8) + '...',
+      p.id,
       p.name?.slice(0, 25) ?? '-',
       `$${p.balance?.toLocaleString() ?? '0'}`,
       p.created_at ? new Date(p.created_at).toLocaleDateString() : '-',
@@ -94,16 +103,19 @@ async function showPortfolio(args: string[]) {
   console.log(`  ${bold('Total Value:')} $${data.totalValue.toLocaleString()}`);
 
   const pnlColor = data.pnl >= 0 ? green : red;
-  console.log(`  ${bold('P&L:')}         ${pnlColor(`$${data.pnl.toFixed(2)} (${data.pnlPercent.toFixed(2)}%)`)}`);
+  console.log(
+    `  ${bold('P&L:')}         ${pnlColor(`$${data.pnl.toFixed(2)} (${data.pnlPercent.toFixed(2)}%)`)}`,
+  );
 
   if (data.positions.length > 0) {
     console.log(`\n${bold('Positions:')}`);
     printTable(
       ['Symbol', 'Qty', 'Avg Price', 'Current', 'Unrealized P&L'],
       data.positions.map((p) => {
-        const pnlStr = p.unrealizedPnl >= 0
-          ? green(`+$${p.unrealizedPnl.toFixed(2)}`)
-          : red(`-$${Math.abs(p.unrealizedPnl).toFixed(2)}`);
+        const pnlStr =
+          p.unrealizedPnl >= 0
+            ? green(`+$${p.unrealizedPnl.toFixed(2)}`)
+            : red(`-$${Math.abs(p.unrealizedPnl).toFixed(2)}`);
         return [
           p.asset,
           p.amount.toString(),
@@ -134,7 +146,9 @@ async function executeTrade(args: string[]) {
   });
 
   if (!values['portfolio-id'] || !values.symbol || !values.side || !values.quantity) {
-    printError('Required: --portfolio-id <id> --symbol <BTCUSDT> --side <buy|sell> --quantity <amount>');
+    printError(
+      'Required: --portfolio-id <id> --symbol <BTCUSDT> --side <buy|sell> --quantity <amount>',
+    );
     process.exit(1);
   }
 
@@ -157,9 +171,9 @@ async function executeTrade(args: string[]) {
   try {
     const result = await engine.executeTrade(
       values['portfolio-id'],
-      values.symbol,  // passed as `asset` to live-engine
+      values.symbol, // passed as `asset` to live-engine
       side,
-      Number(values.quantity),  // passed as `amount` to live-engine
+      Number(values.quantity), // passed as `amount` to live-engine
       type,
       values.price ? Number(values.price) : undefined,
     );

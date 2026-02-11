@@ -1,15 +1,15 @@
-import * as ai from 'ai';
 import { xai } from '@ai-sdk/xai';
+import * as ai from 'ai';
 import { wrapAISDK } from 'langsmith/experimental/vercel';
 
-import { getPrediction, checkAnomaly, optimizePortfolio } from '@/lib/ai/predictor-agent';
-import { generateStrategy } from '@/lib/ai/strategy-agent';
 import { makeDecision } from '@/lib/ai/decision-agent';
+import { checkAnomaly, getPrediction, optimizePortfolio } from '@/lib/ai/predictor-agent';
 import { runStrategist } from '@/lib/ai/strategist';
+import { generateStrategy } from '@/lib/ai/strategy-agent';
 import type { AgentContext, AgentResult, OrchestratorTask } from '@/types/agents';
-import type { StrategyContext } from '@/types/strategies';
 import type { DecisionContext } from '@/types/agents';
 import type { PredictionRequest } from '@/types/predictions';
+import type { StrategyContext } from '@/types/strategies';
 
 const { generateText } = wrapAISDK(ai);
 const model = xai('grok-4-1-fast-non-reasoning');

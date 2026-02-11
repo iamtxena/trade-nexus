@@ -197,7 +197,7 @@ describe('data command', () => {
         callLog.push({ url, method });
 
         // listSymbols returns empty (no matching symbol)
-        if (url.includes('/api/v1/symbols') && method === 'GET' && url.includes('limit=200')) {
+        if (url.includes('/api/v1/symbols') && method === 'GET' && url.includes('limit=500')) {
           return Promise.resolve(mockResponse({ data: { items: [] } }));
         }
         if (url.includes('binance.com')) {
@@ -290,12 +290,12 @@ describe('data command', () => {
         '2025-06-01',
       ]);
 
-      // No DELETE or findSymbolByName (list with limit=200) call
+      // No DELETE or findSymbolByName (list with limit=500) call
       const deleteCalls = callLog.filter((c) => c.method === 'DELETE');
       expect(deleteCalls.length).toBe(0);
 
-      // No listSymbols call for findSymbolByName (limit=200)
-      const findCalls = callLog.filter((c) => c.url.includes('limit=200') && c.method === 'GET');
+      // No listSymbols call for findSymbolByName (limit=500)
+      const findCalls = callLog.filter((c) => c.url.includes('limit=500') && c.method === 'GET');
       expect(findCalls.length).toBe(0);
     });
   });

@@ -8,7 +8,6 @@ import {
   dim,
   printError,
   printHeader,
-  printSuccess,
   printTable,
   spinner,
 } from '../lib/output';

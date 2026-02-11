@@ -2,15 +2,7 @@ import { parseArgs } from 'node:util';
 
 import { getLonaClient } from '../../src/lib/lona/client';
 import { validateConfig } from '../lib/config';
-import {
-  bold,
-  cyan,
-  dim,
-  printError,
-  printHeader,
-  printTable,
-  spinner,
-} from '../lib/output';
+import { bold, cyan, dim, printError, printHeader, printTable, spinner } from '../lib/output';
 
 export async function strategyCommand(args: string[]) {
   const subcommand = args[0];

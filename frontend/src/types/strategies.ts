@@ -1,4 +1,4 @@
-import type { Prediction, PortfolioState } from './agents';
+import type { PortfolioState, Prediction } from './agents';
 
 export interface Strategy {
   id: string;

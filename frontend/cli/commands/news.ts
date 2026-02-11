@@ -1,13 +1,21 @@
-import { generateText } from 'ai';
+import { parseArgs } from 'node:util';
 import { xai } from '@ai-sdk/xai';
-import { parseArgs } from 'util';
+import { generateText } from 'ai';
 
-import {
-  printHeader, printError, printSuccess,
-  dim, bold, cyan, green, red, yellow, spinner,
-} from '../lib/output';
-import { validateConfig } from '../lib/config';
 import { getLonaClient } from '../../src/lib/lona/client';
+import { validateConfig } from '../lib/config';
+import {
+  bold,
+  cyan,
+  dim,
+  green,
+  printError,
+  printHeader,
+  printSuccess,
+  red,
+  spinner,
+  yellow,
+} from '../lib/output';
 
 const NEWS_ANALYSIS_PROMPT = `You are a financial news analyst and sentiment expert. Analyze recent news, events, and market sentiment that could impact trading strategies.
 
@@ -47,15 +55,18 @@ export async function newsCommand(args: string[]) {
     printHeader('News Command');
     console.log(`${bold('Usage:')}  nexus news [options]\n`);
     console.log(`${bold('Options:')}`);
-    console.log(`  --assets        Comma-separated asset classes (default: crypto,stocks)`);
+    console.log('  --assets        Comma-separated asset classes (default: crypto,stocks)');
     console.log(`  --strategy-id   Analyze news for a specific strategy's assets`);
-    console.log(`  --help          Show this help\n`);
+    console.log('  --help          Show this help\n');
     return;
   }
 
   validateConfig(['XAI_API_KEY']);
 
-  let assetContext = (values.assets ?? 'crypto,stocks').split(',').map((s) => s.trim()).join(', ');
+  let assetContext = (values.assets ?? 'crypto,stocks')
+    .split(',')
+    .map((s) => s.trim())
+    .join(', ');
   let strategyContext = '';
 
   if (values['strategy-id']) {
@@ -91,16 +102,26 @@ Focus on events from the last 7 days and upcoming catalysts in the next 2 weeks.
         const data = JSON.parse(jsonMatch[0]);
 
         // Sentiment header
-        const sentColor = data.overall_sentiment === 'bullish' ? green
-          : data.overall_sentiment === 'bearish' ? red : yellow;
-        console.log(`\n  ${bold('Sentiment:')} ${sentColor(data.overall_sentiment?.toUpperCase() ?? 'N/A')} ${dim(`(${((data.confidence ?? 0) * 100).toFixed(0)}% confidence)`)}`);
+        const sentColor =
+          data.overall_sentiment === 'bullish'
+            ? green
+            : data.overall_sentiment === 'bearish'
+              ? red
+              : yellow;
+        console.log(
+          `\n  ${bold('Sentiment:')} ${sentColor(data.overall_sentiment?.toUpperCase() ?? 'N/A')} ${dim(`(${((data.confidence ?? 0) * 100).toFixed(0)}% confidence)`)}`,
+        );
 
         // Key events
         if (data.key_events?.length) {
           console.log(`\n${bold('Key Events:')}`);
           for (const event of data.key_events) {
-            const impactIcon = event.impact === 'positive' ? green('+')
-              : event.impact === 'negative' ? red('-') : dim('~');
+            const impactIcon =
+              event.impact === 'positive'
+                ? green('+')
+                : event.impact === 'negative'
+                  ? red('-')
+                  : dim('~');
             console.log(`  ${impactIcon} ${event.event}`);
             if (event.affected_assets?.length) {
               console.log(`    ${dim(`Affects: ${event.affected_assets.join(', ')}`)}`);
@@ -112,8 +133,12 @@ Focus on events from the last 7 days and upcoming catalysts in the next 2 weeks.
         if (data.upcoming_catalysts?.length) {
           console.log(`\n${bold('Upcoming Catalysts:')}`);
           for (const catalyst of data.upcoming_catalysts) {
-            const urgency = catalyst.expected_impact === 'high' ? red('!!')
-              : catalyst.expected_impact === 'medium' ? yellow('!') : dim('.');
+            const urgency =
+              catalyst.expected_impact === 'high'
+                ? red('!!')
+                : catalyst.expected_impact === 'medium'
+                  ? yellow('!')
+                  : dim('.');
             console.log(`  ${urgency} ${catalyst.event} ${dim(`(${catalyst.date ?? 'TBD'})`)}`);
           }
         }
@@ -137,7 +162,9 @@ Focus on events from the last 7 days and upcoming catalysts in the next 2 weeks.
       console.log(`\n${text}`);
     }
 
-    console.log(`\n${dim(`Completed in ${elapsed}s | ${usage?.totalTokens?.toLocaleString() ?? '?'} tokens`)}\n`);
+    console.log(
+      `\n${dim(`Completed in ${elapsed}s | ${usage?.totalTokens?.toLocaleString() ?? '?'} tokens`)}\n`,
+    );
   } catch (error) {
     spin.stop();
     printError(error instanceof Error ? error.message : String(error));

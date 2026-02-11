@@ -1,5 +1,5 @@
-import * as ai from 'ai';
 import { xai } from '@ai-sdk/xai';
+import * as ai from 'ai';
 import { wrapAISDK } from 'langsmith/experimental/vercel';
 
 import type { DecisionContext, TradeDecision } from '@/types/agents';

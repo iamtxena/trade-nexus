@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
 
 import type { PortfolioSummary } from '@/hooks/use-portfolio';
 

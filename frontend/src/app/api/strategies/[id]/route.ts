@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { auth } from '@clerk/nextjs/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import type { Database } from '@/types/database';
 import type { Strategy } from '@/types/strategies';
@@ -29,10 +29,7 @@ function toStrategy(row: StrategyRow): Strategy {
   };
 }
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { userId } = await auth();
     if (!userId) {
@@ -63,10 +60,7 @@ export async function GET(
   }
 }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { userId } = await auth();
     if (!userId) {
@@ -122,11 +116,7 @@ export async function DELETE(
 
     const { id } = await params;
     const supabase = await createServiceRoleClient();
-    const { error } = await supabase
-      .from('strategies')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', userId);
+    const { error } = await supabase.from('strategies').delete().eq('id', id).eq('user_id', userId);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

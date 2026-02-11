@@ -1,13 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
 import { executeTask } from '@/lib/ai/orchestrator';
+import { createServiceRoleClient } from '@/lib/supabase/server';
+import { auth } from '@clerk/nextjs/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
-import type { Json } from '@/types/database';
 import type { AgentRun, AgentType } from '@/types/agents';
+import type { Json } from '@/types/database';
 
 const VALID_AGENT_TYPES: AgentType[] = [
-  'predictor', 'anomaly', 'optimizer', 'strategy', 'decision', 'strategist',
+  'predictor',
+  'anomaly',
+  'optimizer',
+  'strategy',
+  'decision',
+  'strategist',
 ];
 
 type AgentRunRow = {

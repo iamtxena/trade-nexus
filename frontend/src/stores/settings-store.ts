@@ -46,6 +46,6 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'trade-nexus-settings',
-    }
-  )
+    },
+  ),
 );

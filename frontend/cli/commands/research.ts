@@ -1,9 +1,9 @@
-import { generateText } from 'ai';
+import { parseArgs } from 'node:util';
 import { xai } from '@ai-sdk/xai';
-import { parseArgs } from 'util';
+import { generateText } from 'ai';
 
-import { printHeader, printError, printSuccess, dim, bold, cyan, spinner } from '../lib/output';
 import { validateConfig } from '../lib/config';
+import { bold, cyan, dim, printError, printHeader, printSuccess, spinner } from '../lib/output';
 
 const MARKET_RESEARCH_PROMPT = `You are an elite quantitative market analyst. Analyze market conditions and generate strategy ideas.
 
@@ -42,9 +42,9 @@ export async function researchCommand(args: string[]) {
     printHeader('Research Command');
     console.log(`${bold('Usage:')}  nexus research [options]\n`);
     console.log(`${bold('Options:')}`);
-    console.log(`  --assets    Comma-separated asset classes (default: crypto,stocks,forex)`);
-    console.log(`  --capital   Total capital (default: 100000)`);
-    console.log(`  --help      Show this help\n`);
+    console.log('  --assets    Comma-separated asset classes (default: crypto,stocks,forex)');
+    console.log('  --capital   Total capital (default: 100000)');
+    console.log('  --help      Show this help\n');
     return;
   }
 
@@ -84,7 +84,9 @@ Generate 3-5 diverse strategy ideas.`,
         if (data.strategy_ideas?.length) {
           console.log(`${bold('Strategy Ideas:')}\n`);
           for (const [i, idea] of data.strategy_ideas.entries()) {
-            console.log(`  ${cyan(`${i + 1}.`)} ${bold(idea.name)} ${dim(`[${idea.asset_class}/${idea.type}]`)}`);
+            console.log(
+              `  ${cyan(`${i + 1}.`)} ${bold(idea.name)} ${dim(`[${idea.asset_class}/${idea.type}]`)}`,
+            );
             console.log(`     ${idea.description}`);
             console.log(`     ${dim(`Rationale: ${idea.rationale}`)}\n`);
           }
@@ -96,7 +98,9 @@ Generate 3-5 diverse strategy ideas.`,
       console.log(`\n${text}`);
     }
 
-    console.log(dim(`Completed in ${elapsed}s | ${usage?.totalTokens?.toLocaleString() ?? '?'} tokens`));
+    console.log(
+      dim(`Completed in ${elapsed}s | ${usage?.totalTokens?.toLocaleString() ?? '?'} tokens`),
+    );
   } catch (error) {
     spin.stop();
     printError(error instanceof Error ? error.message : String(error));

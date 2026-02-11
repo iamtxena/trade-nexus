@@ -1,23 +1,15 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { cn } from '@/lib/utils';
+import { UserButton } from '@clerk/nextjs';
+import { Activity, Bot, Brain, LayoutDashboard, LineChart, Menu, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
-import {
-  LayoutDashboard,
-  Brain,
-  LineChart,
-  Bot,
-  Wallet,
-  Menu,
-  Activity,
-} from 'lucide-react';
-import { UserButton } from '@clerk/nextjs';
-import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -56,7 +48,7 @@ function SidebarContent({ pathname }: { pathname: string }) {
                   'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
                   isActive
                     ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                    : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                    : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
                 )}
               >
                 <item.icon
@@ -64,7 +56,7 @@ function SidebarContent({ pathname }: { pathname: string }) {
                     'size-[18px] shrink-0 transition-colors duration-200',
                     isActive
                       ? 'text-primary'
-                      : 'text-muted-foreground group-hover:text-sidebar-foreground'
+                      : 'text-muted-foreground group-hover:text-sidebar-foreground',
                   )}
                 />
                 {item.label}
@@ -106,12 +98,7 @@ export default function DashboardLayout({
           <header className="flex h-14 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-sm md:px-6">
             <div className="flex items-center gap-3">
               <SheetTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="md:hidden"
-                  aria-label="Open menu"
-                >
+                <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open menu">
                   <Menu className="size-5" />
                 </Button>
               </SheetTrigger>

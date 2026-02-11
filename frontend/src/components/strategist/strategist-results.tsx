@@ -1,16 +1,10 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { AlertCircle, Sparkles, Terminal } from 'lucide-react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { AlertCircle, Sparkles, Terminal } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
 interface StrategistResultsProps {
   streamedText: string;
@@ -18,13 +12,10 @@ interface StrategistResultsProps {
   error: string | null;
 }
 
-export function StrategistResults({
-  streamedText,
-  isRunning,
-  error,
-}: StrategistResultsProps) {
+export function StrategistResults({ streamedText, isRunning, error }: StrategistResultsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: streamedText triggers auto-scroll on new content
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -112,7 +103,7 @@ export function StrategistResults({
             ref={scrollRef}
             className={cn(
               'flex-1 overflow-y-auto rounded-lg bg-background/50 border border-border/30',
-              isRunning && 'border-primary/20'
+              isRunning && 'border-primary/20',
             )}
           >
             <div className="p-4">

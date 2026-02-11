@@ -1,13 +1,22 @@
-import { generateText } from 'ai';
+import { parseArgs } from 'node:util';
 import { xai } from '@ai-sdk/xai';
-import { parseArgs } from 'util';
+import { generateText } from 'ai';
 
-import {
-  printHeader, printError, printSuccess, printTable, printDivider,
-  dim, bold, cyan, green, red, yellow, spinner,
-} from '../lib/output';
 import { validateConfig } from '../lib/config';
 import { getLiveEngineClient } from '../lib/live-engine';
+import {
+  bold,
+  cyan,
+  dim,
+  green,
+  printDivider,
+  printError,
+  printHeader,
+  printTable,
+  red,
+  spinner,
+  yellow,
+} from '../lib/output';
 
 export async function reportCommand(args: string[]) {
   const subcommand = args[0];
@@ -77,7 +86,9 @@ async function dailyReport(_args: string[]) {
   console.log(`  ${cyan('Portfolios:')}          ${portfolios.length}`);
   console.log(`  ${cyan('Strategies:')}          ${strategies.length} total`);
   console.log(`  ${cyan('Active strategies:')}   ${green(String(activeStrategies))}`);
-  console.log(`  ${cyan('Stopped strategies:')} ${stoppedStrategies > 0 ? red(String(stoppedStrategies)) : dim('0')}`);
+  console.log(
+    `  ${cyan('Stopped strategies:')} ${stoppedStrategies > 0 ? red(String(stoppedStrategies)) : dim('0')}`,
+  );
 
   // Portfolio details
   if (portfolios.length > 0) {
@@ -89,17 +100,18 @@ async function dailyReport(_args: string[]) {
       try {
         const detail = await engine.getPortfolio(p.id);
         totalValue += detail.totalValue;
-        const pnlStr = detail.pnl >= 0
-          ? green(`+$${detail.pnl.toFixed(2)} (${detail.pnlPercent.toFixed(2)}%)`)
-          : red(`-$${Math.abs(detail.pnl).toFixed(2)} (${detail.pnlPercent.toFixed(2)}%)`);
+        const pnlStr =
+          detail.pnl >= 0
+            ? green(`+$${detail.pnl.toFixed(2)} (${detail.pnlPercent.toFixed(2)}%)`)
+            : red(`-$${Math.abs(detail.pnl).toFixed(2)} (${detail.pnlPercent.toFixed(2)}%)`);
         portfolioRows.push([
-          p.name?.slice(0, 20) ?? p.id.slice(0, 8),
+          p.name?.slice(0, 20) ?? p.id,
           `$${detail.totalValue.toLocaleString()}`,
           pnlStr,
           String(detail.positions.length),
         ]);
       } catch {
-        portfolioRows.push([p.name?.slice(0, 20) ?? p.id.slice(0, 8), `$${p.balance}`, dim('N/A'), '-']);
+        portfolioRows.push([p.name?.slice(0, 20) ?? p.id, `$${p.balance}`, dim('N/A'), '-']);
       }
     }
 
@@ -114,7 +126,11 @@ async function dailyReport(_args: string[]) {
       ['Name', 'Status', 'Asset', 'Interval'],
       strategies.map((s) => [
         s.name.slice(0, 25),
-        s.status === 'running' ? green(s.status) : s.status === 'stopped' ? red(s.status) : s.status,
+        s.status === 'running'
+          ? green(s.status)
+          : s.status === 'stopped'
+            ? red(s.status)
+            : s.status,
         s.asset ?? '-',
         s.interval ?? '-',
       ]),
@@ -127,7 +143,8 @@ async function dailyReport(_args: string[]) {
     try {
       const { text } = await generateText({
         model: xai('grok-4-1-fast-non-reasoning'),
-        system: 'You are a trading operations analyst. Provide a brief daily summary of trading operations.',
+        system:
+          'You are a trading operations analyst. Provide a brief daily summary of trading operations.',
         prompt: `Summarize today's trading status:
 - ${portfolios.length} portfolios, ${strategies.length} strategies (${activeStrategies} active, ${stoppedStrategies} stopped)
 - Date: ${new Date().toISOString().split('T')[0]}
@@ -165,7 +182,9 @@ async function strategyReport(args: string[]) {
 
   printHeader(`Strategy Report: ${strategy.name}`);
   console.log(`  ${bold('ID:')}       ${strategy.id}`);
-  console.log(`  ${bold('Status:')}   ${strategy.status === 'running' ? green(strategy.status) : red(strategy.status)}`);
+  console.log(
+    `  ${bold('Status:')}   ${strategy.status === 'running' ? green(strategy.status) : red(strategy.status)}`,
+  );
   console.log(`  ${bold('Asset:')}    ${strategy.asset}`);
   console.log(`  ${bold('Interval:')} ${strategy.interval}`);
 

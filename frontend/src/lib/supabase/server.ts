@@ -16,15 +16,15 @@ export async function createServerSupabaseClient() {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
+            for (const { name, value, options } of cookiesToSet) {
+              cookieStore.set(name, value, options);
+            }
           } catch {
             // Ignore errors in Server Components
           }
         },
       },
-    }
+    },
   );
 }
 
@@ -39,6 +39,6 @@ export async function createServiceRoleClient() {
         },
         setAll() {},
       },
-    }
+    },
   );
 }

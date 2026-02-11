@@ -1,12 +1,22 @@
-import { parseArgs } from 'util';
+import { parseArgs } from 'node:util';
 
-import {
-  printHeader, printError, printSuccess, printTable,
-  dim, bold, cyan, green, red, yellow, spinner, printStep,
-} from '../lib/output';
-import { validateConfig } from '../lib/config';
 import { getLonaClient } from '../../src/lib/lona/client';
+import { validateConfig } from '../lib/config';
 import { getLiveEngineClient } from '../lib/live-engine';
+import {
+  bold,
+  cyan,
+  dim,
+  green,
+  printError,
+  printHeader,
+  printStep,
+  printSuccess,
+  printTable,
+  red,
+  spinner,
+  yellow,
+} from '../lib/output';
 
 export async function deployCommand(args: string[]) {
   const subcommand = args[0];
@@ -123,8 +133,8 @@ async function deployStrategy(args: string[]) {
     console.log(`  ${bold('Asset:')}        ${values.asset}`);
     console.log(`  ${bold('Interval:')}     ${values.interval}`);
     console.log(`  ${bold('Capital:')}      $${capital.toLocaleString()}`);
-    console.log(`\n  ${dim('View portfolio: nexus portfolio show --id ' + portfolio.id)}`);
-    console.log(`  ${dim('View logs:      nexus deploy logs --id ' + deployed.id)}\n`);
+    console.log(`\n  ${dim(`View portfolio: nexus portfolio show --id ${portfolio.id}`)}`);
+    console.log(`  ${dim(`View logs:      nexus deploy logs --id ${deployed.id}`)}\n`);
   } catch (error) {
     spin.stop();
     printError(error instanceof Error ? error.message : String(error));
@@ -141,14 +151,16 @@ async function deployList(_args: string[]) {
   spin.stop(`Found ${strategies.length} strategies`);
 
   if (strategies.length === 0) {
-    console.log(dim('\n  No deployed strategies. Deploy one with: nexus deploy --strategy-id <id>\n'));
+    console.log(
+      dim('\n  No deployed strategies. Deploy one with: nexus deploy --strategy-id <id>\n'),
+    );
     return;
   }
 
   printTable(
     ['ID', 'Name', 'Status', 'Asset', 'Interval', 'Updated'],
     strategies.map((s) => [
-      s.id.slice(0, 8) + '...',
+      s.id,
       s.name.slice(0, 25),
       s.status === 'running' ? green(s.status) : s.status === 'stopped' ? red(s.status) : s.status,
       s.asset ?? '-',

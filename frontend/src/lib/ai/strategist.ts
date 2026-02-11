@@ -1,6 +1,6 @@
-import * as ai from 'ai';
-import { tool, zodSchema, stepCountIs } from 'ai';
 import { xai } from '@ai-sdk/xai';
+import * as ai from 'ai';
+import { stepCountIs, tool, zodSchema } from 'ai';
 import { wrapAISDK } from 'langsmith/experimental/vercel';
 import { z } from 'zod';
 
@@ -60,14 +60,8 @@ const researchMarketsSchema = z.object({
     .array(z.string())
     .describe('Asset classes to analyze, e.g. ["crypto", "stocks", "forex"]'),
   capital: z.number().describe('Total capital available'),
-  maxPositionPct: z
-    .number()
-    .default(5)
-    .describe('Max position size as % of portfolio'),
-  maxDrawdownPct: z
-    .number()
-    .default(15)
-    .describe('Max portfolio drawdown tolerance %'),
+  maxPositionPct: z.number().default(5).describe('Max position size as % of portfolio'),
+  maxDrawdownPct: z.number().default(15).describe('Max portfolio drawdown tolerance %'),
 });
 
 const createStrategySchema = z.object({
@@ -76,10 +70,7 @@ const createStrategySchema = z.object({
     .min(10)
     .describe('Detailed strategy description with entry/exit rules, indicators, timeframe'),
   name: z.string().optional().describe('Optional strategy name'),
-  provider: z
-    .string()
-    .default('xai')
-    .describe('AI provider for code generation (xai recommended)'),
+  provider: z.string().default('xai').describe('AI provider for code generation (xai recommended)'),
 });
 
 const listSymbolsSchema = z.object({
@@ -92,10 +83,7 @@ const listSymbolsSchema = z.object({
 
 const downloadMarketDataSchema = z.object({
   symbol: z.string().describe('Trading symbol, e.g. BTCUSDT'),
-  interval: z
-    .string()
-    .default('1h')
-    .describe('Candle interval: 1m, 5m, 15m, 30m, 1h, 4h, 1d'),
+  interval: z.string().default('1h').describe('Candle interval: 1m, 5m, 15m, 30m, 1h, 4h, 1d'),
   startDate: z.string().describe('Start date YYYY-MM-DD'),
   endDate: z.string().describe('End date YYYY-MM-DD'),
 });
@@ -144,10 +132,7 @@ const decideAllocationSchema = z.object({
 
 const getMlPredictionSchema = z.object({
   symbol: z.string().describe('Trading symbol'),
-  predictionType: z
-    .string()
-    .default('price')
-    .describe('Type: price, anomaly, volatility'),
+  predictionType: z.string().default('price').describe('Type: price, anomaly, volatility'),
   timeframe: z.string().default('1d').describe('Prediction timeframe'),
 });
 
@@ -275,10 +260,7 @@ Composite score (0-1): 40% Sharpe + 25% max drawdown (inverted) + 20% win rate +
           const returnScore = Math.min(Math.max(s.metrics.total_return / 100, 0), 1);
 
           const score =
-            0.4 * sharpeScore +
-            0.25 * drawdownScore +
-            0.2 * winScore +
-            0.15 * returnScore;
+            0.4 * sharpeScore + 0.25 * drawdownScore + 0.2 * winScore + 0.15 * returnScore;
 
           return { ...s, score: Math.round(score * 10000) / 10000 };
         })
@@ -391,9 +373,7 @@ const sharedConfig = {
   stopWhen: stepCountIs(20),
 } as const;
 
-export async function runStrategist(
-  options: StrategistOptions = {},
-): Promise<StrategistResult> {
+export async function runStrategist(options: StrategistOptions = {}): Promise<StrategistResult> {
   const result = await generateText({
     ...sharedConfig,
     prompt: buildPrompt(options),

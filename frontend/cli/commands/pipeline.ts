@@ -1,15 +1,26 @@
-import { generateText } from 'ai';
+import { parseArgs } from 'node:util';
 import { xai } from '@ai-sdk/xai';
-import { parseArgs } from 'util';
+import { generateText } from 'ai';
 
-import {
-  printHeader, printError, printSuccess, printTable, printStep, printDivider,
-  dim, bold, cyan, green, red, yellow, spinner,
-} from '../lib/output';
-import { validateConfig } from '../lib/config';
 import { getLonaClient } from '../../src/lib/lona/client';
-import { getLiveEngineClient } from '../lib/live-engine';
 import type { LonaReport } from '../../src/lib/lona/types';
+import { validateConfig } from '../lib/config';
+import { getLiveEngineClient } from '../lib/live-engine';
+import {
+  bold,
+  cyan,
+  dim,
+  green,
+  printDivider,
+  printError,
+  printHeader,
+  printStep,
+  printSuccess,
+  printTable,
+  red,
+  spinner,
+  yellow,
+} from '../lib/output';
 
 const RESEARCH_PROMPT = `You are an elite quantitative market analyst. Analyze market conditions and generate strategy ideas.
 
@@ -59,11 +70,11 @@ export async function pipelineCommand(args: string[]) {
     printHeader('Pipeline Command');
     console.log(`${bold('Usage:')}  nexus pipeline [options]\n`);
     console.log(`${bold('Options:')}`);
-    console.log(`  --assets       Comma-separated asset classes (default: crypto)`);
-    console.log(`  --capital      Total capital (default: 50000)`);
-    console.log(`  --top          Number of top strategies to deploy (default: 3)`);
-    console.log(`  --skip-deploy  Skip deployment to live-engine`);
-    console.log(`  --help         Show this help\n`);
+    console.log('  --assets       Comma-separated asset classes (default: crypto)');
+    console.log('  --capital      Total capital (default: 50000)');
+    console.log('  --top          Number of top strategies to deploy (default: 3)');
+    console.log('  --skip-deploy  Skip deployment to live-engine');
+    console.log('  --help         Show this help\n');
     return;
   }
 
@@ -82,7 +93,9 @@ export async function pipelineCommand(args: string[]) {
   console.log(`  ${cyan('Assets:')}  ${assetClasses.join(', ')}`);
   console.log(`  ${cyan('Capital:')} $${capital.toLocaleString()}`);
   console.log(`  ${cyan('Top N:')}   ${topN}`);
-  console.log(`  ${cyan('Deploy:')}  ${values['skip-deploy'] ? yellow('skipped') : green('enabled')}\n`);
+  console.log(
+    `  ${cyan('Deploy:')}  ${values['skip-deploy'] ? yellow('skipped') : green('enabled')}\n`,
+  );
 
   const lona = getLonaClient();
   const results: PipelineResult[] = [];
@@ -128,16 +141,14 @@ Generate 3-5 diverse, codeable Backtrader strategy ideas. For each, include the 
   for (const idea of ideas) {
     const spin = spinner(`Creating: ${idea.name}...`);
     try {
-      const result = await lona.createStrategyFromDescription(
-        idea.description,
-        idea.name,
-        'xai',
-      );
+      const result = await lona.createStrategyFromDescription(idea.description, idea.name, 'xai');
       createdStrategies.push({ id: result.strategyId, name: result.name, idea });
-      spin.stop(`Created: ${result.name} (${result.strategyId.slice(0, 8)}...)`);
+      spin.stop(`Created: ${result.name} (${result.strategyId})`);
     } catch (error) {
       spin.stop();
-      console.log(`    ${red('!')} Failed to create ${idea.name}: ${error instanceof Error ? error.message : error}`);
+      console.log(
+        `    ${red('!')} Failed to create ${idea.name}: ${error instanceof Error ? error.message : error}`,
+      );
     }
   }
 
@@ -161,12 +172,20 @@ Generate 3-5 diverse, codeable Backtrader strategy ideas. For each, include the 
   for (const symbol of symbols) {
     const spin = spinner(`Downloading ${symbol}...`);
     try {
+      // Auto-delete existing symbol to prevent name conflicts on re-runs
+      const expectedName = `${symbol}_1h_${startDate.replace(/-/g, '')}_${endDate.replace(/-/g, '')}`;
+      const existing = await lona.findSymbolByName(expectedName);
+      if (existing) {
+        await lona.deleteSymbol(existing.id);
+      }
       const result = await lona.downloadMarketData(symbol, '1h', startDate, endDate);
       dataMap.set(symbol, result.id);
-      spin.stop(`${symbol}: ${result.id.slice(0, 8)}...`);
+      spin.stop(`${symbol}: ${result.id}`);
     } catch (error) {
       spin.stop();
-      console.log(`    ${red('!')} Failed ${symbol}: ${error instanceof Error ? error.message : error}`);
+      console.log(
+        `    ${red('!')} Failed ${symbol}: ${error instanceof Error ? error.message : error}`,
+      );
     }
   }
 
@@ -215,10 +234,14 @@ Generate 3-5 diverse, codeable Backtrader strategy ideas. For each, include the 
         metrics: stats,
       });
 
-      spin.stop(`${strategy.name}: Sharpe ${(stats.sharpe_ratio ?? 0).toFixed(2)}, Return ${(stats.total_return ?? 0).toFixed(2)}%`);
+      spin.stop(
+        `${strategy.name}: Sharpe ${(stats.sharpe_ratio ?? 0).toFixed(2)}, Return ${(stats.total_return ?? 0).toFixed(2)}%`,
+      );
     } catch (error) {
       spin.stop();
-      console.log(`    ${red('!')} Backtest failed for ${strategy.name}: ${error instanceof Error ? error.message : error}`);
+      console.log(
+        `    ${red('!')} Backtest failed for ${strategy.name}: ${error instanceof Error ? error.message : error}`,
+      );
       results.push({ strategyId: strategy.id, name: strategy.name, score: 0 });
     }
   }
@@ -238,7 +261,10 @@ Generate 3-5 diverse, codeable Backtrader strategy ideas. For each, include the 
     const winScore = Math.min(Math.max(winRate > 1 ? winRate / 100 : winRate, 0), 1);
     const returnScore = Math.min(Math.max(totalReturn / 100, 0), 1);
 
-    r.score = Math.round((0.4 * sharpeScore + 0.25 * drawdownScore + 0.2 * winScore + 0.15 * returnScore) * 10000) / 10000;
+    r.score =
+      Math.round(
+        (0.4 * sharpeScore + 0.25 * drawdownScore + 0.2 * winScore + 0.15 * returnScore) * 10000,
+      ) / 10000;
   }
 
   results.sort((a, b) => b.score - a.score);
@@ -305,10 +331,12 @@ Generate 3-5 diverse, codeable Backtrader strategy ideas. For each, include the 
         strategy.deployedId = deployed.id;
         strategy.portfolioId = portfolio.id;
 
-        spin.stop(`Deployed: ${strategy.name} → Portfolio ${portfolio.id.slice(0, 8)}...`);
+        spin.stop(`Deployed: ${strategy.name} → Portfolio ${portfolio.id}`);
       } catch (error) {
         spin.stop();
-        console.log(`    ${red('!')} Deploy failed for ${strategy.name}: ${error instanceof Error ? error.message : error}`);
+        console.log(
+          `    ${red('!')} Deploy failed for ${strategy.name}: ${error instanceof Error ? error.message : error}`,
+        );
       }
     }
   }
@@ -332,8 +360,8 @@ Generate 3-5 diverse, codeable Backtrader strategy ideas. For each, include the 
       deployed.map((r) => [
         r.name.slice(0, 20),
         r.score.toFixed(4),
-        r.portfolioId ? r.portfolioId.slice(0, 12) + '...' : '-',
-        r.deployedId ? r.deployedId.slice(0, 12) + '...' : '-',
+        r.portfolioId ?? '-',
+        r.deployedId ?? '-',
       ]),
     );
 
@@ -341,7 +369,7 @@ Generate 3-5 diverse, codeable Backtrader strategy ideas. For each, include the 
     console.log(`  ${dim('nexus portfolio list')}     View all portfolios`);
     console.log(`  ${dim('nexus deploy list')}        View deployed strategies`);
     console.log(`  ${dim('nexus report daily')}       Generate daily report`);
-    console.log(`  ${dim('nexus news --assets ' + assetClasses.join(','))} Check market news`);
+    console.log(`  ${dim(`nexus news --assets ${assetClasses.join(',')}`)} Check market news`);
   }
 
   printDivider();

@@ -1,21 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import { Play, RotateCcw, DollarSign } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
 import type { StrategistOptions } from '@/lib/ai/strategist';
+import { cn } from '@/lib/utils';
+import { DollarSign, Play, RotateCcw } from 'lucide-react';
+import { useState } from 'react';
 
 const ASSET_CLASSES = [
   { id: 'crypto', label: 'Crypto', color: 'bg-amber-500' },
@@ -36,9 +30,7 @@ export function StrategistConfig({ onRun, onReset, isRunning }: StrategistConfig
   const [maxDrawdown, setMaxDrawdown] = useState(15);
 
   function toggleAsset(id: string) {
-    setSelectedAssets((prev) =>
-      prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]
-    );
+    setSelectedAssets((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
   }
 
   function handleRun() {
@@ -54,9 +46,7 @@ export function StrategistConfig({ onRun, onReset, isRunning }: StrategistConfig
     <Card className="border-border/50">
       <CardHeader>
         <CardTitle className="text-base">Pipeline Configuration</CardTitle>
-        <CardDescription>
-          Define your universe, capital, and risk parameters
-        </CardDescription>
+        <CardDescription>Define your universe, capital, and risk parameters</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Asset Classes */}
@@ -76,14 +66,14 @@ export function StrategistConfig({ onRun, onReset, isRunning }: StrategistConfig
                     selected
                       ? 'border-primary/40 bg-primary/10 text-foreground'
                       : 'border-border/50 bg-secondary/30 text-muted-foreground hover:border-border hover:bg-secondary/60',
-                    isRunning && 'opacity-50 cursor-not-allowed'
+                    isRunning && 'opacity-50 cursor-not-allowed',
                   )}
                 >
                   <span
                     className={cn(
                       'size-2 rounded-full transition-opacity',
                       asset.color,
-                      !selected && 'opacity-30'
+                      !selected && 'opacity-30',
                     )}
                   />
                   {asset.label}
@@ -112,7 +102,11 @@ export function StrategistConfig({ onRun, onReset, isRunning }: StrategistConfig
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(capital)}
+            {new Intl.NumberFormat('en-US', {
+              style: 'currency',
+              currency: 'USD',
+              maximumFractionDigits: 0,
+            }).format(capital)}
           </p>
         </div>
 

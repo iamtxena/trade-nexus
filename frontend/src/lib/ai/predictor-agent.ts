@@ -18,7 +18,7 @@ export async function getPrediction(request: PredictionRequest): Promise<Predict
 
 export async function checkAnomaly(
   symbol: string,
-  data: number[]
+  data: number[],
 ): Promise<{ isAnomaly: boolean; score: number }> {
   const response = await fetch(`${ML_BACKEND_URL}/api/anomaly`, {
     method: 'POST',
@@ -35,7 +35,7 @@ export async function checkAnomaly(
 
 export async function optimizePortfolio(
   holdings: Record<string, number>,
-  predictions: Prediction[]
+  predictions: Prediction[],
 ): Promise<{ allocations: Record<string, number>; expectedReturn: number }> {
   const response = await fetch(`${ML_BACKEND_URL}/api/optimize`, {
     method: 'POST',

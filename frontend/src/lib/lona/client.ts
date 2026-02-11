@@ -96,6 +96,30 @@ export class LonaClient {
     }
   }
 
+  private async requestVoid(
+    method: string,
+    path: string,
+    options: {
+      timeout?: number;
+    } = {},
+  ): Promise<void> {
+    const url = new URL(path, this.baseUrl);
+    const controller = new AbortController();
+    const timeoutMs = options.timeout ?? 60_000;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url.toString(), {
+        method,
+        headers: this.authHeaders(),
+        signal: controller.signal,
+      });
+      await this.raiseForStatus(response);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   private unwrap(body: unknown): unknown {
     if (body && typeof body === 'object' && 'data' in body) {
       return (body as Record<string, unknown>).data;
@@ -119,10 +143,7 @@ export class LonaClient {
       detail = response.statusText;
     }
 
-    throw new LonaClientError(
-      `Lona API error ${response.status}: ${detail}`,
-      response.status,
-    );
+    throw new LonaClientError(`Lona API error ${response.status}: ${detail}`, response.status);
   }
 
   async register(): Promise<LonaRegistrationResponse> {
@@ -140,6 +161,46 @@ export class LonaClient {
         'Content-Type': 'application/json',
         'X-Agent-Registration-Secret': this.registrationSecret,
       },
+      body: JSON.stringify(body),
+    });
+
+    await this.raiseForStatus(response);
+    const json = await response.json();
+    const data = this.unwrap(json) as LonaRegistrationResponse;
+    this.token = data.token;
+    return data;
+  }
+
+  async requestInvite(): Promise<{ invite_code: string }> {
+    const url = new URL('/api/v1/agents/request-invite', this.baseUrl);
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agent_id: this.agentId,
+        agent_name: this.agentName,
+        source: 'trade-nexus',
+      }),
+    });
+
+    await this.raiseForStatus(response);
+    const json = await response.json();
+    return this.unwrap(json) as { invite_code: string };
+  }
+
+  async registerWithInviteCode(inviteCode: string): Promise<LonaRegistrationResponse> {
+    const body = {
+      agent_id: this.agentId,
+      agent_name: this.agentName,
+      source: 'trade-nexus',
+      invite_code: inviteCode,
+      expires_in_days: this.tokenTtlDays,
+    };
+
+    const url = new URL('/api/v1/agents/register', this.baseUrl);
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
 
@@ -168,22 +229,16 @@ export class LonaClient {
     );
   }
 
-  async createStrategy(
-    name: string,
-    code: string,
-    description?: string,
-  ): Promise<{ id: string }> {
+  async createStrategy(name: string, code: string, description?: string): Promise<{ id: string }> {
     return this.request<{ id: string }>('POST', '/api/v1/strategies', {
       body: { name, code, description, version: '1.0.0', language: 'python' },
     });
   }
 
   async listStrategies(skip = 0, limit = 50): Promise<LonaStrategy[]> {
-    const data = await this.request<{ items: LonaStrategy[] }>(
-      'GET',
-      '/api/v1/strategies',
-      { params: { skip, limit } },
-    );
+    const data = await this.request<{ items: LonaStrategy[] }>('GET', '/api/v1/strategies', {
+      params: { skip, limit },
+    });
     return data.items ?? [];
   }
 
@@ -199,18 +254,10 @@ export class LonaClient {
     return data.code ?? '';
   }
 
-  async listSymbols(
-    isGlobal = false,
-    limit = 50,
-    skip = 0,
-  ): Promise<LonaSymbol[]> {
+  async listSymbols(isGlobal = false, limit = 50, skip = 0): Promise<LonaSymbol[]> {
     const params: Record<string, string | number | boolean> = { skip, limit };
     if (isGlobal) params.is_global = true;
-    const data = await this.request<{ items: LonaSymbol[] }>(
-      'GET',
-      '/api/v1/symbols',
-      { params },
-    );
+    const data = await this.request<{ items: LonaSymbol[] }>('GET', '/api/v1/symbols', { params });
     return data.items ?? [];
   }
 
@@ -218,10 +265,18 @@ export class LonaClient {
     return this.request<LonaSymbol>('GET', `/api/v1/symbols/${symbolId}`);
   }
 
-  async uploadSymbol(
-    csvContent: Blob,
-    metadata: Record<string, unknown>,
-  ): Promise<{ id: string }> {
+  async deleteSymbol(symbolId: string): Promise<void> {
+    return this.requestVoid('DELETE', `/api/v1/symbols/${symbolId}`);
+  }
+
+  async findSymbolByName(name: string): Promise<LonaSymbol | null> {
+    // Note: no server-side filter by name, so we fetch a large page and search locally.
+    // If the user has more than 500 symbols, this may miss matches.
+    const symbols = await this.listSymbols(false, 500);
+    return symbols.find((s) => s.name === name) ?? null;
+  }
+
+  async uploadSymbol(csvContent: Blob, metadata: Record<string, unknown>): Promise<{ id: string }> {
     const formData = new FormData();
     formData.append('file', csvContent, 'data.csv');
     formData.append('metadata', JSON.stringify(metadata));
@@ -254,16 +309,13 @@ export class LonaClient {
     startDate: string,
     endDate: string,
   ): Promise<LonaSymbol> {
-    const candles = await this.fetchBinanceKlines(
-      symbol,
-      interval,
-      startDate,
-      endDate,
-    );
+    const candles = await this.fetchBinanceKlines(symbol, interval, startDate, endDate);
     const csvContent = this.candlesToCsv(candles);
+    const nameStart = startDate.replace(/-/g, '');
+    const nameEnd = endDate.replace(/-/g, '');
     const metadata = {
       data_type: 'ohlcv',
-      name: symbol,
+      name: `${symbol}_${interval}_${nameStart}_${nameEnd}`,
       exchange: 'BINANCE',
       asset_class: 'crypto',
       quote_currency: 'USD',
@@ -280,10 +332,7 @@ export class LonaClient {
       description: `${symbol} ${interval} candles from Binance (${startDate} to ${endDate})`,
     };
 
-    const data = await this.uploadSymbol(
-      new Blob([csvContent], { type: 'text/csv' }),
-      metadata,
-    );
+    const data = await this.uploadSymbol(new Blob([csvContent], { type: 'text/csv' }), metadata);
 
     if (data.id) {
       return this.getSymbol(data.id);
@@ -347,19 +396,14 @@ export class LonaClient {
     return rows.join('\n');
   }
 
-  async runBacktest(
-    request: LonaBacktestRequest,
-  ): Promise<LonaBacktestResponse> {
+  async runBacktest(request: LonaBacktestRequest): Promise<LonaBacktestResponse> {
     return this.request<LonaBacktestResponse>('POST', '/api/v1/runner/run', {
       body: request,
     });
   }
 
   async getReportStatus(reportId: string): Promise<LonaReportStatus> {
-    return this.request<LonaReportStatus>(
-      'GET',
-      `/api/v1/reports/${reportId}/status`,
-    );
+    return this.request<LonaReportStatus>('GET', `/api/v1/reports/${reportId}/status`);
   }
 
   async getReport(reportId: string): Promise<LonaReport> {
@@ -367,11 +411,9 @@ export class LonaClient {
   }
 
   async getFullReport(reportId: string): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>(
-      'GET',
-      `/api/v1/reports/${reportId}/full`,
-      { timeout: 60_000 },
-    );
+    return this.request<Record<string, unknown>>('GET', `/api/v1/reports/${reportId}/full`, {
+      timeout: 60_000,
+    });
   }
 
   async waitForReport(
@@ -397,9 +439,7 @@ export class LonaClient {
       elapsed += pollInterval;
     }
 
-    throw new LonaClientError(
-      `Timed out waiting for report ${reportId} after ${timeout / 1000}s`,
-    );
+    throw new LonaClientError(`Timed out waiting for report ${reportId} after ${timeout / 1000}s`);
   }
 }
 

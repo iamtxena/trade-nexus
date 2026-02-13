@@ -72,14 +72,13 @@ This folder contains detailed specifications for each component of the Trader Br
 ```
 github.com/iamtxena/ (Personal)
 ├── trade-nexus/          # Orchestration + ML backend
-├── lona/                 # Strategy generation + backtesting (PRIVATE)
 └── live-engine/          # Execution engine
 
-github.com/mindsightventures/ (Organization - PUBLIC)
-├── trader-cli/           # NEW: Standalone CLI interface
-├── trader-data/          # NEW: Data module service
-└── trader-knowledge/     # NEW: Knowledge base service
+github.com/mindsightventures/ (Organization)
+├── lona/                 # Strategy generation + backtesting (PRIVATE 🔒)
+├── trader-cli/           # NEW: Standalone CLI interface (public)
+├── trader-data/          # NEW: Data module service (public)
+└── trader-knowledge/     # NEW: Knowledge base service (public)
 ```
 
-> **Note**: New ecosystem repos go under `mindsightventures` org (public).
-> Core trading infra (lona) stays private under `iamtxena`.
+> **Note**: Lona is private, all other mindsightventures repos are public.

@@ -7,25 +7,34 @@
 Trade Nexus is a **two-layer architecture**:
 
 ```
-┌─────────────────────────────────────────┐
-│            CLIENT LAYER                 │
-│  Web UI │ API Direct │ OpenClaw Trader │
-└───────────────┬─────────────────────────┘
-                │
-                ▼
-┌─────────────────────────────────────────┐
-│         TRADE NEXUS PLATFORM            │
-│                                         │
-│  Agent Orchestrator (AI SDK v6)         │
-│       │                                 │
-│   ┌───┴───┬───────┬───────┐            │
-│   ▼       ▼       ▼       ▼            │
-│ Research Risk  Execution Data          │
-│  Agent  Manager  Agent   Module        │
-│                                         │
-│  Knowledge Base │ Session Store        │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                     CLIENT LAYER                         │
+│                                                          │
+│  ┌────────┐  ┌────────┐  ┌────────┐  ┌───────────────┐  │
+│  │ Web UI │  │  CLI   │  │  API   │  │ OpenClaw      │  │
+│  │        │  │        │  │ Direct │  │ Trader        │  │
+│  └───┬────┘  └───┬────┘  └───┬────┘  └───────┬───────┘  │
+│      │           │           │               │          │
+│      │           │           │          (uses CLI)      │
+│      └───────────┴───────────┴───────────────┘          │
+└──────────────────────────┬───────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────┐
+│                 TRADE NEXUS PLATFORM                     │
+│                                                          │
+│  Agent Orchestrator (AI SDK v6)                          │
+│       │                                                  │
+│   ┌───┴───┬───────┬───────┐                             │
+│   ▼       ▼       ▼       ▼                             │
+│ Research Risk  Execution Data                           │
+│  Agent  Manager  Agent   Module                         │
+│                                                          │
+│  Knowledge Base │ Session Store                         │
+└──────────────────────────────────────────────────────────┘
 ```
+
+**The CLI (`trading-cli`) is the primary interface** - OpenClaw Trader uses it, and humans can use it directly too.
 
 ## Architecture Documents
 

@@ -7,22 +7,28 @@ Trade Nexus uses a **two-layer architecture** that separates the platform (backe
 ## Architecture Layers
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    CLIENT LAYER                         │
-│                                                         │
-│  ┌──────────┐  ┌──────────┐  ┌────────────────────┐    │
-│  │  Web UI  │  │   API    │  │  OpenClaw Trader   │    │
-│  │          │  │  direct  │  │  (pre-built agent) │    │
-│  └────┬─────┘  └────┬─────┘  └─────────┬──────────┘    │
-│       │             │                   │               │
-│       │             │         Personal memory,          │
-│       │             │         Telegram/WhatsApp,        │
-│       │             │         autonomous heartbeats     │
-└───────┴─────────────┴───────────────────┴───────────────┘
-                      │
-                      ▼ (Trade Nexus API)
-┌─────────────────────────────────────────────────────────┐
-│              TRADE NEXUS PLATFORM                       │
+┌──────────────────────────────────────────────────────────────┐
+│                       CLIENT LAYER                           │
+│                                                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────────┐  │
+│  │  Web UI  │  │   CLI    │  │   API    │  │  OpenClaw   │  │
+│  │          │  │ trading- │  │  direct  │  │   Trader    │  │
+│  │          │  │   cli    │  │          │  │             │  │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────┬──────┘  │
+│       │             │             │               │         │
+│       │             │             │          (uses CLI)     │
+│       │             │             │               │         │
+│       └─────────────┴─────────────┴───────────────┘         │
+│                                                              │
+│  CLI is the PRIMARY interface:                               │
+│  • Direct human use                                          │
+│  • OpenClaw skill integration                                │
+│  • Scriptable / automatable                                  │
+└──────────────────────────────┬───────────────────────────────┘
+                               │
+                               ▼ (Trade Nexus API)
+┌──────────────────────────────────────────────────────────────┐
+│                   TRADE NEXUS PLATFORM                       │
 │                                                         │
 │  ┌───────────────────────────────────────────────────┐  │
 │  │           AGENT ORCHESTRATOR (AI SDK v6)          │  │
@@ -56,9 +62,44 @@ Handles user interaction and personal preferences. Multiple client types support
 
 | Client Type | Description | Use Case |
 |-------------|-------------|----------|
+| **CLI** (`trading-cli`) | Command-line interface | Primary interface, scriptable, OpenClaw integration |
 | **Web UI** | Browser-based dashboard | Visual portfolio management |
-| **API Direct** | REST/WebSocket API | Custom integrations, bots |
-| **OpenClaw Trader** | Pre-built OpenClaw agent | Personal autonomous trading assistant |
+| **API Direct** | REST/WebSocket API | Custom integrations, programmatic access |
+| **OpenClaw Trader** | Pre-built OpenClaw agent | Personal autonomous trading (uses CLI internally) |
+
+**The CLI is the foundation** - it wraps the API with a human/agent-friendly interface:
+
+```bash
+# Portfolio
+trading-cli portfolio status
+trading-cli portfolio history --days 30
+
+# Trading
+trading-cli trade buy BTC 0.1
+trading-cli trade sell ETH 1.5 --limit 2500
+
+# Strategies
+trading-cli strategy list
+trading-cli strategy create "BTC momentum" --file strategy.py
+trading-cli strategy deploy abc123 --mode paper
+trading-cli strategy backtest abc123 --data btc-1h-2024
+
+# Research
+trading-cli research "momentum strategies for crypto"
+trading-cli research sentiment BTC
+
+# Data
+trading-cli data candles BTC 1h --limit 100
+trading-cli data quote ETH
+```
+
+**Why CLI-first?**
+1. **OpenClaw integration**: Skills can call CLI commands directly
+2. **Scriptable**: Easy automation with bash/python
+3. **Testable**: Easier to test than UI
+4. **Universal**: Works everywhere (SSH, cron, CI/CD)
+
+See [CLI_INTERFACE.md](./CLI_INTERFACE.md) for full specification.
 
 ### Platform Layer (Trade Nexus)
 

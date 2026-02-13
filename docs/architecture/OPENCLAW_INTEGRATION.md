@@ -36,18 +36,23 @@
 │  │                    │                      │  │
 │  │  ┌─────────────────┴─────────────────┐   │  │
 │  │  │        SKILLS                      │   │  │
-│  │  │  • trade-nexus (API client)        │   │  │
+│  │  │  • trade-nexus (uses CLI)          │   │  │
 │  │  │  • research (local tools)          │   │  │
 │  │  │  • alerts (notifications)          │   │  │
-│  │  └───────────────────────────────────┘   │  │
-│  │                    │                      │  │
-│  │  ┌─────────────────┴─────────────────┐   │  │
-│  │  │        CHANNELS                    │   │  │
-│  │  │  • Telegram                        │   │  │
-│  │  │  • WhatsApp                        │   │  │
-│  │  │  • Discord                         │   │  │
-│  │  └───────────────────────────────────┘   │  │
+│  │  └───────────────────┬───────────────┘   │  │
+│  │                      │                    │  │
+│  │  ┌─────────────────────────────────────┐  │  │
+│  │  │        CHANNELS                     │  │  │
+│  │  │  • Telegram                         │  │  │
+│  │  │  • WhatsApp                         │  │  │
+│  │  │  • Discord                          │  │  │
+│  │  └─────────────────────────────────────┘  │  │
 │  └───────────────────────────────────────────┘  │
+│                         │                       │
+│  ┌──────────────────────┴────────────────────┐  │
+│  │              trading-cli                  │  │
+│  │  (installed locally, wraps API)           │  │
+│  └──────────────────────┬────────────────────┘  │
 │                         │                       │
 └─────────────────────────┼───────────────────────┘
                           │
@@ -57,6 +62,11 @@
               │  api.trade-nexus.io   │
               └───────────────────────┘
 ```
+
+**Key insight**: OpenClaw uses `trading-cli` locally, which talks to the Trade Nexus API. This gives us:
+- Offline-capable commands (cached data)
+- Consistent interface for humans and agents
+- Easy skill implementation (just exec CLI commands)
 
 ## Installation Options
 
@@ -130,26 +140,38 @@ read_when:
   - User asks about strategies or backtesting
 ```
 
-### Tool Implementations
+### Tool Implementations (CLI-based)
+
+The skill uses `trading-cli` commands, making it simple and consistent:
 
 ```typescript
 // skills/trade-nexus/tools.ts
-import { TradeNexusClient } from '@trade-nexus/sdk';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
-const client = new TradeNexusClient({
-  apiUrl: process.env.TRADE_NEXUS_API_URL,
-  apiKey: process.env.TRADE_NEXUS_API_KEY,
-});
+const execAsync = promisify(exec);
+
+// Helper to run CLI commands
+async function cli(command: string): Promise<string> {
+  const { stdout, stderr } = await execAsync(`trading-cli ${command} --json`);
+  if (stderr) throw new Error(stderr);
+  return stdout;
+}
 
 export const tools = {
   // Portfolio
   getPortfolio: {
     description: 'Get current portfolio status',
     parameters: {},
-    execute: async () => {
-      const portfolio = await client.portfolio.get();
-      return formatPortfolio(portfolio);
+    execute: async () => cli('portfolio status'),
+  },
+  
+  getPortfolioHistory: {
+    description: 'Get portfolio history',
+    parameters: {
+      days: { type: 'number', default: 30 },
     },
+    execute: async ({ days }) => cli(`portfolio history --days ${days}`),
   },
   
   // Trading
@@ -162,9 +184,10 @@ export const tools = {
       type: { type: 'string', enum: ['market', 'limit'], default: 'market' },
       price: { type: 'number' },
     },
-    execute: async (params) => {
-      const result = await client.trade.execute(params);
-      return formatTradeResult(result);
+    execute: async ({ symbol, side, quantity, type, price }) => {
+      let cmd = `trade ${side} ${symbol} ${quantity}`;
+      if (type === 'limit' && price) cmd += ` --limit ${price}`;
+      return cli(cmd);
     },
   },
   
@@ -173,24 +196,25 @@ export const tools = {
     description: 'Research market conditions or strategies',
     parameters: {
       query: { type: 'string', required: true },
-      asset: { type: 'string' },
     },
-    execute: async ({ query, asset }) => {
-      const result = await client.research.query(query, { asset });
-      return result.summary;
+    execute: async ({ query }) => cli(`research "${query}"`),
+  },
+  
+  sentiment: {
+    description: 'Get sentiment analysis for an asset',
+    parameters: {
+      symbol: { type: 'string', required: true },
     },
+    execute: async ({ symbol }) => cli(`research sentiment ${symbol}`),
   },
   
   // Strategies
   listStrategies: {
     description: 'List trading strategies',
     parameters: {
-      status: { type: 'string', enum: ['all', 'active', 'stopped'] },
+      status: { type: 'string', enum: ['all', 'active', 'stopped'], default: 'all' },
     },
-    execute: async ({ status }) => {
-      const strategies = await client.strategies.list({ status });
-      return formatStrategies(strategies);
-    },
+    execute: async ({ status }) => cli(`strategy list --status ${status}`),
   },
   
   createStrategy: {
@@ -199,38 +223,57 @@ export const tools = {
       name: { type: 'string', required: true },
       description: { type: 'string', required: true },
     },
-    execute: async ({ name, description }) => {
-      const strategy = await client.strategies.create({ name, description });
-      return `Created strategy: ${strategy.id}`;
-    },
+    execute: async ({ name, description }) => 
+      cli(`strategy create "${name}" --description "${description}"`),
   },
   
   deployStrategy: {
-    description: 'Deploy a strategy to paper trading',
+    description: 'Deploy a strategy to paper/live trading',
     parameters: {
       strategyId: { type: 'string', required: true },
       mode: { type: 'string', enum: ['paper', 'live'], default: 'paper' },
     },
-    execute: async ({ strategyId, mode }) => {
-      const result = await client.strategies.deploy(strategyId, { mode });
-      return `Deployed to ${mode}: ${result.deploymentId}`;
-    },
+    execute: async ({ strategyId, mode }) => 
+      cli(`strategy deploy ${strategyId} --mode ${mode}`),
   },
   
-  // Alerts
-  setAlert: {
-    description: 'Set a price or portfolio alert',
+  backtestStrategy: {
+    description: 'Backtest a strategy',
     parameters: {
-      type: { type: 'string', enum: ['price', 'pnl', 'drawdown'] },
-      condition: { type: 'string' },
-      value: { type: 'number' },
+      strategyId: { type: 'string', required: true },
+      dataId: { type: 'string', required: true },
     },
-    execute: async (params) => {
-      const alert = await client.alerts.create(params);
-      return `Alert set: ${alert.id}`;
+    execute: async ({ strategyId, dataId }) => 
+      cli(`strategy backtest ${strategyId} --data ${dataId}`),
+  },
+  
+  // Data
+  getCandles: {
+    description: 'Get candlestick data',
+    parameters: {
+      symbol: { type: 'string', required: true },
+      interval: { type: 'string', default: '1h' },
+      limit: { type: 'number', default: 100 },
     },
+    execute: async ({ symbol, interval, limit }) => 
+      cli(`data candles ${symbol} ${interval} --limit ${limit}`),
+  },
+  
+  getQuote: {
+    description: 'Get current price quote',
+    parameters: {
+      symbol: { type: 'string', required: true },
+    },
+    execute: async ({ symbol }) => cli(`data quote ${symbol}`),
   },
 };
+```
+
+**Why CLI instead of SDK?**
+- Simpler implementation (just shell commands)
+- Consistent with human usage
+- Easier to test and debug
+- Works offline with cached data
 ```
 
 ## Heartbeat Configuration

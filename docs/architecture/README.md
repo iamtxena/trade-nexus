@@ -2,6 +2,60 @@
 
 > 🏗️ Technical architecture for the AI Trading ecosystem
 
+## 🚀 Parallel Development Plan
+
+**Key insight**: Define interfaces first, then everyone can work in parallel!
+
+### Workstreams (Can Run Simultaneously)
+
+| # | Module | Owner | Dependencies | Estimated Time |
+|---|--------|-------|--------------|----------------|
+| **1** | **Live Engine Bug Fix** | ? | None (isolated repo) | 1-2 days |
+| **2** | **Data Module** (`trader-data`) | ? | Only external APIs (Alpaca) | 1 week |
+| **3** | **Knowledge Base Schema** | ? | Only Supabase | 2-3 days |
+| **4** | **Platform API** | ? | Interfaces only (can use mocks) | 1 week |
+| **5** | **CLI enhancements** | ? | Interfaces only (can use mocks) | 3-4 days |
+
+### Dependency Graph
+
+```
+PARALLEL (no overlap):
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+│ 1. Live Engine   │  │ 2. Data Module   │  │ 3. Knowledge     │
+│    Bug Fix       │  │    (trader-data) │  │    Base Schema   │
+│                  │  │                  │  │                  │
+│ Issue #10        │  │ Alpaca connector │  │ Supabase tables  │
+│ Separate repo    │  │ News ingestion   │  │ pgvector setup   │
+└──────────────────┘  └──────────────────┘  └──────────────────┘
+
+AFTER INTERFACES DEFINED:
+┌─────────────────────────────────────────────────────────────┐
+│ 4. Platform API + 5. CLI                                    │
+│                                                             │
+│ Can develop against mocks while 2 & 3 are built             │
+│ Connect to real implementations when ready                  │
+└─────────────────────────────────────────────────────────────┘
+
+LAST (needs platform stable):
+┌─────────────────────────────────────────────────────────────┐
+│ 6. Agent Orchestrator (AI SDK v6)                           │
+│                                                             │
+│ Needs: Platform API + Data Module + Knowledge Base          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### How to Work in Parallel
+
+1. **Read** [INTERFACES.md](./INTERFACES.md) — defines all contracts
+2. **Use mocks** — each SDK has mock implementations
+3. **Agree on types** — TypeScript types are the source of truth
+4. **Test against mocks** — verify your module works with fake data
+5. **Connect when ready** — swap mocks for real implementations
+
+See [INTERFACES.md](./INTERFACES.md) for all API contracts and SDK interfaces.
+
+---
+
 ## Quick Overview
 
 Trade Nexus is a **two-layer architecture**:
@@ -40,9 +94,10 @@ Trade Nexus is a **two-layer architecture**:
 
 | Document | Description |
 |----------|-------------|
+| [INTERFACES.md](./INTERFACES.md) | **Start here!** API contracts for parallel development |
 | [AGENT_ARCHITECTURE.md](./AGENT_ARCHITECTURE.md) | Agent hierarchy, AI SDK patterns, sub-agents |
 | [KNOWLEDGE_BASE.md](./KNOWLEDGE_BASE.md) | Supabase + pgvector for trading memory |
-| [DATA_MODULE.md](./DATA_MODULE.md) | Market data providers (Alpaca, etc.) |
+| [DATA_MODULE.md](./DATA_MODULE.md) | Market data providers (Alpaca, etc.) + news |
 | [CLI_INTERFACE.md](./CLI_INTERFACE.md) | Command-line interface for agents |
 | [OPENCLAW_INTEGRATION.md](./OPENCLAW_INTEGRATION.md) | OpenClaw Trader client agent |
 | [DEPLOYMENT.md](./DEPLOYMENT.md) | Azure infrastructure (Container Apps + AKS) |
@@ -157,9 +212,48 @@ User Message → Client (Web/OpenClaw) → Trade Nexus API
 | Platform API | 🔜 TODO | REST + WebSocket |
 | OpenClaw Trader | 🔜 Future | After platform stable |
 
+---
+
+## News Correlation & Custom Data
+
+**Key feature**: Strategies can be correlated with news context for realistic backtesting.
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│             CONTEXTUAL BACKTESTING                            │
+│                                                               │
+│   Traditional:    Candle → Strategy → Signal                  │
+│                   (price only)                                │
+│                                                               │
+│   Contextual:     Candle + News + Sentiment → Strategy        │
+│                   (what the agent would actually know)        │
+│                                                               │
+│   Example: BTC candle at 14:00                                │
+│   ├── OHLCV: open=42000, close=42100, ...                    │
+│   ├── News (published before 14:00):                         │
+│   │   ├── "Fed signals rate pause" (sentiment: 0.7)          │
+│   │   └── "Whale moves 10k BTC" (sentiment: -0.3)            │
+│   ├── Aggregate sentiment: 0.2                                │
+│   └── Regime: sideways, Volatility: medium                   │
+│                                                               │
+│   Strategy can use ALL this context for decisions             │
+└───────────────────────────────────────────────────────────────┘
+```
+
+**Implementation path**:
+1. Data Module ingests news + stores with timestamps
+2. Builds `ContextualCandle[]` with news attached to each candle
+3. Lona enhanced to accept custom data (or workaround via Knowledge Base)
+4. Agent uses contextual data for backtesting and live decisions
+
+See [DATA_MODULE.md](./DATA_MODULE.md) for news ingestion details.
+
+---
+
 ## Open Questions
 
 - [ ] How to handle real-time streaming from multiple data sources?
 - [ ] Circuit breaker patterns for autonomous trading?
 - [ ] Rate limiting per user for API?
 - [ ] Billing model for platform usage?
+- [ ] Who implements custom data in Lona? Or use Knowledge Base workaround?

@@ -130,6 +130,48 @@ interface Candle {
 }
 ```
 
+### Contextual Candle (for backtesting with news)
+
+```typescript
+// Extended candle with news/sentiment context
+// Used for realistic backtesting where the agent has access to
+// the same information that was available at that point in time
+interface ContextualCandle extends Candle {
+  // News available at this candle's time
+  news: NewsItem[];
+  
+  // Aggregate sentiment from news (-1 to 1)
+  sentiment: number;
+  
+  // Detected market regime
+  regime?: 'bull' | 'bear' | 'sideways';
+  
+  // Volatility level
+  volatility?: 'low' | 'medium' | 'high';
+  
+  // Custom data (user-defined metrics)
+  custom?: Record<string, number>;
+}
+
+interface NewsItem {
+  id: string;
+  title: string;
+  summary: string;
+  source: string;
+  url: string;
+  publishedAt: number;    // Unix ms - BEFORE candle timestamp
+  symbols: string[];      // Assets mentioned
+  sentiment: number;      // -1 to 1
+  impact: 'low' | 'medium' | 'high';
+}
+```
+
+**Why contextual data matters:**
+
+1. **Realistic backtesting**: Strategies can only access news that was published BEFORE the candle
+2. **News correlation**: Test if strategies that use news outperform price-only strategies
+3. **Agent context**: The Trading Agent has the same information during backtesting as it would in live trading
+
 ## Filter Engine
 
 ### Filter Types
@@ -446,13 +488,159 @@ ws.send(JSON.stringify({
 | Real-time | WebSocket | gRPC streams |
 | Message Queue | Redis Streams | Kafka |
 
+## News Ingestion & Contextual Data
+
+### News Sources
+
+| Source | Type | Update Frequency | Cost |
+|--------|------|------------------|------|
+| CryptoPanic API | Crypto news | Real-time | Free tier available |
+| NewsAPI.org | General news | 15 min | Free tier (100/day) |
+| RSS feeds | Various | 5-15 min | Free |
+| Twitter/X | Social | Real-time | API costs |
+| Reddit | Social | 15 min | Free |
+
+### News Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    NEWS INGESTION PIPELINE                       │
+│                                                                  │
+│   1. FETCH          2. PARSE           3. ANALYZE               │
+│   ┌─────────┐       ┌─────────┐        ┌─────────┐              │
+│   │ APIs    │  ──▶  │ Extract │  ──▶   │Sentiment│              │
+│   │ RSS     │       │ symbols │        │ Impact  │              │
+│   │ Twitter │       │ metadata│        │ Embed   │              │
+│   └─────────┘       └─────────┘        └─────────┘              │
+│                                             │                    │
+│                                             ▼                    │
+│   4. STORE                          5. INDEX                    │
+│   ┌─────────────────────────────────────────────────┐           │
+│   │ PostgreSQL (facts) + pgvector (embeddings)      │           │
+│   │                                                  │           │
+│   │ news_items table:                               │           │
+│   │ - id, title, summary, source, url               │           │
+│   │ - published_at (crucial for time-ordering)      │           │
+│   │ - symbols[], sentiment, impact                  │           │
+│   │ - embedding (for semantic search)               │           │
+│   └─────────────────────────────────────────────────┘           │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Building Contextual Candles
+
+```typescript
+// Combine OHLCV with news for backtesting
+async function buildContextualData(
+  symbol: string,
+  interval: string,
+  startDate: Date,
+  endDate: Date
+): Promise<ContextualCandle[]> {
+  
+  // 1. Get OHLCV candles
+  const candles = await getCandles(symbol, interval, startDate, endDate);
+  
+  // 2. Get all news for the period
+  const allNews = await getNews({
+    symbols: [symbol],
+    start: startDate,
+    end: endDate,
+  });
+  
+  // 3. For each candle, attach news that was available at that time
+  return candles.map(candle => {
+    // Only news published BEFORE this candle's close
+    const availableNews = allNews.filter(
+      n => n.publishedAt < candle.timestamp
+    );
+    
+    // Get news from the last N hours (configurable)
+    const recentNews = availableNews.filter(
+      n => candle.timestamp - n.publishedAt < NEWS_LOOKBACK_MS
+    );
+    
+    // Calculate aggregate sentiment
+    const sentiment = recentNews.length > 0
+      ? recentNews.reduce((sum, n) => sum + n.sentiment, 0) / recentNews.length
+      : 0;
+    
+    return {
+      ...candle,
+      news: recentNews,
+      sentiment,
+      regime: detectRegime(candle, candles),
+      volatility: detectVolatility(candle, candles),
+    };
+  });
+}
+```
+
+### API Endpoints for Contextual Data
+
+```typescript
+// Get contextual candles for backtesting
+GET /api/v1/context/:symbol
+  Query: interval, start, end, includeNews=true, newsLookbackHours=24
+  Returns: ContextualCandle[]
+
+// Export contextual data for Lona
+GET /api/v1/context/:symbol/export
+  Query: interval, start, end, format=json|csv
+  Returns: File download (compatible with Lona upload)
+```
+
+### Lona Integration (Custom Data)
+
+**Current limitation**: Lona only supports basic OHLCV data.
+
+**Proposed enhancement** (requires Lona changes):
+
+```typescript
+// Upload contextual data to Lona
+POST /lona/api/data/upload-contextual
+Body: {
+  name: "BTC-1H-2024-with-news",
+  symbol: "BTCUSDT",
+  interval: "1h",
+  data: ContextualCandle[],  // Includes news, sentiment
+  schema: {
+    custom: {
+      news: "NewsItem[]",
+      sentiment: "number",
+      regime: "string",
+    }
+  }
+}
+
+// Strategy code can then access:
+function onCandle(candle: ContextualCandle) {
+  // Access news that was available at this point
+  const bullishNews = candle.news.filter(n => n.sentiment > 0.5);
+  
+  // Use sentiment in decision
+  if (candle.sentiment > 0.7 && rsi < 30) {
+    return { action: 'buy', reason: 'oversold + positive sentiment' };
+  }
+}
+```
+
+**Workaround until Lona supports custom data**:
+
+1. Store contextual data in Knowledge Base
+2. During backtest, agent queries Knowledge Base for news at each timestamp
+3. Slower but works without Lona changes
+
+---
+
 ## Implementation Priority
 
-1. **Phase 1**: Binance connector + basic candle storage (extend current)
-2. **Phase 2**: Tick data storage + TimescaleDB
-3. **Phase 3**: Filter engine + transformations
-4. **Phase 4**: Additional exchanges
-5. **Phase 5**: Order book data + cold storage
+1. **Phase 1**: Alpaca connector + basic candle storage
+2. **Phase 2**: News ingestion pipeline (CryptoPanic + NewsAPI)
+3. **Phase 3**: Contextual data builder
+4. **Phase 4**: Filter engine + transformations
+5. **Phase 5**: Additional exchanges + tick data
 
 ## Open Questions
 
@@ -460,3 +648,4 @@ ws.send(JSON.stringify({
 2. **Stock Data Provider**: Alpaca, Polygon, or IBKR?
 3. **Cold Storage**: S3 or cheaper alternative?
 4. **Budget**: What's acceptable monthly cost for data storage?
+5. **Lona Custom Data**: Who implements this in Lona? Or use workaround?

@@ -60,11 +60,12 @@ This folder contains detailed specifications for each component of the Trader Br
 ## Key Decisions
 
 1. **Trading Agent = Main Actor**: Uses everything else as tools
-2. **AI SDK v5**: All agents built with Vercel AI SDK
+2. **AI SDK v6**: All agents built with Vercel AI SDK v6 (latest)
 3. **OpenClaw**: Trading Agent and Research Agent deployed as bots
 4. **CLI First**: `trader-cli` as standalone repo, usable by humans or bots
 5. **Hybrid Storage**: SQL + Vector DB for knowledge base
 6. **Data Module**: Separate service for multi-exchange data
+7. **Stock Data**: Start with Alpaca (best free tier)
 
 ## Repo Structure (Proposed)
 

@@ -46,14 +46,21 @@ The Trader Brain uses a hierarchical agent architecture where the **Trading Agen
 
 ## Technology Stack
 
-### AI SDK v5 (Recommended)
+### AI SDK v6 (Latest)
 
-All agents built with Vercel AI SDK for consistency:
+All agents built with Vercel AI SDK v6 for consistency.
+
+**Key v6 Features:**
+- `generateObject()` / `streamObject()` (no longer experimental)
+- Better tool type inference
+- Attachments support (files, images)
+- `maxSteps` for multi-turn agent loops
 
 ```typescript
-// Trading Agent (Main Actor)
+// Trading Agent (Main Actor) - AI SDK v6
 import { generateText, tool } from 'ai';
 import { xai } from '@ai-sdk/xai';
+import { z } from 'zod';
 
 const tradingAgent = async (context: TradingContext) => {
   const result = await generateText({
@@ -73,11 +80,54 @@ const tradingAgent = async (context: TradingContext) => {
     prompt: context.userMessage,
     
     tools: {
-      research: researchTool,
-      risk: riskTool,
-      execute: executeTool,
-      knowledge: knowledgeTool,
-      data: dataTool,
+      research: tool({
+        description: 'Research market conditions and strategies',
+        parameters: z.object({
+          query: z.string(),
+          asset: z.string().optional(),
+        }),
+        execute: async ({ query, asset }) => researchAgent(query, asset),
+      }),
+      risk: tool({
+        description: 'Check risk limits and position sizing',
+        parameters: z.object({
+          action: z.enum(['validate', 'size', 'exposure']),
+          trade: z.object({
+            symbol: z.string(),
+            side: z.enum(['buy', 'sell']),
+            quantity: z.number(),
+          }).optional(),
+        }),
+        execute: async ({ action, trade }) => riskManager(action, trade),
+      }),
+      execute: tool({
+        description: 'Execute a trade (paper or live)',
+        parameters: z.object({
+          symbol: z.string(),
+          side: z.enum(['buy', 'sell']),
+          quantity: z.number(),
+          type: z.enum(['market', 'limit']).default('market'),
+          price: z.number().optional(),
+        }),
+        execute: async (params) => executionAgent(params),
+      }),
+      knowledge: tool({
+        description: 'Query trading knowledge base',
+        parameters: z.object({
+          query: z.string(),
+          filters: z.record(z.string()).optional(),
+        }),
+        execute: async ({ query, filters }) => knowledgeBase.search(query, filters),
+      }),
+      data: tool({
+        description: 'Fetch market data',
+        parameters: z.object({
+          symbol: z.string(),
+          interval: z.string().default('1h'),
+          limit: z.number().default(100),
+        }),
+        execute: async ({ symbol, interval, limit }) => dataModule.getCandles(symbol, interval, limit),
+      }),
     },
     
     maxSteps: 10, // Allow multi-step reasoning

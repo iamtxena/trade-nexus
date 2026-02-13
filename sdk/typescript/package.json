@@ -1,0 +1,29 @@
+{
+  "name": "@trade-nexus/sdk",
+  "version": "1.0.0",
+  "description": "Generated TypeScript SDK for the Trade Nexus Platform API",
+  "author": "OpenAPI-Generator",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iamtxena/trade-nexus.git"
+  },
+  "main": "./dist/index.js",
+  "typings": "./dist/index.d.ts",
+  "module": "./dist/esm/index.js",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc && tsc -p tsconfig.esm.json",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^4.0 || ^5.0"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/iamtxena/trade-nexus#readme",
+  "bugs": {
+    "url": "https://github.com/iamtxena/trade-nexus/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

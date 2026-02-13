@@ -7,6 +7,7 @@ This document defines the interface model for the to-be architecture.
 1. Public API contract: `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/specs/platform-api.openapi.yaml`
 2. Governance rules: `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/API_CONTRACT_GOVERNANCE.md`
 3. Architecture boundary decisions: `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/TARGET_ARCHITECTURE_V2.md`
+4. Generated SDK source: `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/sdk/typescript` (package `@trade-nexus/sdk`)
 
 If any previous endpoint list conflicts with the OpenAPI file, the OpenAPI file wins.
 

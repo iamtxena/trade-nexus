@@ -1,0 +1,11 @@
+generatorName: typescript-fetch
+additionalProperties:
+  supportsES6: true
+  useSingleRequestParameter: true
+  withInterfaces: true
+  stringEnums: true
+globalProperties:
+  apiDocs: false
+  modelDocs: false
+  apiTests: false
+  modelTests: false

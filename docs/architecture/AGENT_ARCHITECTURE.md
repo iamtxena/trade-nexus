@@ -1,5 +1,8 @@
 # Agent Architecture
 
+> Note (v2): This document contains prototype-era implementation patterns.
+> For canonical boundaries and contracts, use `TARGET_ARCHITECTURE_V2.md`, `INTERFACES.md`, and `specs/platform-api.openapi.yaml`.
+
 ## Overview
 
 Trade Nexus uses a **two-layer architecture** that separates the platform (backend) from client interfaces. The platform handles all trading logic, while clients (including an optional OpenClaw-based trader agent) handle user interaction.

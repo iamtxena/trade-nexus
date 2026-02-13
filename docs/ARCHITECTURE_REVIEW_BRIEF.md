@@ -123,7 +123,12 @@ All architecture documents are in `docs/architecture/`:
 | Document | What It Covers |
 |----------|----------------|
 | **[README.md](./architecture/README.md)** | Overview, parallel workstreams, quick start |
-| **[INTERFACES.md](./architecture/INTERFACES.md)** | API contracts between modules (critical for parallel dev) |
+| **[TARGET_ARCHITECTURE_V2.md](./architecture/TARGET_ARCHITECTURE_V2.md)** | Canonical to-be architecture and boundaries |
+| **[INTERFACES.md](./architecture/INTERFACES.md)** | v2 interface model (public API + adapter contracts) |
+| **[API_CONTRACT_GOVERNANCE.md](./architecture/API_CONTRACT_GOVERNANCE.md)** | Contract-first workflow and change policy |
+| **[GAP_ANALYSIS_ASIS_TOBE.md](./architecture/GAP_ANALYSIS_ASIS_TOBE.md)** | As-is to to-be gap closure plan |
+| **[DELIVERY_PLAN_AND_TEAM_TOPOLOGY.md](./architecture/DELIVERY_PLAN_AND_TEAM_TOPOLOGY.md)** | Team structure, repo creation plan, and ticket sectors |
+| **[specs/platform-api.openapi.yaml](./architecture/specs/platform-api.openapi.yaml)** | Single source of truth API contract |
 | **[AGENT_ARCHITECTURE.md](./architecture/AGENT_ARCHITECTURE.md)** | Agent design, AI SDK patterns, Lona/Live Engine integration |
 | **[DATA_MODULE.md](./architecture/DATA_MODULE.md)** | Market data, news ingestion, contextual candles |
 | **[KNOWLEDGE_BASE.md](./architecture/KNOWLEDGE_BASE.md)** | Supabase schema, vector search, patterns storage |

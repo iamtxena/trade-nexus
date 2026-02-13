@@ -1,5 +1,8 @@
 # Deployment Architecture
 
+> Note (v2): Deployment details here include prototype alternatives.
+> Treat `TARGET_ARCHITECTURE_V2.md` and current environment runbooks as authoritative for active rollout plans.
+
 ## Overview
 
 Deployment of Trader Brain ecosystem on Azure infrastructure.

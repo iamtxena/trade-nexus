@@ -1,0 +1,956 @@
+openapi: 3.0.3
+info:
+  title: Trade Nexus Platform API
+  version: 1.0.0
+  description: |
+    Canonical public API contract for Trade Nexus.
+
+    Rules:
+    - This file is the source of truth for external consumers.
+    - Lona and execution engines are internal provider integrations behind adapters.
+servers:
+  - url: https://api.trade-nexus.io
+    description: Production
+  - url: http://localhost:3000
+    description: Local development
+
+tags:
+  - name: Health
+  - name: Research
+  - name: Strategies
+  - name: Backtests
+  - name: Deployments
+  - name: Portfolios
+  - name: Orders
+
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+
+paths:
+  /v1/health:
+    get:
+      tags: [Health]
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, service, timestamp]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                  service:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /v1/research/market-scan:
+    post:
+      tags: [Research]
+      summary: Analyze market conditions and return strategy ideas
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarketScanRequest'
+      responses:
+        '200':
+          description: Research result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketScanResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '429':
+          $ref: '#/components/responses/Error429'
+
+  /v1/strategies:
+    get:
+      tags: [Strategies]
+      summary: List strategies
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/StrategyStatus'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Strategy list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyListResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+    post:
+      tags: [Strategies]
+      summary: Create strategy from natural-language description
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStrategyRequest'
+      responses:
+        '201':
+          description: Strategy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+
+  /v1/strategies/{strategyId}:
+    get:
+      tags: [Strategies]
+      summary: Get strategy by id
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/StrategyId'
+      responses:
+        '200':
+          description: Strategy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+    patch:
+      tags: [Strategies]
+      summary: Update strategy metadata or status
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/StrategyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStrategyRequest'
+      responses:
+        '200':
+          description: Updated strategy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v1/strategies/{strategyId}/backtests:
+    post:
+      tags: [Backtests]
+      summary: Start a backtest for a strategy
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/StrategyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBacktestRequest'
+      responses:
+        '202':
+          description: Backtest accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BacktestResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v1/backtests/{backtestId}:
+    get:
+      tags: [Backtests]
+      summary: Get backtest status and report
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/BacktestId'
+      responses:
+        '200':
+          description: Backtest report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BacktestResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v1/deployments:
+    get:
+      tags: [Deployments]
+      summary: List deployments
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/DeploymentStatus'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deployment list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentListResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+    post:
+      tags: [Deployments]
+      summary: Create a paper/live deployment
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDeploymentRequest'
+      responses:
+        '202':
+          description: Deployment accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '409':
+          $ref: '#/components/responses/Error409'
+
+  /v1/deployments/{deploymentId}:
+    get:
+      tags: [Deployments]
+      summary: Get deployment status
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/DeploymentId'
+      responses:
+        '200':
+          description: Deployment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v1/deployments/{deploymentId}/actions/stop:
+    post:
+      tags: [Deployments]
+      summary: Stop a running deployment
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/DeploymentId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '202':
+          description: Stop accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v1/portfolios:
+    get:
+      tags: [Portfolios]
+      summary: List portfolios
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Portfolio list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioListResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+
+  /v1/portfolios/{portfolioId}:
+    get:
+      tags: [Portfolios]
+      summary: Get portfolio snapshot
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/PortfolioId'
+      responses:
+        '200':
+          description: Portfolio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v1/orders:
+    get:
+      tags: [Orders]
+      summary: List orders
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderListResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+    post:
+      tags: [Orders]
+      summary: Place manual order
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Order placed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '409':
+          $ref: '#/components/responses/Error409'
+
+  /v1/orders/{orderId}:
+    get:
+      tags: [Orders]
+      summary: Get order
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+    delete:
+      tags: [Orders]
+      summary: Cancel order
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  parameters:
+    XRequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Caller-provided request id for trace correlation.
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+      description: Required for idempotent write operations.
+    StrategyId:
+      name: strategyId
+      in: path
+      required: true
+      schema:
+        type: string
+    BacktestId:
+      name: backtestId
+      in: path
+      required: true
+      schema:
+        type: string
+    DeploymentId:
+      name: deploymentId
+      in: path
+      required: true
+      schema:
+        type: string
+    PortfolioId:
+      name: portfolioId
+      in: path
+      required: true
+      schema:
+        type: string
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    Error400:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Error401:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Error404:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Error409:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Error429:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error, requestId]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+        requestId:
+          type: string
+
+    CursorPage:
+      type: object
+      required: [nextCursor]
+      properties:
+        nextCursor:
+          type: string
+          nullable: true
+
+    MarketScanRequest:
+      type: object
+      required: [assetClasses, capital]
+      properties:
+        assetClasses:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: [crypto, stocks, forex, etf, commodities]
+        capital:
+          type: number
+          minimum: 0
+        constraints:
+          type: object
+          properties:
+            maxPositionPct:
+              type: number
+              minimum: 0
+              maximum: 100
+            maxDrawdownPct:
+              type: number
+              minimum: 0
+              maximum: 100
+
+    MarketScanResponse:
+      type: object
+      required: [requestId, regimeSummary, strategyIdeas]
+      properties:
+        requestId:
+          type: string
+        regimeSummary:
+          type: string
+        strategyIdeas:
+          type: array
+          items:
+            type: object
+            required: [name, assetClass, description]
+            properties:
+              name:
+                type: string
+              assetClass:
+                type: string
+              description:
+                type: string
+              rationale:
+                type: string
+
+    StrategyStatus:
+      type: string
+      enum: [draft, testing, tested, deployable, archived, failed]
+
+    Strategy:
+      type: object
+      required: [id, name, status, provider, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/StrategyStatus'
+        provider:
+          type: string
+          enum: [lona]
+        providerRefId:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    StrategyResponse:
+      type: object
+      required: [requestId, strategy]
+      properties:
+        requestId:
+          type: string
+        strategy:
+          $ref: '#/components/schemas/Strategy'
+
+    StrategyListResponse:
+      type: object
+      required: [requestId, items, nextCursor]
+      properties:
+        requestId:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Strategy'
+        nextCursor:
+          type: string
+          nullable: true
+
+    CreateStrategyRequest:
+      type: object
+      required: [description]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          minLength: 10
+        provider:
+          type: string
+          enum: [xai]
+          default: xai
+
+    UpdateStrategyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/StrategyStatus'
+        tags:
+          type: array
+          items:
+            type: string
+
+    BacktestStatus:
+      type: string
+      enum: [queued, running, completed, failed, cancelled]
+
+    BacktestMetrics:
+      type: object
+      properties:
+        sharpeRatio:
+          type: number
+        maxDrawdownPct:
+          type: number
+        winRatePct:
+          type: number
+        totalReturnPct:
+          type: number
+
+    Backtest:
+      type: object
+      required: [id, strategyId, status, createdAt]
+      properties:
+        id:
+          type: string
+        strategyId:
+          type: string
+        status:
+          $ref: '#/components/schemas/BacktestStatus'
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        metrics:
+          $ref: '#/components/schemas/BacktestMetrics'
+        error:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    BacktestResponse:
+      type: object
+      required: [requestId, backtest]
+      properties:
+        requestId:
+          type: string
+        backtest:
+          $ref: '#/components/schemas/Backtest'
+
+    CreateBacktestRequest:
+      type: object
+      required: [dataIds, startDate, endDate]
+      properties:
+        dataIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        initialCash:
+          type: number
+          minimum: 0
+          default: 100000
+
+    DeploymentMode:
+      type: string
+      enum: [paper, live]
+
+    DeploymentStatus:
+      type: string
+      enum: [queued, running, paused, stopping, stopped, failed]
+
+    Deployment:
+      type: object
+      required: [id, strategyId, mode, status, capital, createdAt]
+      properties:
+        id:
+          type: string
+        strategyId:
+          type: string
+        mode:
+          $ref: '#/components/schemas/DeploymentMode'
+        status:
+          $ref: '#/components/schemas/DeploymentStatus'
+        capital:
+          type: number
+        engine:
+          type: string
+          example: live-engine
+        providerRefId:
+          type: string
+        latestPnl:
+          type: number
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DeploymentResponse:
+      type: object
+      required: [requestId, deployment]
+      properties:
+        requestId:
+          type: string
+        deployment:
+          $ref: '#/components/schemas/Deployment'
+
+    DeploymentListResponse:
+      type: object
+      required: [requestId, items, nextCursor]
+      properties:
+        requestId:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Deployment'
+        nextCursor:
+          type: string
+          nullable: true
+
+    CreateDeploymentRequest:
+      type: object
+      required: [strategyId, mode, capital]
+      properties:
+        strategyId:
+          type: string
+        mode:
+          $ref: '#/components/schemas/DeploymentMode'
+        capital:
+          type: number
+          minimum: 0
+
+    Position:
+      type: object
+      required: [symbol, quantity, avgPrice, currentPrice, unrealizedPnl]
+      properties:
+        symbol:
+          type: string
+        quantity:
+          type: number
+        avgPrice:
+          type: number
+        currentPrice:
+          type: number
+        unrealizedPnl:
+          type: number
+
+    Portfolio:
+      type: object
+      required: [id, mode, cash, totalValue, positions]
+      properties:
+        id:
+          type: string
+        mode:
+          $ref: '#/components/schemas/DeploymentMode'
+        cash:
+          type: number
+        totalValue:
+          type: number
+        pnlTotal:
+          type: number
+        positions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Position'
+
+    PortfolioResponse:
+      type: object
+      required: [requestId, portfolio]
+      properties:
+        requestId:
+          type: string
+        portfolio:
+          $ref: '#/components/schemas/Portfolio'
+
+    PortfolioListResponse:
+      type: object
+      required: [requestId, items]
+      properties:
+        requestId:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Portfolio'
+
+    OrderSide:
+      type: string
+      enum: [buy, sell]
+
+    OrderType:
+      type: string
+      enum: [market, limit]
+
+    OrderStatus:
+      type: string
+      enum: [pending, filled, cancelled, failed]
+
+    Order:
+      type: object
+      required: [id, symbol, side, type, quantity, status, createdAt]
+      properties:
+        id:
+          type: string
+        symbol:
+          type: string
+        side:
+          $ref: '#/components/schemas/OrderSide'
+        type:
+          $ref: '#/components/schemas/OrderType'
+        quantity:
+          type: number
+        price:
+          type: number
+          nullable: true
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        deploymentId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    OrderResponse:
+      type: object
+      required: [requestId, order]
+      properties:
+        requestId:
+          type: string
+        order:
+          $ref: '#/components/schemas/Order'
+
+    OrderListResponse:
+      type: object
+      required: [requestId, items, nextCursor]
+      properties:
+        requestId:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+        nextCursor:
+          type: string
+          nullable: true
+
+    CreateOrderRequest:
+      type: object
+      required: [symbol, side, type, quantity]
+      properties:
+        symbol:
+          type: string
+        side:
+          $ref: '#/components/schemas/OrderSide'
+        type:
+          $ref: '#/components/schemas/OrderType'
+        quantity:
+          type: number
+          minimum: 0
+        price:
+          type: number
+          minimum: 0
+        deploymentId:
+          type: string

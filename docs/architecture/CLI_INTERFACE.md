@@ -1,5 +1,8 @@
 # CLI Interface Architecture
 
+> Note (v2): This document is historical and describes the prototype CLI model.
+> The target model is an external `trading-cli` repo consuming Platform API from the OpenAPI contract.
+
 ## Overview
 
 The `trader-cli` is a standalone command-line interface for the entire trading ecosystem. It's designed to be:

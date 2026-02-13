@@ -1,5 +1,8 @@
 # OpenClaw Trader Integration
 
+> Note (v2): This document describes a prototype integration path.
+> For canonical contract boundaries, use `TARGET_ARCHITECTURE_V2.md`, `INTERFACES.md`, and `specs/platform-api.openapi.yaml`.
+
 ## Overview
 
 **OpenClaw Trader** is an optional client product that allows users to run a personal autonomous trading assistant that connects to the Trade Nexus platform.

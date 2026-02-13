@@ -101,6 +101,373 @@ trading-cli data quote ETH
 
 See [CLI_INTERFACE.md](./CLI_INTERFACE.md) for full specification.
 
+---
+
+## Detailed Integration with Existing Components
+
+The platform integrates with our existing infrastructure:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                        TRADE NEXUS PLATFORM (AI SDK)                             │
+│                                                                                   │
+│   ┌─────────────────────────────────────────────────────────────────────────┐    │
+│   │                      AGENT ORCHESTRATOR                                  │    │
+│   │                                                                          │    │
+│   │   "Trading Agent" - Main Actor that coordinates everything               │    │
+│   │                                                                          │    │
+│   └──────────────────────────────┬───────────────────────────────────────────┘    │
+│                                  │                                                │
+│      ┌─────────────┬─────────────┼─────────────┬─────────────┐                   │
+│      │             │             │             │             │                   │
+│      ▼             ▼             ▼             ▼             ▼                   │
+│  ┌────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
+│  │RESEARCH│  │   RISK   │  │EXECUTION │  │   DATA   │  │KNOWLEDGE │             │
+│  │ AGENT  │  │ MANAGER  │  │  AGENT   │  │  MODULE  │  │   BASE   │             │
+│  │        │  │          │  │          │  │          │  │          │             │
+│  │AI SDK  │  │ AI SDK   │  │ AI SDK   │  │  API     │  │ Supabase │             │
+│  └───┬────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘             │
+│      │            │             │             │             │                    │
+└──────┼────────────┼─────────────┼─────────────┼─────────────┼────────────────────┘
+       │            │             │             │             │
+       │            │             │             │             │
+       ▼            ▼             ▼             ▼             ▼
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                           INFRASTRUCTURE LAYER                                    │
+│                                                                                   │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐               │
+│  │   LONA GATEWAY   │  │   LIVE ENGINE    │  │    DATA SOURCES  │               │
+│  │                  │  │                  │  │                  │               │
+│  │ • Generate       │  │ • Paper trading  │  │ • Alpaca (stocks)│               │
+│  │   strategies     │  │ • Live trading   │  │ • Binance        │               │
+│  │ • Backtest       │  │ • Real-time exec │  │   (crypto)       │               │
+│  │ • Score/rank     │  │ • Position mgmt  │  │ • News APIs      │               │
+│  │ • Store data     │  │ • Order status   │  │                  │               │
+│  │                  │  │                  │  │                  │               │
+│  │ API: lona.agency │  │ API: live-engine │  │                  │               │
+│  └──────────────────┘  └──────────────────┘  └──────────────────┘               │
+│                                                                                   │
+└──────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### How Agents Use Infrastructure
+
+| Agent | Uses | For What |
+|-------|------|----------|
+| **Research Agent** | Lona API | Generate strategies, backtest, get scores |
+| **Research Agent** | Data Sources | Market data for analysis |
+| **Research Agent** | Knowledge Base | Historical patterns, lessons learned |
+| **Risk Manager** | Knowledge Base | Correlation data, regime detection |
+| **Execution Agent** | Live Engine | Paper/live trade execution |
+| **Execution Agent** | Lona API | Deploy strategies to paper trading |
+| **Data Module** | Alpaca, Binance | Fetch OHLCV, quotes, news |
+
+### Lona Integration
+
+```typescript
+// tools/lona.ts - Tools for Research & Execution agents
+
+const LONA_API = process.env.LONA_API_URL || 'https://lona.agency/api';
+
+export const lonaTools = {
+  // Generate a strategy from description
+  generateStrategy: tool({
+    description: 'Generate a trading strategy from natural language',
+    parameters: z.object({
+      name: z.string(),
+      description: z.string(),
+      asset: z.string().default('BTC'),
+      timeframe: z.string().default('1h'),
+    }),
+    execute: async ({ name, description, asset, timeframe }) => {
+      const response = await fetch(`${LONA_API}/strategies/generate`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${process.env.LONA_API_KEY}` },
+        body: JSON.stringify({ name, description, asset, timeframe }),
+      });
+      return response.json();
+    },
+  }),
+
+  // Run backtest on a strategy
+  backtest: tool({
+    description: 'Backtest a strategy against historical data',
+    parameters: z.object({
+      strategyId: z.string(),
+      dataId: z.string(),
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+    }),
+    execute: async ({ strategyId, dataId, startDate, endDate }) => {
+      const response = await fetch(`${LONA_API}/strategies/${strategyId}/backtest`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${process.env.LONA_API_KEY}` },
+        body: JSON.stringify({ dataId, startDate, endDate }),
+      });
+      return response.json();
+    },
+  }),
+
+  // Get backtest report
+  getReport: tool({
+    description: 'Get detailed backtest report with metrics',
+    parameters: z.object({
+      backtestId: z.string(),
+    }),
+    execute: async ({ backtestId }) => {
+      const response = await fetch(`${LONA_API}/backtests/${backtestId}/report`, {
+        headers: { 'Authorization': `Bearer ${process.env.LONA_API_KEY}` },
+      });
+      return response.json();
+      // Returns: { sharpe, drawdown, winRate, returns, trades, ... }
+    },
+  }),
+
+  // List strategies with scores
+  listStrategies: tool({
+    description: 'List all strategies with their scores',
+    parameters: z.object({
+      status: z.enum(['all', 'active', 'archived']).default('all'),
+      sortBy: z.enum(['score', 'returns', 'sharpe']).default('score'),
+    }),
+    execute: async ({ status, sortBy }) => {
+      const response = await fetch(
+        `${LONA_API}/strategies?status=${status}&sort=${sortBy}`,
+        { headers: { 'Authorization': `Bearer ${process.env.LONA_API_KEY}` } },
+      );
+      return response.json();
+    },
+  }),
+
+  // Upload data to Lona
+  uploadData: tool({
+    description: 'Upload OHLCV data to Lona for backtesting',
+    parameters: z.object({
+      name: z.string(),
+      symbol: z.string(),
+      interval: z.string(),
+      data: z.array(z.object({
+        timestamp: z.number(),
+        open: z.number(),
+        high: z.number(),
+        low: z.number(),
+        close: z.number(),
+        volume: z.number(),
+      })),
+    }),
+    execute: async ({ name, symbol, interval, data }) => {
+      const response = await fetch(`${LONA_API}/data/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${process.env.LONA_API_KEY}` },
+        body: JSON.stringify({ name, symbol, interval, data }),
+      });
+      return response.json();
+    },
+  }),
+};
+```
+
+### Live Engine Integration
+
+```typescript
+// tools/live-engine.ts - Tools for Execution Agent
+
+const LIVE_ENGINE_API = process.env.LIVE_ENGINE_URL;
+
+export const liveEngineTools = {
+  // Deploy strategy to paper trading
+  deployPaper: tool({
+    description: 'Deploy a strategy to paper trading',
+    parameters: z.object({
+      strategyId: z.string(),
+      capital: z.number().default(10000),
+    }),
+    execute: async ({ strategyId, capital }) => {
+      const response = await fetch(`${LIVE_ENGINE_API}/deploy/paper`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${process.env.LIVE_ENGINE_API_KEY}` },
+        body: JSON.stringify({ strategyId, capital }),
+      });
+      return response.json();
+      // Returns: { deploymentId, status: 'running' }
+    },
+  }),
+
+  // Deploy to live trading (requires confirmation)
+  deployLive: tool({
+    description: 'Deploy a strategy to LIVE trading (real money)',
+    parameters: z.object({
+      strategyId: z.string(),
+      capital: z.number(),
+      confirmed: z.boolean(),
+    }),
+    execute: async ({ strategyId, capital, confirmed }) => {
+      if (!confirmed) {
+        return { error: 'Live deployment requires explicit confirmation' };
+      }
+      const response = await fetch(`${LIVE_ENGINE_API}/deploy/live`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${process.env.LIVE_ENGINE_API_KEY}` },
+        body: JSON.stringify({ strategyId, capital }),
+      });
+      return response.json();
+    },
+  }),
+
+  // Get deployment status
+  getDeploymentStatus: tool({
+    description: 'Get status of a deployed strategy',
+    parameters: z.object({
+      deploymentId: z.string(),
+    }),
+    execute: async ({ deploymentId }) => {
+      const response = await fetch(
+        `${LIVE_ENGINE_API}/deployments/${deploymentId}`,
+        { headers: { 'Authorization': `Bearer ${process.env.LIVE_ENGINE_API_KEY}` } },
+      );
+      return response.json();
+      // Returns: { status, pnl, trades, positions, ... }
+    },
+  }),
+
+  // Stop a deployment
+  stopDeployment: tool({
+    description: 'Stop a running deployment',
+    parameters: z.object({
+      deploymentId: z.string(),
+      reason: z.string().optional(),
+    }),
+    execute: async ({ deploymentId, reason }) => {
+      const response = await fetch(
+        `${LIVE_ENGINE_API}/deployments/${deploymentId}/stop`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${process.env.LIVE_ENGINE_API_KEY}` },
+          body: JSON.stringify({ reason }),
+        },
+      );
+      return response.json();
+    },
+  }),
+
+  // Get all positions
+  getPositions: tool({
+    description: 'Get current open positions',
+    parameters: z.object({
+      mode: z.enum(['paper', 'live']).default('paper'),
+    }),
+    execute: async ({ mode }) => {
+      const response = await fetch(
+        `${LIVE_ENGINE_API}/positions?mode=${mode}`,
+        { headers: { 'Authorization': `Bearer ${process.env.LIVE_ENGINE_API_KEY}` } },
+      );
+      return response.json();
+    },
+  }),
+
+  // Manual trade execution (outside strategy)
+  executeTrade: tool({
+    description: 'Execute a manual trade',
+    parameters: z.object({
+      symbol: z.string(),
+      side: z.enum(['buy', 'sell']),
+      quantity: z.number(),
+      type: z.enum(['market', 'limit']).default('market'),
+      price: z.number().optional(),
+      mode: z.enum(['paper', 'live']).default('paper'),
+    }),
+    execute: async ({ symbol, side, quantity, type, price, mode }) => {
+      const response = await fetch(`${LIVE_ENGINE_API}/trades`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${process.env.LIVE_ENGINE_API_KEY}` },
+        body: JSON.stringify({ symbol, side, quantity, type, price, mode }),
+      });
+      return response.json();
+    },
+  }),
+};
+```
+
+### Complete Research Flow
+
+```
+User: "Research momentum strategies for BTC"
+                │
+                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    RESEARCH AGENT (AI SDK)                       │
+│                                                                  │
+│  1. Query Knowledge Base                                         │
+│     → "momentum patterns", "BTC historical regimes"              │
+│     → Returns: Best momentum indicators for crypto               │
+│                                                                  │
+│  2. Fetch Data via Data Module                                   │
+│     → data.getCandles('BTC', '1h', 500)                         │
+│     → Returns: Last 500 hours of BTC OHLCV                       │
+│                                                                  │
+│  3. Generate Strategies via Lona                                 │
+│     → lona.generateStrategy('BTC RSI Momentum', '...')           │
+│     → lona.generateStrategy('BTC MACD Crossover', '...')         │
+│     → Returns: strategy_id_1, strategy_id_2                      │
+│                                                                  │
+│  4. Upload Data to Lona                                          │
+│     → lona.uploadData('BTC-1H-2024', 'BTC', '1h', candles)       │
+│     → Returns: data_id                                           │
+│                                                                  │
+│  5. Backtest via Lona                                            │
+│     → lona.backtest(strategy_id_1, data_id)                      │
+│     → lona.backtest(strategy_id_2, data_id)                      │
+│     → Returns: backtest_id_1, backtest_id_2                      │
+│                                                                  │
+│  6. Get Reports                                                  │
+│     → lona.getReport(backtest_id_1)                              │
+│     → lona.getReport(backtest_id_2)                              │
+│     → Returns: { sharpe: 1.8, returns: 12%, drawdown: 5% }       │
+│                                                                  │
+│  7. Save to Knowledge Base                                       │
+│     → knowledge.save('strategy_result', { ... })                 │
+│                                                                  │
+│  8. Return Summary to User                                       │
+│     "Found 2 momentum strategies. Best: RSI Momentum with        │
+│      1.8 Sharpe, 12% returns. Deploy to paper trading?"          │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Complete Execution Flow
+
+```
+User: "Deploy the RSI Momentum strategy to paper trading"
+                │
+                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   ORCHESTRATOR → AGENTS                          │
+│                                                                  │
+│  1. Risk Manager checks                                          │
+│     → risk.checkExposure(portfolio)                              │
+│     → risk.validateTrade(strategy, capital)                      │
+│     → Returns: { approved: true, maxCapital: 5000 }              │
+│                                                                  │
+│  2. Execution Agent deploys                                      │
+│     → liveEngine.deployPaper(strategy_id, 5000)                  │
+│     → Returns: { deploymentId: 'dep_abc123', status: 'running' } │
+│                                                                  │
+│  3. Save to Knowledge Base                                       │
+│     → knowledge.save('deployment', { ... })                      │
+│                                                                  │
+│  4. Schedule monitoring (heartbeat)                              │
+│     → Every 5 min: check deployment status                       │
+│     → Alert if drawdown > 3%                                     │
+│                                                                  │
+│  5. Return to User                                               │
+│     "Deployed! Strategy running with $5,000 paper capital.       │
+│      Current P&L: $0. I'll alert you on significant moves."     │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ### Platform Layer (Trade Nexus)
 
 The core trading intelligence. Handles:

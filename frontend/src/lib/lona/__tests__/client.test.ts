@@ -561,6 +561,133 @@ describe('LonaClient', () => {
     });
   });
 
+  describe('createStrategyFromDescription retry behavior', () => {
+    test('retries once with a unique name when API returns resource already exists', async () => {
+      let callCount = 0;
+      let firstBody: Record<string, unknown> | null = null;
+      let secondBody: Record<string, unknown> | null = null;
+
+      fetchMock = mock((_url: string, options?: RequestInit) => {
+        callCount++;
+        if (callCount === 1) {
+          firstBody = JSON.parse(String(options?.body));
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({ error: { message: 'Resource already exists' } }),
+              { status: 409, statusText: 'Conflict' },
+            ),
+          );
+        }
+
+        secondBody = JSON.parse(String(options?.body));
+        return Promise.resolve(
+          mockResponse({
+            data: {
+              strategyId: 'strategy-2',
+              name: 'retry-strategy',
+              code: 'print("ok")',
+              explanation: 'test',
+            },
+          }),
+        );
+      });
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const client = createClient();
+      const result = await client.createStrategyFromDescription('RSI mean reversion on BTCUSDT');
+
+      expect(result.strategyId).toBe('strategy-2');
+      expect(callCount).toBe(2);
+      expect(firstBody?.['name']).toBeUndefined();
+      const retryName = secondBody?.['name'];
+      expect(typeof retryName).toBe('string');
+      expect(String(retryName).length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('backtest failure messages', () => {
+    test('adds categorized CODE_ERROR context with stderr snippet', async () => {
+      fetchMock = mock((url: string) => {
+        if (url.includes('/api/v1/reports/rpt-1/status')) {
+          return Promise.resolve(mockResponse({ data: { status: 'FAILED', progress: 1 } }));
+        }
+        if (url.includes('/api/v1/reports/rpt-1/full')) {
+          return Promise.resolve(
+            mockResponse({
+              data: {
+                stderr: 'Traceback ... NameError: period is not defined',
+              },
+            }),
+          );
+        }
+        if (url.includes('/api/v1/reports/rpt-1')) {
+          return Promise.resolve(
+            mockResponse({
+              data: {
+                id: 'rpt-1',
+                strategy_id: 'str-1',
+                status: 'FAILED',
+                name: 'test',
+                description: '',
+                created_at: '',
+                updated_at: '',
+                total_stats: null,
+                error: "NameError: name 'period' is not defined",
+              },
+            }),
+          );
+        }
+        return Promise.resolve(mockResponse({}));
+      });
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const client = createClient();
+
+      try {
+        await client.waitForReport('rpt-1', 10_000, 1);
+        expect(true).toBe(false);
+      } catch (error) {
+        expect(error).toBeInstanceOf(LonaClientError);
+        const message = (error as LonaClientError).message;
+        expect(message).toContain('[CODE_ERROR]');
+        expect(message).toContain('stderr:');
+        expect(message).toContain('period is not defined');
+      }
+    });
+
+    test('adds data ownership hint when runBacktest returns data not found', async () => {
+      fetchMock = mock(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ detail: 'Data abc123 not found' }), {
+            status: 404,
+            statusText: 'Not Found',
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ),
+      );
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const client = createClient();
+      try {
+        await client.runBacktest({
+          strategy_id: 's-1',
+          data_ids: ['abc123'],
+          start_date: '2025-01-01',
+          end_date: '2025-02-01',
+          simulation_parameters: {
+            initial_cash: 100000,
+            commission_schema: { commission: 0.001, leverage: 1 },
+            buy_on_close: true,
+          },
+        });
+        expect(true).toBe(false);
+      } catch (error) {
+        expect(error).toBeInstanceOf(LonaClientError);
+        expect((error as LonaClientError).message).toContain('same Lona user/token');
+      }
+    });
+  });
+
   describe('LonaClientError', () => {
     test('has correct name and statusCode', () => {
       const error = new LonaClientError('test error', 500);

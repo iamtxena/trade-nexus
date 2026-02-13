@@ -39,6 +39,7 @@ BINANCE_INTERVAL_MS = {
     "1d": 86_400_000,
 }
 BINANCE_MAX_LIMIT = 1000
+RESOURCE_EXISTS_PATTERN = "resource already exists"
 
 
 class LonaClientError(Exception):
@@ -149,7 +150,15 @@ class LonaClient:
         old_timeout = self._client.timeout
         self._client.timeout = httpx.Timeout(180.0)
         try:
-            data = await self._request("POST", "/api/v1/agent/strategy/create", json=body)
+            try:
+                data = await self._request("POST", "/api/v1/agent/strategy/create", json=body)
+            except LonaClientError as exc:
+                if RESOURCE_EXISTS_PATTERN not in str(exc).lower():
+                    raise
+
+                retry_name = self._build_retry_strategy_name(name, description)
+                body["name"] = retry_name
+                data = await self._request("POST", "/api/v1/agent/strategy/create", json=body)
         finally:
             self._client.timeout = old_timeout
 
@@ -395,8 +404,18 @@ class LonaClient:
 
             if status.status in ("FAILED", "failed"):
                 report = await self.get_report(report_id)
+                full_report: dict | None = None
+                try:
+                    full_report = await self.get_full_report(report_id)
+                except Exception:
+                    full_report = None
+
                 raise LonaClientError(
-                    f"Backtest report {report_id} failed: {report.error or 'unknown error'}",
+                    self._build_backtest_failure_message(
+                        report_id=report_id,
+                        report_error=report.error or "",
+                        full_report=full_report,
+                    )
                 )
 
             await asyncio.sleep(poll_interval)
@@ -446,7 +465,112 @@ class LonaClient:
         except Exception:
             detail = response.text
 
+        hint = ""
+        detail_lower = detail.lower()
+        if "data" in detail_lower and "not found" in detail_lower:
+            hint = (
+                " (hint: ensure the data ID belongs to the same Lona user/token. "
+                "IDs created under a different interface/user are isolated)"
+            )
+
         raise LonaClientError(
-            f"Lona API error {response.status_code}: {detail}",
+            f"Lona API error {response.status_code}: {detail}{hint}",
             status_code=response.status_code,
+        )
+
+    @staticmethod
+    def _build_retry_strategy_name(name: str | None, description: str) -> str:
+        base = (name or " ".join(description.split()[:6]) or "strategy").strip()
+        base = " ".join(base.split())[:64] or "strategy"
+        suffix = datetime.now(tz=UTC).strftime("%m%d%H%M%S")
+        return f"{base}-{suffix}"
+
+    @staticmethod
+    def _collect_diagnostic_strings(payload: Any, output: list[str] | None = None, depth: int = 0) -> list[str]:
+        if output is None:
+            output = []
+        if depth > 5 or len(output) >= 8 or payload is None:
+            return output
+
+        if isinstance(payload, str):
+            normalized = " ".join(payload.split())
+            if normalized:
+                output.append(normalized)
+            return output
+
+        if isinstance(payload, list):
+            for item in payload:
+                LonaClient._collect_diagnostic_strings(item, output, depth + 1)
+            return output
+
+        if isinstance(payload, dict):
+            for key, value in payload.items():
+                if isinstance(value, str) and any(
+                    token in key.lower() for token in ("stderr", "traceback", "error", "exception", "message")
+                ):
+                    normalized = " ".join(value.split())
+                    if normalized:
+                        output.append(normalized)
+                elif isinstance(value, (dict, list)):
+                    LonaClient._collect_diagnostic_strings(value, output, depth + 1)
+
+        return output
+
+    @staticmethod
+    def _classify_backtest_failure(message: str) -> tuple[str, str]:
+        message_lower = message.lower()
+        if "timeout" in message_lower or "timed out" in message_lower:
+            return (
+                "TIMEOUT_ERROR",
+                "Hint: narrow the date range or reduce strategy complexity, then rerun.",
+            )
+        if "data" in message_lower and "not found" in message_lower:
+            return (
+                "DATA_ERROR",
+                "Hint: verify data IDs exist for the same Lona user/token used by this run.",
+            )
+        if any(
+            token in message_lower
+            for token in (
+                "syntaxerror",
+                "nameerror",
+                "attributeerror",
+                "typeerror",
+                "importerror",
+                "modulenotfounderror",
+                "indentationerror",
+                "traceback",
+            )
+        ):
+            return (
+                "CODE_ERROR",
+                "Hint: strategy code failed during compile/runtime; inspect stderr for the failing line or symbol.",
+            )
+        return (
+            "EXECUTION_ERROR",
+            "Hint: inspect full runner stderr/traceback for runtime details.",
+        )
+
+    @staticmethod
+    def _build_backtest_failure_message(
+        report_id: str,
+        report_error: str,
+        full_report: dict | None,
+    ) -> str:
+        diagnostics = LonaClient._collect_diagnostic_strings(full_report) if full_report else []
+        snippet = diagnostics[0][:420] if diagnostics else ""
+        normalized_error = " ".join((report_error or "").split())
+        merged = " | ".join(part for part in (normalized_error, snippet) if part) or "unknown error"
+        category, hint = LonaClient._classify_backtest_failure(merged)
+
+        if snippet:
+            return (
+                f"Backtest report {report_id} failed [{category}]: {normalized_error or 'unknown error'}\n"
+                f"{hint}\n"
+                f"stderr: {snippet}"
+            )
+
+        return (
+            f"Backtest report {report_id} failed [{category}]: {normalized_error or 'unknown error'}\n"
+            f"{hint}"
         )

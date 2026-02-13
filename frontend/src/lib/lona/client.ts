@@ -11,6 +11,11 @@ import type {
 
 const BINANCE_KLINES_URL = 'https://api.binance.com/api/v3/klines';
 const BINANCE_MAX_LIMIT = 1000;
+const RESOURCE_EXISTS_PATTERN = /resource already exists/i;
+const DATA_NOT_FOUND_PATTERN = /(data|symbol).*(not found)|not found.*(data|symbol)/i;
+const CODE_ERROR_PATTERN =
+  /(syntaxerror|nameerror|attributeerror|typeerror|importerror|modulenotfounderror|indentationerror|traceback)/i;
+const TIMEOUT_PATTERN = /(timed out|timeout|deadline exceeded)/i;
 
 export class LonaClientError extends Error {
   statusCode: number | null;
@@ -143,7 +148,120 @@ export class LonaClient {
       detail = response.statusText;
     }
 
-    throw new LonaClientError(`Lona API error ${response.status}: ${detail}`, response.status);
+    throw new LonaClientError(
+      `Lona API error ${response.status}: ${this.withActionableApiHint(detail)}`,
+      response.status,
+    );
+  }
+
+  private withActionableApiHint(detail: string): string {
+    if (DATA_NOT_FOUND_PATTERN.test(detail)) {
+      return `${detail} (hint: ensure this data ID belongs to the same Lona user/token used for the backtest; IDs created under a different interface/user are isolated)`;
+    }
+    return detail;
+  }
+
+  private shouldRetryCreateStrategy(error: unknown): error is LonaClientError {
+    return (
+      error instanceof LonaClientError &&
+      RESOURCE_EXISTS_PATTERN.test(error.message) &&
+      (error.statusCode === 409 || error.statusCode === 400 || error.statusCode === null)
+    );
+  }
+
+  private buildRetryStrategyName(name: string | undefined, description: string): string {
+    const base =
+      (name?.trim() || description.trim().split(/\s+/).slice(0, 6).join(' ') || 'strategy')
+        .replace(/\s+/g, ' ')
+        .slice(0, 64) || 'strategy';
+    const suffix = new Date().toISOString().replace(/\D/g, '').slice(4, 14);
+    return `${base}-${suffix}`;
+  }
+
+  private static normalizeSnippet(value: string): string {
+    return value.replace(/\s+/g, ' ').trim();
+  }
+
+  private collectDiagnosticStrings(payload: unknown, depth = 0, output: string[] = []): string[] {
+    if (depth > 5 || output.length >= 8 || payload == null) return output;
+
+    if (typeof payload === 'string') {
+      const normalized = LonaClient.normalizeSnippet(payload);
+      if (normalized) output.push(normalized);
+      return output;
+    }
+
+    if (Array.isArray(payload)) {
+      for (const item of payload) {
+        this.collectDiagnosticStrings(item, depth + 1, output);
+      }
+      return output;
+    }
+
+    if (typeof payload === 'object') {
+      for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+        if (typeof value === 'string' && /(stderr|traceback|error|exception|message)/i.test(key)) {
+          const normalized = LonaClient.normalizeSnippet(value);
+          if (normalized) output.push(normalized);
+          continue;
+        }
+        if (typeof value === 'object') {
+          this.collectDiagnosticStrings(value, depth + 1, output);
+        }
+      }
+    }
+
+    return output;
+  }
+
+  private classifyBacktestFailure(message: string): {
+    category: 'CODE_ERROR' | 'DATA_ERROR' | 'EXECUTION_ERROR' | 'TIMEOUT_ERROR';
+    hint: string;
+  } {
+    if (TIMEOUT_PATTERN.test(message)) {
+      return {
+        category: 'TIMEOUT_ERROR',
+        hint:
+          'Hint: narrow the date range or reduce strategy complexity, then rerun. If this persists, inspect runner capacity/timeouts in Lona.',
+      };
+    }
+    if (DATA_NOT_FOUND_PATTERN.test(message)) {
+      return {
+        category: 'DATA_ERROR',
+        hint:
+          'Hint: verify the data ID exists for this same Lona user/token. If data was created from another interface/user, redownload or list symbols with this token.',
+      };
+    }
+    if (CODE_ERROR_PATTERN.test(message)) {
+      return {
+        category: 'CODE_ERROR',
+        hint:
+          'Hint: strategy code failed during compilation/runtime. Validate code locally and inspect the stderr snippet below for the exact line or symbol.',
+      };
+    }
+    return {
+      category: 'EXECUTION_ERROR',
+      hint:
+        'Hint: inspect full runner stderr/traceback. This is usually a runtime exception or backend execution failure.',
+    };
+  }
+
+  private buildBacktestFailureMessage(
+    reportId: string,
+    report: LonaReport,
+    fullReport: Record<string, unknown> | null,
+  ): string {
+    const diagnostics = fullReport ? this.collectDiagnosticStrings(fullReport) : [];
+    const diagnosticSnippet = diagnostics[0] ? diagnostics[0].slice(0, 420) : '';
+    const baseError = LonaClient.normalizeSnippet(report.error ?? '');
+    const merged = [baseError, diagnosticSnippet].filter(Boolean).join(' | ') || 'unknown error';
+    const { category, hint } = this.classifyBacktestFailure(merged);
+
+    if (diagnosticSnippet) {
+      return `Backtest report ${reportId} failed [${category}]: ${baseError || 'unknown error'}\n${hint}\nstderr: ${diagnosticSnippet}`;
+    }
+
+    return `Backtest report ${reportId} failed [${category}]: ${baseError || 'unknown error'}\n${hint}`;
   }
 
   async register(): Promise<LonaRegistrationResponse> {
@@ -222,11 +340,28 @@ export class LonaClient {
     if (provider) body.provider = provider;
     if (model) body.model = model;
 
-    return this.request<LonaStrategyFromDescriptionResponse>(
-      'POST',
-      '/api/v1/agent/strategy/create',
-      { body, timeout: 180_000 },
-    );
+    try {
+      return await this.request<LonaStrategyFromDescriptionResponse>(
+        'POST',
+        '/api/v1/agent/strategy/create',
+        { body, timeout: 180_000 },
+      );
+    } catch (error) {
+      if (!this.shouldRetryCreateStrategy(error)) {
+        throw error;
+      }
+
+      const retryBody = {
+        ...body,
+        name: this.buildRetryStrategyName(name, description),
+      };
+
+      return this.request<LonaStrategyFromDescriptionResponse>(
+        'POST',
+        '/api/v1/agent/strategy/create',
+        { body: retryBody, timeout: 180_000 },
+      );
+    }
   }
 
   async createStrategy(name: string, code: string, description?: string): Promise<{ id: string }> {
@@ -437,9 +572,14 @@ export class LonaClient {
       }
       if (status.status === 'FAILED') {
         const report = await this.getReport(reportId);
-        throw new LonaClientError(
-          `Backtest report ${reportId} failed: ${report.error ?? 'unknown error'}`,
-        );
+        let fullReport: Record<string, unknown> | null = null;
+        try {
+          fullReport = await this.getFullReport(reportId);
+        } catch {
+          // Ignore secondary errors; we still return a categorized message from base report.
+        }
+
+        throw new LonaClientError(this.buildBacktestFailureMessage(reportId, report, fullReport));
       }
 
       await new Promise((r) => setTimeout(r, pollInterval));

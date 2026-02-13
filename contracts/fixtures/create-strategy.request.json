@@ -1,0 +1,5 @@
+{
+  "name": "Mean Reversion ETH",
+  "description": "Mean-reversion strategy for ETH using 20-period z-score bands.",
+  "provider": "xai"
+}

@@ -1,0 +1,33 @@
+name: contracts-governance
+
+on:
+  pull_request:
+    paths:
+      - "docs/architecture/**"
+      - "backend/tests/contracts/**"
+      - ".github/workflows/contracts-governance.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/architecture/**"
+      - "backend/tests/contracts/**"
+      - ".github/workflows/contracts-governance.yml"
+
+jobs:
+  contract-governance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test tooling
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Run OpenAPI contract baseline tests
+        run: pytest backend/tests/contracts/test_openapi_contract_baseline.py

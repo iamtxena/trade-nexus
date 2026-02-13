@@ -5,6 +5,7 @@ import csv
 import io
 import json as json_mod
 import logging
+import re
 from datetime import UTC, datetime
 from types import TracebackType
 from typing import Any
@@ -40,6 +41,8 @@ BINANCE_INTERVAL_MS = {
 }
 BINANCE_MAX_LIMIT = 1000
 RESOURCE_EXISTS_PATTERN = "resource already exists"
+DATA_NOT_FOUND_PATTERN = re.compile(r"(data|symbol).*(not found)|not found.*(data|symbol)")
+TIMEOUT_PATTERN = re.compile(r"(timed out|timeout|deadline exceeded)")
 
 
 class LonaClientError(Exception):
@@ -153,7 +156,7 @@ class LonaClient:
             try:
                 data = await self._request("POST", "/api/v1/agent/strategy/create", json=body)
             except LonaClientError as exc:
-                if RESOURCE_EXISTS_PATTERN not in str(exc).lower():
+                if not self._should_retry_create_strategy(exc):
                     raise
 
                 retry_name = self._build_retry_strategy_name(name, description)
@@ -466,8 +469,7 @@ class LonaClient:
             detail = response.text
 
         hint = ""
-        detail_lower = detail.lower()
-        if "data" in detail_lower and "not found" in detail_lower:
+        if DATA_NOT_FOUND_PATTERN.search(detail.lower()):
             hint = (
                 " (hint: ensure the data ID belongs to the same Lona user/token. "
                 "IDs created under a different interface/user are isolated)"
@@ -484,6 +486,12 @@ class LonaClient:
         base = " ".join(base.split())[:64] or "strategy"
         suffix = datetime.now(tz=UTC).strftime("%m%d%H%M%S")
         return f"{base}-{suffix}"
+
+    @staticmethod
+    def _should_retry_create_strategy(error: LonaClientError) -> bool:
+        if error.status_code not in (400, 409, None):
+            return False
+        return RESOURCE_EXISTS_PATTERN in str(error).lower()
 
     @staticmethod
     def _collect_diagnostic_strings(payload: Any, output: list[str] | None = None, depth: int = 0) -> list[str]:
@@ -519,12 +527,12 @@ class LonaClient:
     @staticmethod
     def _classify_backtest_failure(message: str) -> tuple[str, str]:
         message_lower = message.lower()
-        if "timeout" in message_lower or "timed out" in message_lower:
+        if TIMEOUT_PATTERN.search(message_lower):
             return (
                 "TIMEOUT_ERROR",
                 "Hint: narrow the date range or reduce strategy complexity, then rerun.",
             )
-        if "data" in message_lower and "not found" in message_lower:
+        if DATA_NOT_FOUND_PATTERN.search(message_lower):
             return (
                 "DATA_ERROR",
                 "Hint: verify data IDs exist for the same Lona user/token used by this run.",

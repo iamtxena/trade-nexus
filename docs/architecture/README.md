@@ -1,84 +1,139 @@
-# Trade Nexus Architecture Documentation
+# Trade Nexus Architecture
 
-This folder contains detailed specifications for each component of the Trader Brain ecosystem.
+> 🏗️ Technical architecture for the AI Trading ecosystem
 
-## Document Index
+## Quick Overview
 
-| Document | Description | Status |
-|----------|-------------|--------|
-| [AGENT_ARCHITECTURE.md](./AGENT_ARCHITECTURE.md) | Agent hierarchy, ownership, AI SDK integration | 📝 Draft |
-| [KNOWLEDGE_BASE.md](./KNOWLEDGE_BASE.md) | SQL + Vector DB, news feeds, semantic search | 📝 Draft |
-| [DATA_MODULE.md](./DATA_MODULE.md) | Multi-exchange, storage, conversions | 📝 Draft |
-| [CLI_INTERFACE.md](./CLI_INTERFACE.md) | Standalone CLI for the ecosystem | 📝 Draft |
-| [OPENCLAW_INTEGRATION.md](./OPENCLAW_INTEGRATION.md) | How to deploy agents as OpenClaw bots | 📝 Draft |
-
-## High-Level Architecture
+Trade Nexus is a **two-layer architecture**:
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                              TRADER BRAIN ECOSYSTEM                                  │
-├─────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
-│   CONVERSATION LAYER (Phase 1: CLI, Phase 2: Web)                                   │
-│   ┌─────────────────────────────────────────────────────────────────────────────┐   │
-│   │  trader-cli (standalone repo)                                                │   │
-│   │  - Natural language interface                                                │   │
-│   │  - Can be operated by humans OR by OpenClaw bots                            │   │
-│   └─────────────────────────────────────────────────────────────────────────────┘   │
-│                                          │                                           │
-│                                          ▼                                           │
-│   AGENT LAYER (AI SDK v6 / OpenClaw)                                                │
-│   ┌─────────────────────────────────────────────────────────────────────────────┐   │
-│   │                                                                              │   │
-│   │   ┌──────────────────┐                                                      │   │
-│   │   │  TRADING AGENT   │ ◀── MAIN ACTOR (orchestrates everything)            │   │
-│   │   │  (OpenClaw bot)  │                                                      │   │
-│   │   └────────┬─────────┘                                                      │   │
-│   │            │                                                                 │   │
-│   │            │ uses as tools/skills:                                          │   │
-│   │            │                                                                 │   │
-│   │   ┌────────┼────────┬────────────────┬─────────────────┐                   │   │
-│   │   ▼        ▼        ▼                ▼                 ▼                   │   │
-│   │ ┌──────┐ ┌──────┐ ┌──────────┐ ┌──────────┐ ┌────────────────┐            │   │
-│   │ │Research│ │Risk  │ │Knowledge │ │  Data    │ │   Execution    │            │   │
-│   │ │Agent  │ │Mgr   │ │  Base    │ │  Module  │ │   (Lona/Live)  │            │   │
-│   │ └──────┘ └──────┘ └──────────┘ └──────────┘ └────────────────┘            │   │
-│   │                                                                              │   │
-│   └─────────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                      │
-│   INFRASTRUCTURE LAYER                                                              │
-│   ┌─────────────────────────────────────────────────────────────────────────────┐   │
-│   │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐      │   │
-│   │  │   Lona   │  │  Live    │  │ Postgres │  │  Vector  │  │  Time    │      │   │
-│   │  │ Gateway  │  │  Engine  │  │   (SQL)  │  │    DB    │  │  Series  │      │   │
-│   │  └──────────┘  └──────────┘  └──────────┘  └──────────┘  └──────────┘      │   │
-│   └─────────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                      │
-└─────────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│            CLIENT LAYER                 │
+│  Web UI │ API Direct │ OpenClaw Trader │
+└───────────────┬─────────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────────────┐
+│         TRADE NEXUS PLATFORM            │
+│                                         │
+│  Agent Orchestrator (AI SDK v6)         │
+│       │                                 │
+│   ┌───┴───┬───────┬───────┐            │
+│   ▼       ▼       ▼       ▼            │
+│ Research Risk  Execution Data          │
+│  Agent  Manager  Agent   Module        │
+│                                         │
+│  Knowledge Base │ Session Store        │
+└─────────────────────────────────────────┘
 ```
+
+## Architecture Documents
+
+| Document | Description |
+|----------|-------------|
+| [AGENT_ARCHITECTURE.md](./AGENT_ARCHITECTURE.md) | Agent hierarchy, AI SDK patterns, sub-agents |
+| [KNOWLEDGE_BASE.md](./KNOWLEDGE_BASE.md) | Supabase + pgvector for trading memory |
+| [DATA_MODULE.md](./DATA_MODULE.md) | Market data providers (Alpaca, etc.) |
+| [CLI_INTERFACE.md](./CLI_INTERFACE.md) | Command-line interface for agents |
+| [OPENCLAW_INTEGRATION.md](./OPENCLAW_INTEGRATION.md) | OpenClaw Trader client agent |
+| [DEPLOYMENT.md](./DEPLOYMENT.md) | Azure infrastructure (Container Apps + AKS) |
 
 ## Key Decisions
 
-1. **Trading Agent = Main Actor**: Uses everything else as tools
-2. **AI SDK v6**: All agents built with Vercel AI SDK v6 (latest)
-3. **OpenClaw**: Trading Agent and Research Agent deployed as bots
-4. **CLI First**: `trader-cli` as standalone repo, usable by humans or bots
-5. **Hybrid Storage**: SQL + Vector DB for knowledge base
-6. **Data Module**: Separate service for multi-exchange data
-7. **Stock Data**: Start with Alpaca (best free tier)
+### Why Two Layers?
 
-## Repo Structure
+| Layer | Purpose |
+|-------|---------|
+| **Platform** | Multi-user, shared infrastructure, trading logic |
+| **Client** | Personal interaction, memory, messaging |
+
+### Why AI SDK for Platform?
+
+| Concern | OpenClaw | AI SDK |
+|---------|----------|--------|
+| Multi-user | 1 instance per user 😬 | Shared instance ✅ |
+| Sessions | Built-in (personal) | Custom (Supabase) ✅ |
+| Control | Opinionated | Full flexibility ✅ |
+
+### Why OpenClaw for Client?
+
+For users who want **personal autonomous trading**:
+
+- ✅ Local memory (privacy)
+- ✅ Telegram/WhatsApp integration
+- ✅ Heartbeats (proactive alerts)
+- ✅ Personal preferences
+
+## Technology Stack
+
+| Component | Technology |
+|-----------|------------|
+| **Agent Framework** | Vercel AI SDK v6 |
+| **Models** | Grok-2 (xAI) primary, Claude/GPT fallback |
+| **Database** | Supabase (PostgreSQL + pgvector) |
+| **Market Data** | Alpaca (stocks), Binance (crypto) |
+| **Execution** | Lona API + Live Engine |
+| **Infrastructure** | Azure (Container Apps + AKS) |
+
+## Agent Types
+
+### Platform Agents (AI SDK)
+
+Run on Trade Nexus servers, serve all users:
+
+| Agent | Responsibility |
+|-------|---------------|
+| **Orchestrator** | Coordinate agents, manage sessions |
+| **Research** | Market analysis, strategy discovery |
+| **Risk** | Position sizing, exposure limits |
+| **Execution** | Trade execution, paper/live |
+
+### Client Agents (OpenClaw)
+
+Run on user's machine, personal to each user:
+
+| Agent | Responsibility |
+|-------|---------------|
+| **OpenClaw Trader** | Personal interface to Trade Nexus |
+
+## Data Flow
 
 ```
-github.com/iamtxena/ (Personal)
-├── trade-nexus/          # Orchestration + ML backend
-└── live-engine/          # Execution engine
-
-github.com/mindsightventures/ (Organization)
-├── lona/                 # Strategy generation + backtesting (PRIVATE 🔒)
-├── trader-cli/           # NEW: Standalone CLI interface (public)
-├── trader-data/          # NEW: Data module service (public)
-└── trader-knowledge/     # NEW: Knowledge base service (public)
+User Message → Client (Web/OpenClaw) → Trade Nexus API
+                                           │
+                                           ▼
+                                    Orchestrator
+                                           │
+                        ┌──────────────────┼──────────────────┐
+                        ▼                  ▼                  ▼
+                   Research            Risk               Execution
+                     Agent            Manager               Agent
+                        │                  │                  │
+                        └──────────────────┼──────────────────┘
+                                           │
+                                           ▼
+                                    Response → User
 ```
 
-> **Note**: Lona is private, all other mindsightventures repos are public.
+## Getting Started
+
+1. **Read** [AGENT_ARCHITECTURE.md](./AGENT_ARCHITECTURE.md) for full agent details
+2. **Understand** the [KNOWLEDGE_BASE.md](./KNOWLEDGE_BASE.md) for memory/context
+3. **Review** [DEPLOYMENT.md](./DEPLOYMENT.md) for infrastructure setup
+
+## Current Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Agent Architecture | ✅ Designed | AI SDK v6 patterns defined |
+| Knowledge Base | 📝 Planned | Supabase tables TBD |
+| Data Module | 📝 Planned | Alpaca first |
+| Platform API | 🔜 TODO | REST + WebSocket |
+| OpenClaw Trader | 🔜 Future | After platform stable |
+
+## Open Questions
+
+- [ ] How to handle real-time streaming from multiple data sources?
+- [ ] Circuit breaker patterns for autonomous trading?
+- [ ] Rate limiting per user for API?
+- [ ] Billing model for platform usage?

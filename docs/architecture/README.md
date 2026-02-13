@@ -256,4 +256,3 @@ See [DATA_MODULE.md](./DATA_MODULE.md) for news ingestion details.
 - [ ] Circuit breaker patterns for autonomous trading?
 - [ ] Rate limiting per user for API?
 - [ ] Billing model for platform usage?
-- [ ] Who implements custom data in Lona? Or use Knowledge Base workaround?

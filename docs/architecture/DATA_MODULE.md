@@ -593,9 +593,7 @@ GET /api/v1/context/:symbol/export
 
 ### Lona Integration (Custom Data)
 
-**Current limitation**: Lona only supports basic OHLCV data.
-
-**Proposed enhancement** (requires Lona changes):
+Lona supports custom data fields alongside standard OHLCV, enabling strategies to use news, sentiment, and other contextual information.
 
 ```typescript
 // Upload contextual data to Lona
@@ -626,11 +624,27 @@ function onCandle(candle: ContextualCandle) {
 }
 ```
 
-**Workaround until Lona supports custom data**:
+**Data flow for contextual backtesting:**
 
-1. Store contextual data in Knowledge Base
-2. During backtest, agent queries Knowledge Base for news at each timestamp
-3. Slower but works without Lona changes
+```
+Data Module                    Lona                         Strategy
+    │                           │                              │
+    │  1. Build contextual      │                              │
+    │     candles (OHLCV +      │                              │
+    │     news + sentiment)     │                              │
+    │                           │                              │
+    ├──────────────────────────▶│  2. Upload contextual data   │
+    │                           │                              │
+    │                           ├─────────────────────────────▶│
+    │                           │  3. Run backtest             │
+    │                           │     (strategy accesses       │
+    │                           │      candle.news,            │
+    │                           │      candle.sentiment)       │
+    │                           │                              │
+    │                           │◀─────────────────────────────┤
+    │                           │  4. Return results           │
+    │                           │                              │
+```
 
 ---
 

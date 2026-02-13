@@ -336,13 +336,13 @@ trader-cli/
 
 ```bash
 # npm/bun global install
-bun add -g @trader/cli
+bun add -g @mindsightventures/trader-cli
 
 # Or run directly
-bunx @trader/cli research "BTC momentum"
+bunx @mindsightventures/trader-cli research "BTC momentum"
 
 # Or clone and link
-git clone https://github.com/iamtxena/trader-cli
+git clone https://github.com/mindsightventures/trader-cli
 cd trader-cli
 bun install
 bun link

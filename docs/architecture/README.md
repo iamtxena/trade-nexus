@@ -67,14 +67,19 @@ This folder contains detailed specifications for each component of the Trader Br
 6. **Data Module**: Separate service for multi-exchange data
 7. **Stock Data**: Start with Alpaca (best free tier)
 
-## Repo Structure (Proposed)
+## Repo Structure
 
 ```
-github.com/iamtxena/
-├── trade-nexus/          # Current: Orchestration + ML backend
-├── lona/                 # Strategy generation + backtesting  
-├── live-engine/          # Execution engine
+github.com/iamtxena/ (Personal)
+├── trade-nexus/          # Orchestration + ML backend
+├── lona/                 # Strategy generation + backtesting (PRIVATE)
+└── live-engine/          # Execution engine
+
+github.com/mindsightventures/ (Organization - PUBLIC)
 ├── trader-cli/           # NEW: Standalone CLI interface
 ├── trader-data/          # NEW: Data module service
 └── trader-knowledge/     # NEW: Knowledge base service
 ```
+
+> **Note**: New ecosystem repos go under `mindsightventures` org (public).
+> Core trading infra (lona) stays private under `iamtxena`.

@@ -1,0 +1,54 @@
+name: publish-sdk
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Set to true to publish to npm. Default is dry-run."
+        required: false
+        default: "false"
+  push:
+    tags:
+      - "sdk-v*"
+
+jobs:
+  publish-sdk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Regenerate SDK from canonical OpenAPI
+        run: bash contracts/scripts/generate-sdk.sh
+
+      - name: Verify SDK drift
+        run: bash contracts/scripts/verify-sdk-drift.sh
+
+      - name: Prepare SDK release
+        run: bash contracts/scripts/prepare-sdk-release.sh
+
+      - name: Publish SDK to npm
+        if: ${{ github.event_name == 'push' || inputs.publish == 'true' }}
+        working-directory: sdk/typescript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_CACHE: /tmp/trade-nexus-npm-cache
+        run: npm publish --access public
+
+      - name: Dry-run complete
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish != 'true' }}
+        run: echo "Dry-run complete. Set workflow input publish=true to publish to npm."

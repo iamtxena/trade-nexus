@@ -56,9 +56,9 @@ The Data Module handles all market data operations:
 │   │                         TIME-SERIES STORAGE                                  │   │
 │   │                                                                              │   │
 │   │   Hot Data (last 30 days):        Cold Data (historical):                   │   │
-│   │   • TimescaleDB / QuestDB          • Parquet files on S3                    │   │
+│   │   • Supabase / Redis               • Azure Blob Storage                     │   │
 │   │   • Fast queries                   • Cheap storage                          │   │
-│   │   • Real-time inserts              • Batch queries                          │   │
+│   │   • Real-time inserts              • Batch queries (Parquet/JSON)           │   │
 │   │                                                                              │   │
 │   └─────────────────────────────────────────────────────────────────────────────┘   │
 │                                          │                                           │
@@ -280,28 +280,77 @@ SELECT add_compression_policy('ticks', INTERVAL '7 days');
 SELECT add_retention_policy('ticks', INTERVAL '90 days');
 ```
 
-### Cold Storage (S3 + Parquet)
+### Cold Storage (Azure Blob Storage)
 
 For historical data:
 
 ```
-s3://trader-data/
-├── ticks/
-│   ├── exchange=binance/
-│   │   ├── symbol=BTCUSDT/
-│   │   │   ├── year=2024/
-│   │   │   │   ├── month=01/
-│   │   │   │   │   ├── day=01/
-│   │   │   │   │   │   └── ticks.parquet
-│   │   │   │   │   └── ...
-├── candles/
-│   ├── exchange=binance/
-│   │   ├── symbol=BTCUSDT/
-│   │   │   ├── interval=1h/
-│   │   │   │   └── candles.parquet
+tradenexusdata.blob.core.windows.net/
+├── ohlcv/                      # Lona-compatible OHLCV
+│   ├── binance/
+│   │   ├── BTCUSDT/
+│   │   │   ├── 1h/
+│   │   │   │   └── 2024-01.json
+│   │   │   └── 1d/
+│   │   │       └── 2024.json
+├── ticks/                      # Extended data (if needed)
+│   ├── binance/
+│   │   ├── BTCUSDT/
+│   │   │   └── 2024-01-01.parquet
+├── exports/                    # Ready for Lona upload
+│   └── btc-1h-2024.json
 ```
 
-Query with **DuckDB** or **AWS Athena** for analytical queries.
+### Lona-Compatible Format
+
+**IMPORTANT**: All OHLCV data must match Lona's expected format:
+
+```typescript
+// Base format (required by Lona)
+interface LonaOHLCV {
+  timestamp: number;  // Unix timestamp in milliseconds
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+// JSON file format
+{
+  "symbol": "BTCUSDT",
+  "interval": "1h",
+  "exchange": "binance",
+  "data": [
+    { "timestamp": 1707350400000, "open": 42150.5, "high": 42300.0, "low": 42100.0, "close": 42250.0, "volume": 1234.56 },
+    { "timestamp": 1707354000000, "open": 42250.0, "high": 42400.0, "low": 42200.0, "close": 42350.0, "volume": 1456.78 }
+  ]
+}
+```
+
+**Export function for Lona**:
+```typescript
+async function exportForLona(
+  symbol: string, 
+  interval: string, 
+  startDate: Date, 
+  endDate: Date
+): Promise<LonaOHLCV[]> {
+  const data = await getCandles(symbol, interval, startDate, endDate);
+  
+  // Strip to Lona-compatible fields only
+  return data.map(({ timestamp, open, high, low, close, volume }) => ({
+    timestamp,
+    open,
+    high,
+    low,
+    close,
+    volume,
+  }));
+}
+```
+
+Query with **DuckDB** for analytical queries on Parquet files.
 
 ### Storage Estimates
 

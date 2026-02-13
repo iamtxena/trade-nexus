@@ -4,20 +4,23 @@
 
 Deployment of Trader Brain ecosystem on Azure infrastructure.
 
-## Azure Infrastructure
+## Resource Group Strategy
 
-### Two Resource Ecosystems
+**IMPORTANT**: We use a **single resource group** for all new Trade Nexus components:
 
-| Ecosystem | Resource Group | Region | Purpose |
-|-----------|---------------|--------|---------|
-| **Trade Nexus** | `trade-nexus` | West Europe | Container Apps (backend services) |
-| **Trading Platform** | `rg-trading-*` | North Europe | AKS (Lona, heavy workloads) |
+| What | Resource Group | Notes |
+|------|---------------|-------|
+| **New Trade Nexus components** | `trade-nexus` (West Europe) | Everything we build goes here |
+| **Lona Gateway** | Existing Lona RG | Already deployed, don't touch |
+| **Live Engine** | Existing Lona RG / Vercel | Already deployed, don't touch |
+
+> **No dev/prod split** for now. We deploy directly to `trade-nexus` resource group.
 
 ---
 
 ## Trade Nexus Resource Group (West Europe)
 
-**Best for**: Lightweight services, APIs, scale-to-zero workloads
+**All new services go here**: APIs, Data Module, Agent Platform, etc.
 
 ### Available Resources
 
@@ -62,92 +65,73 @@ az containerapp create \
 
 ---
 
-## Trading Platform (North Europe)
+## Existing Resources (Reference Only)
 
-### Resource Groups
+> **Note**: These exist but we're NOT deploying new Trade Nexus components here.
+> New components go to `trade-nexus` RG.
 
-| Resource Group | Environment | Region |
-|---------------|-------------|--------|
-| rg-trading-shared | Shared Infrastructure | North Europe |
-| rg-trading-dev | Development | North Europe |
-| rg-trading-prod | Production | North Europe |
-| rg-trading-lab | Lab/Sandbox | West Europe |
+### Trading Platform (North Europe) - Reserved for Lona/Heavy Workloads
 
-### Available Resources
+| Resource Group | Contains |
+|---------------|----------|
+| rg-trading-shared | ACR, DNS Zone |
+| rg-trading-dev | AKS dev cluster, Redis, Cosmos |
+| rg-trading-prod | AKS prod cluster, Redis, Cosmos |
 
-#### Shared (rg-trading-shared)
-- `acrtrading` — Container Registry
-- `mindsightventures.ai` — DNS Zone
+**Use only if** we need AKS for heavy workloads (TimescaleDB, etc.) in the future.
 
-#### Development (rg-trading-dev)
-- `aks-trading-dev` — AKS Cluster
-- `trading-dev-redis` — Azure Cache for Redis
-- `trading-dev-mongodb` — Cosmos DB (MongoDB API)
-- `tradingdevstorage` — Storage Account
-- Application Gateway + VNet
-
-#### Production (rg-trading-prod)
-- `aks-trading-prod` — AKS Cluster
-- `trading-prod-redis` — Azure Cache for Redis
-- `trading-prod-mongodb` — Cosmos DB (MongoDB API)
-- `tradingprodstorage` — Storage Account
-- Application Gateway + VNet
-
-## Component Deployment
-
-### Architecture Diagram
+## Simplified Deployment Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                         AZURE TRADING PLATFORM                                       │
-├─────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                      │
-│   rg-trading-shared (North Europe)                                                  │
-│   ┌─────────────────────────────────────────────────────────────────────────────┐   │
-│   │  acrtrading.azurecr.io          mindsightventures.ai (DNS)                  │   │
-│   └─────────────────────────────────────────────────────────────────────────────┘   │
-│                                          │                                           │
-│         ┌────────────────────────────────┴────────────────────────────────┐         │
-│         │                                                                  │         │
-│         ▼                                                                  ▼         │
-│   rg-trading-dev (North Europe)                  rg-trading-prod (North Europe)     │
-│   ┌───────────────────────────────┐              ┌───────────────────────────────┐  │
-│   │                               │              │                               │  │
-│   │   AKS: aks-trading-dev        │              │   AKS: aks-trading-prod       │  │
-│   │   ┌─────────────────────────┐ │              │   ┌─────────────────────────┐ │  │
-│   │   │ Namespaces:             │ │              │   │ Namespaces:             │ │  │
-│   │   │ • trader-data           │ │              │   │ • trader-data           │ │  │
-│   │   │ • trader-knowledge      │ │              │   │ • trader-knowledge      │ │  │
-│   │   │ • trader-cli            │ │              │   │ • trader-cli            │ │  │
-│   │   └─────────────────────────┘ │              │   └─────────────────────────┘ │  │
-│   │                               │              │                               │  │
-│   │   Redis: trading-dev-redis    │              │   Redis: trading-prod-redis   │  │
-│   │   Cosmos: trading-dev-mongodb │              │   Cosmos: trading-prod-mongodb│  │
-│   │   Storage: tradingdevstorage  │              │   Storage: tradingprodstorage │  │
-│   │                               │              │                               │  │
-│   └───────────────────────────────┘              └───────────────────────────────┘  │
-│                                                                                      │
-│   rg-trading-lab (West Europe)                                                      │
-│   ┌───────────────────────────────┐                                                 │
-│   │  Experimental deployments     │                                                 │
-│   │  CI/CD testing                │                                                 │
-│   └───────────────────────────────┘                                                 │
-│                                                                                      │
-└─────────────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│                              AZURE DEPLOYMENT                                         │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                       │
+│   trade-nexus (West Europe) ← ALL NEW COMPONENTS GO HERE                            │
+│   ┌────────────────────────────────────────────────────────────────────────────────┐ │
+│   │                                                                                 │ │
+│   │   Container Apps Environment: trade-nexus-env                                   │ │
+│   │   ACR: tradenexusacr.azurecr.io                                                │ │
+│   │                                                                                 │ │
+│   │   ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐               │ │
+│   │   │  Agent Platform │  │  trader-data    │  │  trading-cli    │               │ │
+│   │   │  (AI SDK)       │  │  (Data API)     │  │  (CLI Backend)  │               │ │
+│   │   │                 │  │                 │  │                 │               │ │
+│   │   │  Container App  │  │  Container App  │  │  Container App  │               │ │
+│   │   │  min-replicas:0 │  │  min-replicas:0 │  │  min-replicas:0 │               │ │
+│   │   └─────────────────┘  └─────────────────┘  └─────────────────┘               │ │
+│   │                                                                                 │ │
+│   │   ┌─────────────────────────────────────────────────────────────┐             │ │
+│   │   │  Azure Blob Storage: tradenexusdata                         │             │ │
+│   │   │  • ohlcv/      (Lona-compatible OHLCV data)                 │             │ │
+│   │   │  • exports/    (Export files for Lona)                      │             │ │
+│   │   └─────────────────────────────────────────────────────────────┘             │ │
+│   │                                                                                 │ │
+│   └────────────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                       │
+│   External Services (Don't Touch)                                                     │
+│   ┌────────────────────────────────────────────────────────────────────────────────┐ │
+│   │                                                                                 │ │
+│   │   Supabase (Knowledge Base)     Lona Gateway        Live Engine               │ │
+│   │   PostgreSQL + pgvector         (Existing RG)       (Vercel/Lona RG)          │ │
+│   │                                                                                 │ │
+│   └────────────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                       │
+└──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Component → Resource Mapping
 
-| Component | Where | Resource | Notes |
-|-----------|-------|----------|-------|
-| **Trade Nexus Backend** | trade-nexus (WE) | Container App | Already deployed ✅ |
-| **trader-data API** | trade-nexus (WE) | Container App | Scale-to-zero, lightweight |
-| **trader-cli API** | trade-nexus (WE) | Container App | If needed as service |
+| Component | Resource Group | Type | Notes |
+|-----------|---------------|------|-------|
+| **Agent Platform API** | `trade-nexus` | Container App | AI SDK orchestrator |
+| **trader-data API** | `trade-nexus` | Container App | Scale-to-zero |
+| **trading-cli API** | `trade-nexus` | Container App | CLI backend (if needed) |
+| **Data Storage (OHLCV)** | `trade-nexus` | Azure Blob Storage | Lona-compatible format |
 | **Knowledge Base** | Supabase | PostgreSQL + pgvector | External, managed |
-| **Tick Data (Hot)** | rg-trading-dev (NE) | AKS + TimescaleDB | High memory workloads |
-| **Tick Data (Cold)** | trade-nexus (WE) | Storage Account | Parquet files |
-| **Lona Gateway** | lona (separate RG) | Container App | Already deployed ✅ |
-| **Live Engine** | lona (separate RG) | Vercel | Already deployed ✅ |
+| **Trade Nexus Backend** | `trade-nexus` | Container App | Already deployed ✅ |
+| **Lona Gateway** | Lona RG | Container App | **Don't touch** ✅ |
+| **Live Engine** | Lona RG / Vercel | - | **Don't touch** ✅ |
 
 ### Deployment Decision Tree
 
@@ -160,82 +144,97 @@ Is it a lightweight API that can scale to zero?
 
 ## Data Module Deployment
 
-### New Repo: `trader-data`
+### Deploy to: `trade-nexus` Container Apps
+
+```bash
+# Build and push to trade-nexus ACR
+docker build -t tradenexusacr.azurecr.io/trader-data:latest .
+docker push tradenexusacr.azurecr.io/trader-data:latest
+
+# Deploy as Container App (scale-to-zero)
+az containerapp create \
+  --name trader-data \
+  --resource-group trade-nexus \
+  --environment trade-nexus-env \
+  --image tradenexusacr.azurecr.io/trader-data:latest \
+  --target-port 8000 \
+  --ingress external \
+  --cpu 0.5 --memory 1.0Gi \
+  --min-replicas 0
+```
+
+### Storage: Azure Blob Storage (NOT S3)
+
+```bash
+# Create storage account in trade-nexus RG
+az storage account create \
+  --name tradenexusdata \
+  --resource-group trade-nexus \
+  --location westeurope \
+  --sku Standard_LRS
+
+# Create containers
+az storage container create --name ohlcv --account-name tradenexusdata
+az storage container create --name exports --account-name tradenexusdata
+```
+
+### Data Format: Lona-Compatible OHLCV
+
+**IMPORTANT**: All data must be compatible with Lona's format.
+
+```typescript
+// Base OHLCV format (Lona-compatible)
+interface OHLCVCandle {
+  timestamp: number;    // Unix timestamp (ms)
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+// Extended format (optional extra columns)
+interface ExtendedOHLCV extends OHLCVCandle {
+  // Additional columns (Lona will ignore these)
+  vwap?: number;
+  trades?: number;
+  spread?: number;
+}
+```
+
+**Export for Lona**:
+```typescript
+// When exporting to Lona, strip to base OHLCV
+function exportForLona(data: ExtendedOHLCV[]): OHLCVCandle[] {
+  return data.map(({ timestamp, open, high, low, close, volume }) => ({
+    timestamp, open, high, low, close, volume
+  }));
+}
+```
+
+**File format**: JSON or CSV
+```csv
+timestamp,open,high,low,close,volume
+1707350400000,42150.5,42300.0,42100.0,42250.0,1234.56
+1707354000000,42250.0,42400.0,42200.0,42350.0,1456.78
+```
+
+### Repo Structure: `trader-data`
 
 ```
 trader-data/
 ├── src/
-│   ├── api/              # FastAPI REST + WebSocket
+│   ├── api/              # FastAPI REST
 │   ├── cli/              # CLI interface
-│   ├── connectors/       # Exchange connectors
-│   ├── storage/          # Storage adapters
-│   └── transform/        # Data transformation
-├── helm/                 # Kubernetes charts
+│   ├── connectors/       # Alpaca, Binance
+│   │   ├── alpaca.ts
+│   │   └── binance.ts
+│   ├── storage/          
+│   │   └── azure-blob.ts # Azure Blob adapter
+│   └── export/
+│       └── lona.ts       # Lona-compatible export
 ├── Dockerfile
 └── README.md
-```
-
-### Kubernetes Deployment
-
-```yaml
-# helm/values.yaml
-replicaCount: 2
-
-image:
-  repository: acrtrading.azurecr.io/trader-data
-  tag: latest
-
-resources:
-  requests:
-    memory: "2Gi"
-    cpu: "500m"
-  limits:
-    memory: "8Gi"
-    cpu: "2000m"
-
-# TimescaleDB sidecar for hot storage
-timescaledb:
-  enabled: true
-  persistence:
-    size: 100Gi
-    storageClass: managed-premium
-
-# Azure Blob for cold storage
-azure:
-  storageAccount: tradingdevstorage
-  container: tick-data
-
-# Exchange connectors
-connectors:
-  binance:
-    enabled: true
-  alpaca:
-    enabled: true
-    apiKey: ${ALPACA_API_KEY}
-    apiSecret: ${ALPACA_API_SECRET}
-```
-
-### Ingress Configuration
-
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: trader-data
-  annotations:
-    kubernetes.io/ingress.class: azure/application-gateway
-spec:
-  rules:
-  - host: data.trading.mindsightventures.ai
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: trader-data
-            port:
-              number: 8000
 ```
 
 ## Knowledge Base Deployment

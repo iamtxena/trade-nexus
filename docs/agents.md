@@ -4,9 +4,11 @@
 
 Trade Nexus uses a multi-agent architecture with specialized agents for different trading tasks. Agents are implemented in both TypeScript (frontend) and Python (backend).
 
-## TypeScript Agents (AI SDK v5)
+## TypeScript Agents (AI SDK v6)
 
 Located in `frontend/src/lib/ai/`
+
+> **Note**: Using AI SDK v6.x with `tool()` helper and zod schemas for type-safe tool definitions.
 
 ### Orchestrator
 

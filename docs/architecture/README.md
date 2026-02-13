@@ -27,7 +27,7 @@ This folder contains detailed specifications for each component of the Trader Br
 │   └─────────────────────────────────────────────────────────────────────────────┘   │
 │                                          │                                           │
 │                                          ▼                                           │
-│   AGENT LAYER (AI SDK v5 / OpenClaw)                                                │
+│   AGENT LAYER (AI SDK v6 / OpenClaw)                                                │
 │   ┌─────────────────────────────────────────────────────────────────────────────┐   │
 │   │                                                                              │   │
 │   │   ┌──────────────────┐                                                      │   │

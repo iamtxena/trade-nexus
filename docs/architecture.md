@@ -85,7 +85,7 @@ frontend/
 - State: TanStack Query v5 (server), Zustand (client)
 - UI: TailwindCSS v4, shadcn/ui
 - Charts: TradingView, Recharts
-- AI: AI SDK v5 with xAI Grok
+- AI: AI SDK v6 with xAI Grok
 
 ### Backend (FastAPI)
 
@@ -157,25 +157,33 @@ backend/
 3. Push: Tag with commit SHA + `latest`
 4. Deploy: Update Azure Container App
 
-## Scaling Configuration
+## Production Deployment
+
+**Backend URL**: https://trade-nexus-backend.whitecliff-198cd26a.westeurope.azurecontainerapps.io/
+
+**Health Check**: `GET /health`
+
+### Scaling Configuration
 
 | Setting | Value |
 |---------|-------|
 | Min Replicas | 0 (scale to zero) |
 | Max Replicas | 3 |
-| CPU | 1 core |
-| Memory | 2 Gi |
-| Workload Profile | Consumption |
+| CPU | 2 vCPU |
+| Memory | 4 GB |
+| Port | 8000 |
+| Ingress | External |
 
-## External Services
+## External Services & Environment Variables
 
-| Service | Purpose | Environment Variables |
-|---------|---------|----------------------|
-| Supabase | PostgreSQL database | `SUPABASE_URL`, `SUPABASE_KEY` |
-| Upstash | Redis cache | `UPSTASH_REDIS_URL`, `UPSTASH_REDIS_TOKEN` |
-| xAI | Grok LLM | `XAI_API_KEY` |
-| LangSmith | Agent observability | `LANGSMITH_API_KEY` |
-| Clerk | Authentication | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` |
+| Service | Purpose | Env Var | Secret? |
+|---------|---------|---------|---------|
+| xAI | Grok LLM | `XAI_API_KEY` | Yes |
+| Supabase | PostgreSQL + pgvector | `SUPABASE_URL`, `SUPABASE_KEY` | Yes |
+| LangSmith | Agent observability | `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` | Yes |
+| Lona Gateway | Strategy generation | `LONA_GATEWAY_URL`, `LONA_AGENT_TOKEN`, `LONA_AGENT_ID` | Partial |
+| Live Engine | Trade execution | `LIVE_ENGINE_URL` | No |
+| Clerk | Authentication (frontend) | `NEXT_PUBLIC_CLERK_*`, `CLERK_SECRET_KEY` | Yes |
 
 ## Security
 

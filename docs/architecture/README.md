@@ -69,11 +69,25 @@ For users who want **personal autonomous trading**:
 | Component | Technology |
 |-----------|------------|
 | **Agent Framework** | Vercel AI SDK v6 |
-| **Models** | Grok-2 (xAI) primary, Claude/GPT fallback |
+| **Model Gateway** | OpenRouter (unified access to all models) |
+| **Models** | Configurable per agent (see below) |
 | **Database** | Supabase (PostgreSQL + pgvector) |
 | **Market Data** | Alpaca (stocks), Binance (crypto) |
 | **Execution** | Lona API + Live Engine |
 | **Infrastructure** | Azure (Container Apps + AKS) |
+
+### Model Options (via OpenRouter)
+
+| Model | Provider | Best For |
+|-------|----------|----------|
+| Grok 4 | xAI | Fast reasoning |
+| Claude Sonnet 4.5 | Anthropic | Complex analysis |
+| Claude Sonnet 4.5 (thinking) | Anthropic | Deep reasoning |
+| GPT-5.2 | OpenAI | General tasks |
+| MiniMax-01 | MiniMax | Fast, cost-effective |
+| Kimi K2 | Moonshot | Long context |
+
+Models are configurable per agent via environment variables.
 
 ## Agent Types
 

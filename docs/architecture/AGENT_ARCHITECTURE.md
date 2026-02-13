@@ -94,6 +94,67 @@ All platform agents built with [Vercel AI SDK v6](https://sdk.vercel.ai/docs) fo
 
 **Conclusion**: AI SDK + custom infrastructure for multi-tenant platform.
 
+### Model Providers
+
+AI SDK supports multiple providers. We use **OpenRouter** as the unified gateway for model flexibility:
+
+```typescript
+import { createOpenAI } from '@ai-sdk/openai';
+
+// OpenRouter as unified provider
+const openrouter = createOpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+
+// Available models (configurable per agent)
+const MODELS = {
+  // Reasoning models (for complex decisions)
+  reasoning: {
+    primary: 'x-ai/grok-4',              // Grok 4 (fast reasoning)
+    fallback: 'anthropic/claude-sonnet-4.5-thinking', // Claude thinking
+  },
+  // Fast models (for quick responses)
+  fast: {
+    primary: 'minimax/minimax-01',       // MiniMax (new, fast)
+    fallback: 'moonshotai/kimi-k2',      // Kimi K2
+  },
+  // Coding models
+  coding: {
+    primary: 'anthropic/claude-sonnet-4.5',
+    fallback: 'openai/gpt-5.2',
+  },
+};
+```
+
+**Supported Models (via OpenRouter):**
+
+| Model | Provider | Best For |
+|-------|----------|----------|
+| Grok 4 | xAI | Fast reasoning, real-time analysis |
+| Claude Sonnet 4.5 | Anthropic | Complex reasoning, coding |
+| Claude Sonnet 4.5 (thinking) | Anthropic | Deep analysis with CoT |
+| GPT-5.2 | OpenAI | General tasks |
+| GPT-5.2 (thinking) | OpenAI | Reasoning with CoT |
+| MiniMax-01 | MiniMax | Fast, cost-effective |
+| Kimi K2 | Moonshot | Multilingual, long context |
+
+**Direct Provider Packages (alternative to OpenRouter):**
+
+```typescript
+// Direct providers (if not using OpenRouter)
+import { anthropic } from '@ai-sdk/anthropic';
+import { openai } from '@ai-sdk/openai';
+import { xai } from '@ai-sdk/xai';
+import { google } from '@ai-sdk/google';
+
+// Use directly
+const result = await generateText({
+  model: anthropic('claude-sonnet-4.5'),
+  prompt: '...',
+});
+```
+
 ### Client: OpenClaw Trader (Optional)
 
 For users who want a **personal autonomous agent** that connects to Trade Nexus:
@@ -141,8 +202,22 @@ The central coordinator built with AI SDK v6.
 ```typescript
 // agent-orchestrator.ts
 import { generateText, tool } from 'ai';
-import { xai } from '@ai-sdk/xai';
+import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
+
+// OpenRouter as unified provider
+const openrouter = createOpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+
+// Model configuration (from env or config)
+const MODEL_CONFIG = {
+  orchestrator: process.env.MODEL_ORCHESTRATOR || 'x-ai/grok-4',
+  research: process.env.MODEL_RESEARCH || 'anthropic/claude-sonnet-4.5',
+  risk: process.env.MODEL_RISK || 'x-ai/grok-4',
+  execution: process.env.MODEL_EXECUTION || 'minimax/minimax-01',
+};
 
 interface UserContext {
   userId: string;
@@ -158,9 +233,9 @@ export async function runOrchestrator(
   // 1. Load user session from Supabase
   const session = await sessionManager.load(context.userId);
   
-  // 2. Run AI SDK agent
+  // 2. Run AI SDK agent (model configurable)
   const result = await generateText({
-    model: xai('grok-2-latest'),
+    model: openrouter(MODEL_CONFIG.orchestrator),
     
     system: `You are a trading orchestrator managing a portfolio.
     
@@ -279,7 +354,7 @@ import { generateText, tool } from 'ai';
 
 export const researchAgent = async (query: string, context: ResearchContext) => {
   return await generateText({
-    model: xai('grok-2-latest'),
+    model: openrouter(MODEL_CONFIG.research), // Claude for deep research
     
     system: `You are a trading research analyst.
     
@@ -351,7 +426,7 @@ export const researchAgentTool = tool({
 // risk-manager.ts
 export const riskManager = async (action: RiskAction, context: RiskContext) => {
   return await generateText({
-    model: xai('grok-2-latest'),
+    model: openrouter(MODEL_CONFIG.risk), // Fast reasoning for risk
     
     system: `You are a risk manager for a trading portfolio.
     
@@ -414,7 +489,7 @@ export const riskManager = async (action: RiskAction, context: RiskContext) => {
 // execution-agent.ts
 export const executionAgent = async (order: Order, context: ExecutionContext) => {
   return await generateText({
-    model: xai('grok-2-latest'),
+    model: openrouter(MODEL_CONFIG.execution), // Fast model for execution
     
     system: `You are a trade execution agent.
     

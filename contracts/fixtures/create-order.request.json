@@ -1,0 +1,8 @@
+{
+  "symbol": "BTCUSDT",
+  "side": "buy",
+  "type": "limit",
+  "quantity": 0.1,
+  "price": 64500,
+  "deploymentId": "dep-001"
+}

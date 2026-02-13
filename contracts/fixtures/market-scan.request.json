@@ -1,0 +1,8 @@
+{
+  "assetClasses": ["crypto", "stocks"],
+  "capital": 25000,
+  "constraints": {
+    "maxPositionPct": 25,
+    "maxDrawdownPct": 12
+  }
+}

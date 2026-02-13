@@ -88,6 +88,17 @@ Update API documentation for /predict endpoint
 - Update documentation if adding new features
 - Add tests for new functionality
 
+## Architecture and Contract Proposals
+
+Use the dedicated issue templates before opening architecture or API contract PRs:
+
+- Architecture changes:
+  - `.github/ISSUE_TEMPLATE/architecture_change.yml`
+- API contract changes:
+  - `.github/ISSUE_TEMPLATE/api_contract_change.yml`
+
+For breaking API proposals, include an explicit architecture approval comment URL in the issue before merge.
+
 ## Project Structure
 
 See [AGENTS.md](./AGENTS.md) for detailed architecture and code patterns.

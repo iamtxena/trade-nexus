@@ -1,8 +1,11 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
   - name: Documentation
     url: https://github.com/iamtxena/trade-nexus#readme
     about: Check the README for setup and usage instructions
+  - name: Architecture Baseline
+    url: https://github.com/iamtxena/trade-nexus/tree/main/docs/architecture
+    about: Read architecture and contract governance docs before opening issues
   - name: Discussions
     url: https://github.com/iamtxena/trade-nexus/discussions
     about: Ask questions and discuss ideas

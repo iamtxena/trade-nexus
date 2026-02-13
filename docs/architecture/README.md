@@ -93,10 +93,13 @@ For users who want **personal autonomous trading**:
 | Claude Sonnet 4.5 | Anthropic | Complex analysis |
 | Claude Sonnet 4.5 (thinking) | Anthropic | Deep reasoning |
 | GPT-5.2 | OpenAI | General tasks |
-| MiniMax-01 | MiniMax | Fast, cost-effective |
+| **MiniMax M2.5** | MiniMax | Fast, cost-effective (newest) |
+| **GLM-5** | Z.AI | Strong reasoning |
 | Kimi K2 | Moonshot | Long context |
 
 Models are configurable per agent via environment variables.
+
+> OpenRouter IDs: `minimax/minimax-m2.5`, `z-ai/glm-5`
 
 ## Agent Types
 

@@ -153,17 +153,22 @@ const MODELS = {
   // Reasoning models (for complex decisions)
   reasoning: {
     primary: 'x-ai/grok-4',              // Grok 4 (fast reasoning)
-    fallback: 'anthropic/claude-sonnet-4.5-thinking', // Claude thinking
+    fallback: 'z-ai/glm-5',              // GLM-5 (strong reasoning)
   },
   // Fast models (for quick responses)
   fast: {
-    primary: 'minimax/minimax-01',       // MiniMax (new, fast)
+    primary: 'minimax/minimax-m2.5',     // MiniMax M2.5 (newest, fast)
     fallback: 'moonshotai/kimi-k2',      // Kimi K2
   },
   // Coding models
   coding: {
     primary: 'anthropic/claude-sonnet-4.5',
     fallback: 'openai/gpt-5.2',
+  },
+  // Analysis models (deep thinking)
+  analysis: {
+    primary: 'anthropic/claude-sonnet-4.5-thinking',
+    fallback: 'openai/gpt-5.2-thinking',
   },
 };
 ```
@@ -177,8 +182,11 @@ const MODELS = {
 | Claude Sonnet 4.5 (thinking) | Anthropic | Deep analysis with CoT |
 | GPT-5.2 | OpenAI | General tasks |
 | GPT-5.2 (thinking) | OpenAI | Reasoning with CoT |
-| MiniMax-01 | MiniMax | Fast, cost-effective |
+| **MiniMax M2.5** | MiniMax | Fast, cost-effective (newest) |
+| **GLM-5** | Z.AI (Zhipu) | Strong reasoning, multilingual |
 | Kimi K2 | Moonshot | Multilingual, long context |
+
+> **Note**: OpenRouter IDs: `minimax/minimax-m2.5`, `z-ai/glm-5`
 
 **Direct Provider Packages (alternative to OpenRouter):**
 

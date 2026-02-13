@@ -2,13 +2,67 @@
 
 ## Overview
 
-Deployment of Trader Brain ecosystem on Azure Trading Platform infrastructure.
+Deployment of Trader Brain ecosystem on Azure infrastructure.
 
 ## Azure Infrastructure
 
-### Regions
-- **North Europe**: Production + Development
-- **West Europe**: Lab/Sandbox
+### Two Resource Ecosystems
+
+| Ecosystem | Resource Group | Region | Purpose |
+|-----------|---------------|--------|---------|
+| **Trade Nexus** | `trade-nexus` | West Europe | Container Apps (backend services) |
+| **Trading Platform** | `rg-trading-*` | North Europe | AKS (Lona, heavy workloads) |
+
+---
+
+## Trade Nexus Resource Group (West Europe)
+
+**Best for**: Lightweight services, APIs, scale-to-zero workloads
+
+### Available Resources
+
+| Resource | Type | Notes |
+|----------|------|-------|
+| `trade-nexus-env` | Container App Environment | Shared hosting layer |
+| `tradenexusacr` | Container Registry | Push images here |
+| `trade-nexus-backend` | Container App | 2 vCPU, 4GB RAM |
+| Log Analytics | Auto-created | Shared logs |
+
+### Service Principal
+- **Name**: `trade-nexus-github`
+- **Role**: Contributor (scoped to resource group)
+- **Use**: GitHub Actions deployments
+
+### How to Deploy a New App
+
+```bash
+# 1. Push image to ACR
+docker build -t tradenexusacr.azurecr.io/my-app:latest .
+docker push tradenexusacr.azurecr.io/my-app:latest
+
+# 2. Create Container App
+az containerapp create \
+  --name my-app \
+  --resource-group trade-nexus \
+  --environment trade-nexus-env \
+  --image tradenexusacr.azurecr.io/my-app:latest \
+  --registry-server tradenexusacr.azurecr.io \
+  --registry-username tradenexusacr \
+  --registry-password <ACR_PASSWORD> \
+  --target-port 8000 \
+  --ingress external \
+  --cpu 0.5 --memory 1.0Gi \
+  --min-replicas 0
+```
+
+### Cost Model
+- Environment + Log Analytics: **~$0 idle** (shared overhead)
+- Container App with `--min-replicas 0`: **~$0 when idle**
+- Pay only when app has running replicas
+
+---
+
+## Trading Platform (North Europe)
 
 ### Resource Groups
 
@@ -84,16 +138,25 @@ Deployment of Trader Brain ecosystem on Azure Trading Platform infrastructure.
 
 ### Component → Resource Mapping
 
-| Component | Azure Resource | Notes |
-|-----------|---------------|-------|
-| **Data Module** | AKS (dedicated namespace) | High memory for data processing |
-| **Knowledge Base (SQL)** | Supabase OR Azure PostgreSQL | Supabase easier, Azure for compliance |
-| **Knowledge Base (Vector)** | Supabase (pgvector) | Same DB, add extension |
-| **Tick Data (Hot)** | TimescaleDB on AKS | Or Azure Database for PostgreSQL |
-| **Tick Data (Cold)** | Azure Blob Storage | Parquet files |
-| **Cache** | Azure Redis (existing) | Session state, rate limiting |
-| **Message Queue** | Azure Redis Streams | Real-time data distribution |
-| **API Gateway** | Application Gateway (existing) | SSL termination, routing |
+| Component | Where | Resource | Notes |
+|-----------|-------|----------|-------|
+| **Trade Nexus Backend** | trade-nexus (WE) | Container App | Already deployed ✅ |
+| **trader-data API** | trade-nexus (WE) | Container App | Scale-to-zero, lightweight |
+| **trader-cli API** | trade-nexus (WE) | Container App | If needed as service |
+| **Knowledge Base** | Supabase | PostgreSQL + pgvector | External, managed |
+| **Tick Data (Hot)** | rg-trading-dev (NE) | AKS + TimescaleDB | High memory workloads |
+| **Tick Data (Cold)** | trade-nexus (WE) | Storage Account | Parquet files |
+| **Lona Gateway** | lona (separate RG) | Container App | Already deployed ✅ |
+| **Live Engine** | lona (separate RG) | Vercel | Already deployed ✅ |
+
+### Deployment Decision Tree
+
+```
+Is it a lightweight API that can scale to zero?
+  └─ YES → trade-nexus Container Apps (West Europe)
+  └─ NO (needs persistent storage/high memory)?
+       └─ Trading Platform AKS (North Europe)
+```
 
 ## Data Module Deployment
 

@@ -30,10 +30,10 @@ export class LonaClientError extends Error {
 function getConfig() {
   return {
     gatewayUrl: process.env.LONA_GATEWAY_URL ?? 'https://gateway.lona.agency',
-    agentId: process.env.LONA_AGENT_ID ?? 'trade-nexus',
+    agentId: process.env.LONA_AGENT_ID ?? process.env.LONA_USER_ID ?? 'trade-nexus',
     agentName: process.env.LONA_AGENT_NAME ?? 'Trade Nexus Orchestrator',
     registrationSecret: process.env.LONA_AGENT_REGISTRATION_SECRET ?? '',
-    token: process.env.LONA_AGENT_TOKEN ?? '',
+    token: process.env.LONA_AGENT_TOKEN ?? process.env.LONA_API_KEY ?? '',
     tokenTtlDays: Number(process.env.LONA_TOKEN_TTL_DAYS ?? '30'),
   };
 }

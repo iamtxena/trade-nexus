@@ -41,6 +41,10 @@ Edit `frontend/.env.local` with the following:
 | `LIVE_ENGINE_SERVICE_KEY` | Yes | Must match the `SERVICE_API_KEY` env var set on the live-engine Vercel deployment. Enables CLI→live-engine bridge. |
 | `LIVE_ENGINE_USER_ID` | No | Optional. Set to your Clerk user ID (e.g. `user_2abc...`) if you want CLI-created data visible in the browser dashboard. Defaults to `cli-agent`. |
 
+Credential compatibility notes:
+- The CLI now auto-maps MCP-style vars (`LONA_API_KEY`, `LONA_USER_ID`) to `LONA_AGENT_TOKEN` / `LONA_AGENT_ID`.
+- If env vars are missing, the CLI also checks `~/.lona-credentials.json` (or `LONA_CREDENTIALS_FILE`) to align with MCP credential context.
+
 ### 4. Register with Lona Gateway
 
 ```bash

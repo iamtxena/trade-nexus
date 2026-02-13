@@ -38,6 +38,24 @@ Any of the following is breaking:
 - changing enum behavior incompatibly,
 - changing auth requirements.
 
+## Gate1 Freeze Policy
+
+Gate1 is a strict contract freeze for the v1 path set and operation signatures.
+
+1. No endpoint additions, removals, or repurposing under `/v1`.
+2. No incompatible request/response shape changes under `/v1`.
+3. SDK/mocks/CI gates must pass for every contract-related PR.
+4. Breaking proposals are blocked during Gate1 unless architecture approval is explicitly documented.
+
+### Gate1 Exception Path (breaking proposal)
+
+All of the following are required before a breaking proposal can proceed:
+
+1. Open issue using the API contract template with impact, migration, and rollback notes.
+2. Architecture approval comment URL from `@iamtxena`.
+3. Explicit versioning plan (new major version path, e.g. `/v2`).
+4. Linked CI evidence proving the change was intentionally reviewed.
+
 ## Required Contract Conventions
 
 ### 1) Error envelope

@@ -32,6 +32,7 @@ paths:
     get:
       tags: [Health]
       summary: Health check
+      operationId: getHealthV1
       security: []
       responses:
         '200':
@@ -50,11 +51,16 @@ paths:
                   timestamp:
                     type: string
                     format: date-time
+              example:
+                status: ok
+                service: trade-nexus-platform-api
+                timestamp: '2026-02-13T22:00:00Z'
 
   /v1/research/market-scan:
     post:
       tags: [Research]
       summary: Analyze market conditions and return strategy ideas
+      operationId: postMarketScanV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
       requestBody:
@@ -63,6 +69,12 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/MarketScanRequest'
+            example:
+              assetClasses: [crypto, stocks]
+              capital: 25000
+              constraints:
+                maxPositionPct: 25
+                maxDrawdownPct: 12
       responses:
         '200':
           description: Research result
@@ -70,6 +82,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MarketScanResponse'
+              example:
+                requestId: req-research-001
+                regimeSummary: Risk-on momentum with elevated volatility clusters.
+                strategyIdeas:
+                  - name: BTC Trend Follow
+                    assetClass: crypto
+                    description: Long breakouts with trailing stop.
+                    rationale: Momentum persists while breadth remains positive.
         '400':
           $ref: '#/components/responses/Error400'
         '401':
@@ -81,6 +101,7 @@ paths:
     get:
       tags: [Strategies]
       summary: List strategies
+      operationId: listStrategiesV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - name: status
@@ -98,11 +119,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StrategyListResponse'
+              example:
+                requestId: req-strategy-list-001
+                items:
+                  - id: strat-001
+                    name: BTC Trend Follow
+                    description: Breakout strategy for BTCUSD.
+                    status: tested
+                    provider: lona
+                    providerRefId: lona-strategy-123
+                    tags: [momentum, crypto]
+                    createdAt: '2026-02-10T10:00:00Z'
+                    updatedAt: '2026-02-13T19:00:00Z'
+                nextCursor: null
         '401':
           $ref: '#/components/responses/Error401'
     post:
       tags: [Strategies]
       summary: Create strategy from natural-language description
+      operationId: createStrategyV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
       requestBody:
@@ -111,6 +146,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateStrategyRequest'
+            example:
+              name: Mean Reversion ETH
+              description: Mean-reversion strategy for ETH using 20-period z-score bands.
+              provider: xai
       responses:
         '201':
           description: Strategy created
@@ -118,6 +157,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StrategyResponse'
+              example:
+                requestId: req-strategy-create-001
+                strategy:
+                  id: strat-002
+                  name: Mean Reversion ETH
+                  description: Mean-reversion strategy for ETH using z-score bands.
+                  status: draft
+                  provider: lona
+                  providerRefId: lona-strategy-456
+                  tags: [mean-reversion, crypto]
+                  createdAt: '2026-02-13T21:20:00Z'
+                  updatedAt: '2026-02-13T21:20:00Z'
         '400':
           $ref: '#/components/responses/Error400'
         '401':
@@ -127,6 +178,7 @@ paths:
     get:
       tags: [Strategies]
       summary: Get strategy by id
+      operationId: getStrategyV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/StrategyId'
@@ -137,6 +189,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StrategyResponse'
+              example:
+                requestId: req-strategy-get-001
+                strategy:
+                  id: strat-001
+                  name: BTC Trend Follow
+                  description: Breakout strategy for BTCUSD.
+                  status: tested
+                  provider: lona
+                  providerRefId: lona-strategy-123
+                  tags: [momentum, crypto]
+                  createdAt: '2026-02-10T10:00:00Z'
+                  updatedAt: '2026-02-13T19:00:00Z'
         '401':
           $ref: '#/components/responses/Error401'
         '404':
@@ -144,6 +208,7 @@ paths:
     patch:
       tags: [Strategies]
       summary: Update strategy metadata or status
+      operationId: updateStrategyV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/StrategyId'
@@ -153,6 +218,9 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateStrategyRequest'
+            example:
+              status: deployable
+              tags: [momentum, approved]
       responses:
         '200':
           description: Updated strategy
@@ -160,6 +228,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StrategyResponse'
+              example:
+                requestId: req-strategy-update-001
+                strategy:
+                  id: strat-001
+                  name: BTC Trend Follow
+                  description: Breakout strategy for BTCUSD.
+                  status: deployable
+                  provider: lona
+                  providerRefId: lona-strategy-123
+                  tags: [momentum, approved]
+                  createdAt: '2026-02-10T10:00:00Z'
+                  updatedAt: '2026-02-13T21:00:00Z'
         '400':
           $ref: '#/components/responses/Error400'
         '401':
@@ -171,6 +251,7 @@ paths:
     post:
       tags: [Backtests]
       summary: Start a backtest for a strategy
+      operationId: createBacktestV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/StrategyId'
@@ -180,6 +261,11 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateBacktestRequest'
+            example:
+              dataIds: [dataset-btc-1h-2025]
+              startDate: '2025-01-01'
+              endDate: '2025-12-31'
+              initialCash: 100000
       responses:
         '202':
           description: Backtest accepted
@@ -187,6 +273,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BacktestResponse'
+              example:
+                requestId: req-backtest-create-001
+                backtest:
+                  id: bt-001
+                  strategyId: strat-001
+                  status: queued
+                  startedAt: null
+                  completedAt: null
+                  metrics: {}
+                  error: null
+                  createdAt: '2026-02-13T21:25:00Z'
         '400':
           $ref: '#/components/responses/Error400'
         '401':
@@ -198,6 +295,7 @@ paths:
     get:
       tags: [Backtests]
       summary: Get backtest status and report
+      operationId: getBacktestV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/BacktestId'
@@ -208,6 +306,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BacktestResponse'
+              example:
+                requestId: req-backtest-get-001
+                backtest:
+                  id: bt-001
+                  strategyId: strat-001
+                  status: completed
+                  startedAt: '2026-02-13T21:25:30Z'
+                  completedAt: '2026-02-13T21:27:00Z'
+                  metrics:
+                    sharpeRatio: 1.48
+                    maxDrawdownPct: 9.2
+                    winRatePct: 57.3
+                    totalReturnPct: 24.5
+                  error: null
+                  createdAt: '2026-02-13T21:25:00Z'
         '401':
           $ref: '#/components/responses/Error401'
         '404':
@@ -217,6 +330,7 @@ paths:
     get:
       tags: [Deployments]
       summary: List deployments
+      operationId: listDeploymentsV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - name: status
@@ -234,11 +348,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeploymentListResponse'
+              example:
+                requestId: req-deployment-list-001
+                items:
+                  - id: dep-001
+                    strategyId: strat-001
+                    mode: paper
+                    status: running
+                    capital: 20000
+                    engine: live-engine
+                    providerRefId: live-abc
+                    latestPnl: 150.25
+                    createdAt: '2026-02-13T20:00:00Z'
+                    updatedAt: '2026-02-13T21:10:00Z'
+                nextCursor: null
         '401':
           $ref: '#/components/responses/Error401'
     post:
       tags: [Deployments]
       summary: Create a paper/live deployment
+      operationId: createDeploymentV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -248,6 +377,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateDeploymentRequest'
+            example:
+              strategyId: strat-001
+              mode: paper
+              capital: 20000
       responses:
         '202':
           description: Deployment accepted
@@ -255,6 +388,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeploymentResponse'
+              example:
+                requestId: req-deployment-create-001
+                deployment:
+                  id: dep-001
+                  strategyId: strat-001
+                  mode: paper
+                  status: queued
+                  capital: 20000
+                  engine: live-engine
+                  providerRefId: live-abc
+                  latestPnl: null
+                  createdAt: '2026-02-13T21:30:00Z'
+                  updatedAt: '2026-02-13T21:30:00Z'
         '400':
           $ref: '#/components/responses/Error400'
         '401':
@@ -266,6 +412,7 @@ paths:
     get:
       tags: [Deployments]
       summary: Get deployment status
+      operationId: getDeploymentV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/DeploymentId'
@@ -276,6 +423,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeploymentResponse'
+              example:
+                requestId: req-deployment-get-001
+                deployment:
+                  id: dep-001
+                  strategyId: strat-001
+                  mode: paper
+                  status: running
+                  capital: 20000
+                  engine: live-engine
+                  providerRefId: live-abc
+                  latestPnl: 150.25
+                  createdAt: '2026-02-13T20:00:00Z'
+                  updatedAt: '2026-02-13T21:10:00Z'
         '401':
           $ref: '#/components/responses/Error401'
         '404':
@@ -285,6 +445,7 @@ paths:
     post:
       tags: [Deployments]
       summary: Stop a running deployment
+      operationId: stopDeploymentV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/DeploymentId'
@@ -297,6 +458,8 @@ paths:
               properties:
                 reason:
                   type: string
+            example:
+              reason: Risk policy drawdown threshold breached.
       responses:
         '202':
           description: Stop accepted
@@ -304,6 +467,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeploymentResponse'
+              example:
+                requestId: req-deployment-stop-001
+                deployment:
+                  id: dep-001
+                  strategyId: strat-001
+                  mode: paper
+                  status: stopping
+                  capital: 20000
+                  engine: live-engine
+                  providerRefId: live-abc
+                  latestPnl: 120.0
+                  createdAt: '2026-02-13T20:00:00Z'
+                  updatedAt: '2026-02-13T21:15:00Z'
         '401':
           $ref: '#/components/responses/Error401'
         '404':
@@ -313,6 +489,7 @@ paths:
     get:
       tags: [Portfolios]
       summary: List portfolios
+      operationId: listPortfoliosV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
       responses:
@@ -322,6 +499,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PortfolioListResponse'
+              example:
+                requestId: req-portfolio-list-001
+                items:
+                  - id: portfolio-paper-001
+                    mode: paper
+                    cash: 12450.75
+                    totalValue: 20891.12
+                    pnlTotal: 891.12
+                    positions:
+                      - symbol: BTCUSDT
+                        quantity: 0.3
+                        avgPrice: 62000
+                        currentPrice: 64800
+                        unrealizedPnl: 840
         '401':
           $ref: '#/components/responses/Error401'
 
@@ -329,6 +520,7 @@ paths:
     get:
       tags: [Portfolios]
       summary: Get portfolio snapshot
+      operationId: getPortfolioV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/PortfolioId'
@@ -339,6 +531,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PortfolioResponse'
+              example:
+                requestId: req-portfolio-get-001
+                portfolio:
+                  id: portfolio-paper-001
+                  mode: paper
+                  cash: 12450.75
+                  totalValue: 20891.12
+                  pnlTotal: 891.12
+                  positions:
+                    - symbol: BTCUSDT
+                      quantity: 0.3
+                      avgPrice: 62000
+                      currentPrice: 64800
+                      unrealizedPnl: 840
         '401':
           $ref: '#/components/responses/Error401'
         '404':
@@ -348,6 +554,7 @@ paths:
     get:
       tags: [Orders]
       summary: List orders
+      operationId: listOrdersV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - name: status
@@ -365,11 +572,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderListResponse'
+              example:
+                requestId: req-order-list-001
+                items:
+                  - id: ord-001
+                    symbol: BTCUSDT
+                    side: buy
+                    type: limit
+                    quantity: 0.1
+                    price: 64500
+                    status: pending
+                    deploymentId: dep-001
+                    createdAt: '2026-02-13T21:31:00Z'
+                nextCursor: null
         '401':
           $ref: '#/components/responses/Error401'
     post:
       tags: [Orders]
       summary: Place manual order
+      operationId: createOrderV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -379,6 +600,13 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateOrderRequest'
+            example:
+              symbol: BTCUSDT
+              side: buy
+              type: limit
+              quantity: 0.1
+              price: 64500
+              deploymentId: dep-001
       responses:
         '201':
           description: Order placed
@@ -386,6 +614,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderResponse'
+              example:
+                requestId: req-order-create-001
+                order:
+                  id: ord-001
+                  symbol: BTCUSDT
+                  side: buy
+                  type: limit
+                  quantity: 0.1
+                  price: 64500
+                  status: pending
+                  deploymentId: dep-001
+                  createdAt: '2026-02-13T21:31:00Z'
         '400':
           $ref: '#/components/responses/Error400'
         '401':
@@ -397,6 +637,7 @@ paths:
     get:
       tags: [Orders]
       summary: Get order
+      operationId: getOrderV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/OrderId'
@@ -407,6 +648,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderResponse'
+              example:
+                requestId: req-order-get-001
+                order:
+                  id: ord-001
+                  symbol: BTCUSDT
+                  side: buy
+                  type: limit
+                  quantity: 0.1
+                  price: 64500
+                  status: pending
+                  deploymentId: dep-001
+                  createdAt: '2026-02-13T21:31:00Z'
         '401':
           $ref: '#/components/responses/Error401'
         '404':
@@ -414,6 +667,7 @@ paths:
     delete:
       tags: [Orders]
       summary: Cancel order
+      operationId: cancelOrderV1
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/OrderId'
@@ -424,6 +678,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderResponse'
+              example:
+                requestId: req-order-cancel-001
+                order:
+                  id: ord-001
+                  symbol: BTCUSDT
+                  side: buy
+                  type: limit
+                  quantity: 0.1
+                  price: 64500
+                  status: cancelled
+                  deploymentId: dep-001
+                  createdAt: '2026-02-13T21:31:00Z'
         '401':
           $ref: '#/components/responses/Error401'
         '404':
@@ -530,13 +796,17 @@ components:
           properties:
             code:
               type: string
+              minLength: 1
             message:
               type: string
+              minLength: 1
             details:
               type: object
+              nullable: true
               additionalProperties: true
         requestId:
           type: string
+          minLength: 1
 
     CursorPage:
       type: object
@@ -939,18 +1209,32 @@ components:
     CreateOrderRequest:
       type: object
       required: [symbol, side, type, quantity]
+      oneOf:
+        - title: MarketOrder
+          properties:
+            type:
+              enum: [market]
+          not:
+            required: [price]
+        - title: LimitOrder
+          required: [price]
+          properties:
+            type:
+              enum: [limit]
       properties:
         symbol:
           type: string
+          minLength: 1
         side:
           $ref: '#/components/schemas/OrderSide'
         type:
           $ref: '#/components/schemas/OrderType'
         quantity:
           type: number
-          minimum: 0
+          minimum: 0.00000001
         price:
           type: number
           minimum: 0
         deploymentId:
           type: string
+          minLength: 1

@@ -1,0 +1,250 @@
+"""Strategy, research, and backtest orchestration via adapter boundaries."""
+
+from __future__ import annotations
+
+from src.platform_api.adapters.lona_adapter import AdapterError, LonaAdapter
+from src.platform_api.errors import PlatformAPIError
+from src.platform_api.schemas_v1 import (
+    Backtest,
+    BacktestMetrics,
+    CreateBacktestRequest,
+    CreateStrategyRequest,
+    MarketScanIdea,
+    MarketScanRequest,
+    MarketScanResponse,
+    RequestContext,
+    Strategy,
+    StrategyListResponse,
+    StrategyResponse,
+    UpdateStrategyRequest,
+)
+from src.platform_api.services.backtest_resolution_service import BacktestResolutionService
+from src.platform_api.state_store import BacktestRecord, InMemoryStateStore, StrategyRecord, utc_now
+
+
+class StrategyBacktestService:
+    """Platform-facing service for research, strategy, and backtest flows."""
+
+    def __init__(
+        self,
+        *,
+        store: InMemoryStateStore,
+        lona_adapter: LonaAdapter,
+        backtest_resolution_service: BacktestResolutionService,
+    ) -> None:
+        self._store = store
+        self._lona_adapter = lona_adapter
+        self._backtest_resolution_service = backtest_resolution_service
+
+    async def market_scan(self, *, request: MarketScanRequest, context: RequestContext) -> MarketScanResponse:
+        ideas = [
+            MarketScanIdea(
+                name=f"{asset.upper()} Momentum Scout",
+                assetClass=asset,
+                description=f"{asset.upper()} trend and volatility baseline scan.",
+                rationale="Thin-slice research baseline signal from platform heuristics.",
+            )
+            for asset in request.assetClasses
+        ]
+        regime = "Risk-on momentum with elevated volatility clusters."
+        return MarketScanResponse(requestId=context.request_id, regimeSummary=regime, strategyIdeas=ideas)
+
+    async def list_strategies(
+        self,
+        *,
+        status: str | None,
+        cursor: str | None,
+        context: RequestContext,
+    ) -> StrategyListResponse:
+        items = list(self._store.strategies.values())
+        if status:
+            items = [item for item in items if item.status == status]
+        strategies = [self._to_strategy(item) for item in items]
+        return StrategyListResponse(requestId=context.request_id, items=strategies, nextCursor=None)
+
+    async def create_strategy(self, *, request: CreateStrategyRequest, context: RequestContext) -> StrategyResponse:
+        try:
+            provider_result = await self._lona_adapter.create_strategy_from_description(
+                name=request.name,
+                description=request.description,
+                provider=request.provider,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            )
+        except AdapterError as exc:
+            raise PlatformAPIError(
+                status_code=exc.status_code,
+                code=exc.code,
+                message=str(exc),
+                request_id=context.request_id,
+            )
+
+        strategy_id = self._store.next_id("strategy")
+        now = utc_now()
+        record = StrategyRecord(
+            id=strategy_id,
+            name=str(provider_result.get("name") or request.name or "Generated Strategy"),
+            description=request.description,
+            status="draft",
+            provider="lona",
+            provider_ref_id=str(provider_result.get("providerRefId") or f"lona-{strategy_id}"),
+            tags=[],
+            created_at=now,
+            updated_at=now,
+        )
+        self._store.strategies[strategy_id] = record
+        return StrategyResponse(requestId=context.request_id, strategy=self._to_strategy(record))
+
+    async def get_strategy(self, *, strategy_id: str, context: RequestContext) -> StrategyResponse:
+        record = self._store.strategies.get(strategy_id)
+        if record is None:
+            raise PlatformAPIError(
+                status_code=404,
+                code="STRATEGY_NOT_FOUND",
+                message=f"Strategy {strategy_id} not found.",
+                request_id=context.request_id,
+            )
+        return StrategyResponse(requestId=context.request_id, strategy=self._to_strategy(record))
+
+    async def update_strategy(
+        self,
+        *,
+        strategy_id: str,
+        request: UpdateStrategyRequest,
+        context: RequestContext,
+    ) -> StrategyResponse:
+        record = self._store.strategies.get(strategy_id)
+        if record is None:
+            raise PlatformAPIError(
+                status_code=404,
+                code="STRATEGY_NOT_FOUND",
+                message=f"Strategy {strategy_id} not found.",
+                request_id=context.request_id,
+            )
+
+        if request.name is not None:
+            record.name = request.name
+        if request.description is not None:
+            record.description = request.description
+        if request.status is not None:
+            record.status = request.status
+        if request.tags is not None:
+            record.tags = request.tags
+        record.updated_at = utc_now()
+
+        return StrategyResponse(requestId=context.request_id, strategy=self._to_strategy(record))
+
+    async def create_backtest(
+        self,
+        *,
+        strategy_id: str,
+        request: CreateBacktestRequest,
+        context: RequestContext,
+    ) -> Backtest:
+        strategy = self._store.strategies.get(strategy_id)
+        if strategy is None:
+            raise PlatformAPIError(
+                status_code=404,
+                code="STRATEGY_NOT_FOUND",
+                message=f"Strategy {strategy_id} not found.",
+                request_id=context.request_id,
+            )
+
+        if request.datasetIds:
+            data_ids = await self._backtest_resolution_service.resolve_data_ids(
+                dataset_ids=request.datasetIds,
+                context=context,
+            )
+        else:
+            data_ids = request.dataIds or []
+
+        try:
+            provider_result = await self._lona_adapter.run_backtest(
+                provider_ref_id=strategy.provider_ref_id,
+                data_ids=data_ids,
+                start_date=request.startDate,
+                end_date=request.endDate,
+                initial_cash=request.initialCash,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            )
+        except AdapterError as exc:
+            raise PlatformAPIError(
+                status_code=exc.status_code,
+                code=exc.code,
+                message=str(exc),
+                request_id=context.request_id,
+            )
+
+        backtest_id = self._store.next_id("backtest")
+        record = BacktestRecord(
+            id=backtest_id,
+            strategy_id=strategy_id,
+            status="queued",
+            created_at=utc_now(),
+            provider_report_id=str(provider_result.get("providerReportId")),
+        )
+        self._store.backtests[backtest_id] = record
+        return self._to_backtest(record)
+
+    async def get_backtest(self, *, backtest_id: str, context: RequestContext) -> Backtest:
+        record = self._store.backtests.get(backtest_id)
+        if record is None:
+            raise PlatformAPIError(
+                status_code=404,
+                code="BACKTEST_NOT_FOUND",
+                message=f"Backtest {backtest_id} not found.",
+                request_id=context.request_id,
+            )
+
+        if record.provider_report_id:
+            try:
+                provider_report = await self._lona_adapter.get_backtest_report(
+                    provider_report_id=record.provider_report_id,
+                    tenant_id=context.tenant_id,
+                    user_id=context.user_id,
+                )
+            except AdapterError as exc:
+                raise PlatformAPIError(
+                    status_code=exc.status_code,
+                    code=exc.code,
+                    message=str(exc),
+                    request_id=context.request_id,
+                )
+
+            record.status = provider_report.status
+            if provider_report.status == "running" and record.started_at is None:
+                record.started_at = utc_now()
+            if provider_report.status in {"completed", "failed", "cancelled"} and record.completed_at is None:
+                record.completed_at = utc_now()
+            if provider_report.metrics is not None:
+                record.metrics = provider_report.metrics
+            if provider_report.error:
+                record.error = provider_report.error
+
+        return self._to_backtest(record)
+
+    def _to_strategy(self, record: StrategyRecord) -> Strategy:
+        return Strategy(
+            id=record.id,
+            name=record.name,
+            description=record.description,
+            status=record.status,
+            provider="lona",
+            providerRefId=record.provider_ref_id,
+            tags=record.tags,
+            createdAt=record.created_at,
+            updatedAt=record.updated_at,
+        )
+
+    def _to_backtest(self, record: BacktestRecord) -> Backtest:
+        return Backtest(
+            id=record.id,
+            strategyId=record.strategy_id,
+            status=record.status,
+            startedAt=record.started_at,
+            completedAt=record.completed_at,
+            metrics=BacktestMetrics(**record.metrics),
+            error=record.error,
+            createdAt=record.created_at,
+        )

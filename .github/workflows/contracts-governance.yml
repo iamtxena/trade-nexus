@@ -5,6 +5,7 @@ on:
     paths:
       - "docs/architecture/**"
       - "backend/tests/contracts/**"
+      - "backend/src/**"
       - "contracts/**"
       - "sdk/typescript/**"
       - ".github/workflows/contracts-governance.yml"
@@ -14,6 +15,7 @@ on:
     paths:
       - "docs/architecture/**"
       - "backend/tests/contracts/**"
+      - "backend/src/**"
       - "contracts/**"
       - "sdk/typescript/**"
       - ".github/workflows/contracts-governance.yml"

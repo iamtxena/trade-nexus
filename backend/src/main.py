@@ -8,6 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.lona_routes import router as lona_router
 from src.api.routes import router
+from src.platform_api.errors import (
+    PlatformAPIError,
+    platform_api_error_handler,
+)
+from src.platform_api.router_v1 import router as platform_api_v1_router
 from src.config import get_settings
 
 # Load environment variables
@@ -39,6 +44,10 @@ app.add_middleware(
 # Include routes
 app.include_router(router, prefix="/api")
 app.include_router(lona_router, prefix="/api")
+app.include_router(platform_api_v1_router)
+
+# Register platform API error envelope handlers.
+app.add_exception_handler(PlatformAPIError, platform_api_error_handler)
 
 
 @app.get("/")

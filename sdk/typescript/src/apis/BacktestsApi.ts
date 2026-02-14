@@ -30,7 +30,7 @@ import {
 
 export interface CreateBacktestV1Request {
     strategyId: string;
-    createBacktestRequest: CreateBacktestRequest;
+    createBacktestRequest: CreateBacktestRequest | null;
     xRequestId?: string;
 }
 

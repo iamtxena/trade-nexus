@@ -1,0 +1,72 @@
+"""Runtime checks for ErrorResponse envelope parity."""
+
+from __future__ import annotations
+
+from fastapi.testclient import TestClient
+
+from src.main import app
+
+
+HEADERS = {
+    "Authorization": "Bearer test-token",
+    "X-API-Key": "test-key",
+    "X-Request-Id": "req-error-envelope-001",
+}
+
+
+def _assert_error_envelope(payload: dict[str, object]) -> None:
+    assert "requestId" in payload
+    assert "error" in payload
+    error = payload["error"]
+    assert isinstance(error, dict)
+    assert "code" in error
+    assert "message" in error
+
+
+def test_404_responses_use_error_envelope() -> None:
+    client = TestClient(app)
+
+    strategy = client.get("/v1/strategies/strat-missing", headers=HEADERS)
+    assert strategy.status_code == 404
+    _assert_error_envelope(strategy.json())
+
+    deployment = client.get("/v1/deployments/dep-missing", headers=HEADERS)
+    assert deployment.status_code == 404
+    _assert_error_envelope(deployment.json())
+
+    dataset = client.get("/v1/datasets/dataset-missing", headers=HEADERS)
+    assert dataset.status_code == 404
+    _assert_error_envelope(dataset.json())
+
+
+def test_409_responses_use_error_envelope() -> None:
+    client = TestClient(app)
+
+    first = client.post(
+        "/v1/orders",
+        headers={**HEADERS, "Idempotency-Key": "idem-error-envelope-001"},
+        json={
+            "symbol": "BTCUSDT",
+            "side": "buy",
+            "type": "limit",
+            "quantity": 0.1,
+            "price": 64000,
+            "deploymentId": "dep-001",
+        },
+    )
+    assert first.status_code == 201
+
+    conflict = client.post(
+        "/v1/orders",
+        headers={**HEADERS, "Idempotency-Key": "idem-error-envelope-001"},
+        json={
+            "symbol": "BTCUSDT",
+            "side": "buy",
+            "type": "limit",
+            "quantity": 0.2,
+            "price": 64000,
+            "deploymentId": "dep-001",
+        },
+    )
+    assert conflict.status_code == 409
+    _assert_error_envelope(conflict.json())

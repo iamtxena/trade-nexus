@@ -24,6 +24,7 @@ If any document conflicts with implementation prototypes, treat these files as a
 | [TARGET_ARCHITECTURE_V2.md](./TARGET_ARCHITECTURE_V2.md) | Final to-be architecture and boundaries |
 | [INTERFACES.md](./INTERFACES.md) | Interface model (public + internal adapters) |
 | [API_CONTRACT_GOVERNANCE.md](./API_CONTRACT_GOVERNANCE.md) | How contracts are changed safely |
+| [DOCUMENTATION_IA_AND_GOVERNANCE.md](./DOCUMENTATION_IA_AND_GOVERNANCE.md) | Canonical docs IA, ownership, and gate governance |
 | [GAP_ANALYSIS_ASIS_TOBE.md](./GAP_ANALYSIS_ASIS_TOBE.md) | As-is gaps and exact change proposals |
 | [DELIVERY_PLAN_AND_TEAM_TOPOLOGY.md](./DELIVERY_PLAN_AND_TEAM_TOPOLOGY.md) | Delegation model, repo plan, and ticket sectors |
 | [DATA_LIFECYCLE_AND_LONA_CONNECTOR_V2.md](./DATA_LIFECYCLE_AND_LONA_CONNECTOR_V2.md) | Large-file data lifecycle and Lona-compatible publish connector |

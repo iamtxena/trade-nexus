@@ -27,6 +27,7 @@ updated: 2026-02-14
 
 - CLI and clients do not call provider APIs directly.
 - Dataset handling is performed through Platform API surfaces.
+- Dataset lifecycle endpoints are planned for Gate2 (`#97`) and are not in the current OpenAPI v1 path set.
 - Data module implementation details are owned in [`trader-data`](https://github.com/iamtxena/trader-data).
 
 ## References

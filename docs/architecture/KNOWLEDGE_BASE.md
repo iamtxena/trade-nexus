@@ -8,6 +8,27 @@ The Knowledge Base provides hybrid storage (SQL + Vector) for:
 - News and sentiment (continuous feed)
 - Lessons learned from trades
 
+## Gate3 Canonical Schema (v1.0)
+
+The Gate3 canonical schema is frozen at version `1.0` and implemented by:
+
+- migration: `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/supabase/migrations/002_kb_schema.sql`
+- runtime models: `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/backend/src/platform_api/knowledge/models.py`
+
+Canonical entities:
+
+1. `KnowledgePattern` (patterns library)
+2. `MarketRegime` (active and historical regimes)
+3. `LessonLearned` (feedback from backtests/deployments)
+4. `MacroEvent` (macro/news events with impact metadata)
+5. `CorrelationEdge` (asset correlation graph edges)
+
+Governance requirements:
+
+1. Every record includes `schema_version`.
+2. Additive evolution is allowed in-place; breaking changes require new schema version and migration notes.
+3. KB ingestion is idempotent and keyed by event fingerprint.
+
 ## Architecture
 
 ```

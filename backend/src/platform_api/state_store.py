@@ -7,7 +7,16 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.platform_api.knowledge.models import (
+        CorrelationEdgeRecord,
+        KnowledgePatternRecord,
+        LessonLearnedRecord,
+        MacroEventRecord,
+        MarketRegimeRecord,
+    )
 
 
 def utc_now() -> str:
@@ -210,6 +219,11 @@ class InMemoryStateStore:
         self.dataset_provider_map: dict[str, str] = {
             "dataset-btc-1h-2025": "lona-symbol-001",
         }
+        self.knowledge_patterns: dict[str, KnowledgePatternRecord] = {}
+        self.market_regimes: dict[str, MarketRegimeRecord] = {}
+        self.lessons_learned: dict[str, LessonLearnedRecord] = {}
+        self.macro_events: dict[str, MacroEventRecord] = {}
+        self.correlations: dict[str, CorrelationEdgeRecord] = {}
 
         self._id_counters: dict[str, int] = {
             "strategy": 2,
@@ -217,6 +231,11 @@ class InMemoryStateStore:
             "deployment": 2,
             "order": 2,
             "dataset": 2,
+            "knowledge_pattern": 1,
+            "knowledge_regime": 1,
+            "knowledge_lesson": 1,
+            "knowledge_event": 1,
+            "knowledge_corr": 1,
         }
         self._idempotency: dict[str, dict[str, tuple[str, dict[str, Any]]]] = {
             "deployments": {},
@@ -236,6 +255,16 @@ class InMemoryStateStore:
             return f"ord-{idx:03d}"
         if scope == "dataset":
             return f"dataset-{idx:03d}"
+        if scope == "knowledge_pattern":
+            return f"kbp-{idx:04d}"
+        if scope == "knowledge_regime":
+            return f"kbr-{idx:04d}"
+        if scope == "knowledge_lesson":
+            return f"kbl-{idx:04d}"
+        if scope == "knowledge_event":
+            return f"kbe-{idx:04d}"
+        if scope == "knowledge_corr":
+            return f"kbc-{idx:04d}"
         return f"{scope}-{idx:03d}"
 
     @staticmethod

@@ -31,6 +31,7 @@ Public endpoints exposed to clients (CLI, web, agents):
 - research
 - strategies
 - backtests
+- datasets
 - deployments
 - portfolios
 - orders
@@ -178,6 +179,46 @@ export interface ExecutionAdapter {
 
 ```ts
 export interface DataKnowledgeAdapter {
+  initUpload(input: {
+    filename: string;
+    contentType: string;
+    sizeBytes: number;
+    tenantId: string;
+    userId: string;
+  }): Promise<{
+    datasetId: string;
+    uploadUrl: string;
+  }>;
+
+  completeUpload(input: {
+    datasetId: string;
+    uploadToken?: string;
+    tenantId: string;
+    userId: string;
+  }): Promise<{ status: 'uploaded' | 'failed' }>;
+
+  validateDataset(input: {
+    datasetId: string;
+    columnMapping: Record<string, string>;
+    tenantId: string;
+    userId: string;
+  }): Promise<{ status: 'queued' | 'running' | 'completed' | 'failed' }>;
+
+  transformDataset(input: {
+    datasetId: string;
+    targetType: 'candles';
+    frequency: string;
+    tenantId: string;
+    userId: string;
+  }): Promise<{ outputDatasetId: string; status: 'queued' | 'running' | 'completed' | 'failed' }>;
+
+  publishToLona(input: {
+    datasetId: string;
+    mode: 'explicit' | 'just_in_time';
+    tenantId: string;
+    userId: string;
+  }): Promise<{ providerDataId: string; status: 'queued' | 'running' | 'completed' | 'failed' }>;
+
   getMarketContext(input: {
     assetClasses: string[];
     tenantId: string;
@@ -212,6 +253,7 @@ Long-running operations use resource status:
 Affected resources:
 
 - backtests
+- datasets
 - deployments
 - research jobs (if promoted to async)
 

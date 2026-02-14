@@ -289,12 +289,18 @@ Trader Brain:
 - [ ] Fix `deploy logs` 404 error
 
 ### Phase 2: Data Module (Weeks 2-4)
-- [ ] Design data module architecture (separate project or in Lona?)
+- [ ] Lock architecture decision: Data Module is source of truth, Lona remains unchanged
 - [ ] Implement tick data ingestion (Binance WebSocket)
 - [ ] Implement order book snapshots
 - [ ] Build filtering engine (time, spread, volume, custom)
 - [ ] Build transformation engine (ticks → OHLCV)
-- [ ] API for querying filtered datasets
+- [ ] API for dataset lifecycle (upload/validate/transform/publish)
+- [ ] Lona publish connector (explicit + just-in-time publish modes)
+
+Reference implementation docs:
+
+- `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/DATA_LIFECYCLE_AND_LONA_CONNECTOR_V2.md`
+- `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/GATE_TEAM_EXECUTION_PLAYBOOK.md`
 
 ### Phase 3: Knowledge Base (Weeks 5-6)
 - [ ] Design knowledge schema (patterns, regimes, lessons)

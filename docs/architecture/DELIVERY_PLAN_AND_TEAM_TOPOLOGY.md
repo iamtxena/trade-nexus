@@ -103,6 +103,21 @@ Tickets:
 | L-03 | trade-nexus | L-01 | Normalize backtest lifecycle and metrics mapping |
 | L-04 | trade-nexus | L-01 | Add resilience policy (timeouts, retries, typed provider errors) |
 
+## Sector DATA-SCALE: Data Module and Lona Publish Connector (Data/Knowledge Team + Team C)
+
+Tickets:
+
+| Ticket | Repo | Dependencies | Description |
+|-------|------|--------------|-------------|
+| C-05 | trade-nexus-contracts (or trade-nexus) | C-01 | Extend OpenAPI with dataset lifecycle and `publish/lona` endpoints |
+| DATA-06 | trader-data + trade-nexus | C-05 | Implement dataset lifecycle state model (`uploading -> ready -> published_lona`) |
+| DATA-07 | trader-data | DATA-06 | Implement validation worker (timestamp, schema, ordering, quality report) |
+| DATA-08 | trader-data | DATA-06 | Implement transform worker (BBO/trades/ticks -> candles) with lineage |
+| DATA-09 | trader-data + trade-nexus | DATA-07/DATA-08 + L-01 | Implement Lona publish connector (explicit + just-in-time publish modes) |
+| DATA-10 | trader-data | DATA-07 | Implement source resolvers (existing Lona assets + external vendor pull + user upload) |
+| P-06 | trade-nexus | P-01 + C-05 | Orchestrate backtests from dataset refs, resolving provider refs internally |
+| CLI-05 | trading-cli | CLI-01 + C-05 | Add dataset commands (upload, validate, transform, publish, list status) |
+
 ## Sector E: Execution Integration (Team D)
 
 Tickets:
@@ -218,6 +233,28 @@ Tickets:
 ### Week 4
 
 - hardening, deprecation of legacy prototype endpoints, release readiness
+
+## Program Gate Sequence
+
+### Gate G0
+
+- repo/program setup and ownership ADRs.
+
+### Gate G1
+
+- contract freeze and generation pipeline.
+
+### Gate G2
+
+- thin vertical slice (contract -> platform -> adapters -> client).
+
+### Gate G3
+
+- data-scale implementation (workers, lineage, Lona publish connector).
+
+### Gate G4
+
+- operational maturity (SLOs, alerts, runbooks, recovery drills).
 
 ## Architecture Gates (must pass)
 

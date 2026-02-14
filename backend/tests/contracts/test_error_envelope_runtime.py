@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from src.main import app
+from src.platform_api import router_v1
 
 
 HEADERS = {
@@ -70,3 +71,27 @@ def test_409_responses_use_error_envelope() -> None:
     )
     assert conflict.status_code == 409
     _assert_error_envelope(conflict.json())
+
+
+def test_unhandled_errors_use_error_envelope(monkeypatch) -> None:
+    async def _raise_unhandled(**_: object) -> dict[str, object]:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(router_v1._dataset_service, "init_upload", _raise_unhandled)
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post(
+        "/v1/datasets/uploads:init",
+        headers=HEADERS,
+        json={
+            "filename": "broken.csv",
+            "contentType": "text/csv",
+            "sizeBytes": 128,
+        },
+    )
+
+    assert response.status_code == 500
+    payload = response.json()
+    _assert_error_envelope(payload)
+    assert payload["error"]["code"] == "INTERNAL_ERROR"
+    assert payload["requestId"] == HEADERS["X-Request-Id"]

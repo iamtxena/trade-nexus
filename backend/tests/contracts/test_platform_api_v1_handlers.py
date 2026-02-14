@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from src.main import app
+from src.platform_api import router_v1
 
 
 HEADERS = {
@@ -204,14 +205,12 @@ def test_dataset_routes_and_dataset_ref_backtests() -> None:
     complete_resp = client.post(
         f"/v1/datasets/{dataset_id}/uploads:complete",
         headers=HEADERS,
-        json={"uploadToken": "upload-token-001"},
     )
     assert complete_resp.status_code == 202
 
     validate_resp = client.post(
         f"/v1/datasets/{dataset_id}/validate",
         headers=HEADERS,
-        json={"columnMapping": {"timestamp": "timestamp", "close": "close"}},
     )
     assert validate_resp.status_code == 202
 
@@ -225,7 +224,6 @@ def test_dataset_routes_and_dataset_ref_backtests() -> None:
     publish_resp = client.post(
         f"/v1/datasets/{dataset_id}/publish/lona",
         headers=HEADERS,
-        json={"mode": "explicit"},
     )
     assert publish_resp.status_code == 202
     assert publish_resp.json()["dataset"]["status"] == "published_lona"
@@ -275,3 +273,39 @@ def test_dataset_routes_and_dataset_ref_backtests() -> None:
     )
     assert unresolved.status_code == 404
     assert unresolved.json()["error"]["code"] in {"DATASET_NOT_PUBLISHED", "DATASET_NOT_FOUND"}
+
+
+def test_stop_deployment_uses_adapter_failure_status(monkeypatch) -> None:
+    client = _client()
+
+    create_strategy = client.post(
+        "/v1/strategies",
+        headers=HEADERS,
+        json={
+            "name": "Stop Failure Strategy",
+            "description": "Exercise deployment stop status mapping.",
+            "provider": "xai",
+        },
+    )
+    assert create_strategy.status_code == 201
+    strategy_id = create_strategy.json()["strategy"]["id"]
+
+    create_deployment = client.post(
+        "/v1/deployments",
+        headers={**HEADERS, "Idempotency-Key": "idem-stop-status-001"},
+        json={"strategyId": strategy_id, "mode": "paper", "capital": 12000},
+    )
+    assert create_deployment.status_code == 202
+    deployment_id = create_deployment.json()["deployment"]["id"]
+
+    async def _stop_failed(**_: object) -> dict[str, str]:
+        return {"status": "failed"}
+
+    monkeypatch.setattr(router_v1._execution_adapter, "stop_deployment", _stop_failed)
+
+    stop_response = client.post(
+        f"/v1/deployments/{deployment_id}/actions/stop",
+        headers=HEADERS,
+    )
+    assert stop_response.status_code == 202
+    assert stop_response.json()["deployment"]["status"] == "failed"

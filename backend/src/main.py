@@ -11,6 +11,7 @@ from src.api.routes import router
 from src.platform_api.errors import (
     PlatformAPIError,
     platform_api_error_handler,
+    unhandled_error_handler,
 )
 from src.platform_api.router_v1 import router as platform_api_v1_router
 from src.config import get_settings
@@ -48,6 +49,7 @@ app.include_router(platform_api_v1_router)
 
 # Register platform API error envelope handlers.
 app.add_exception_handler(PlatformAPIError, platform_api_error_handler)
+app.add_exception_handler(Exception, unhandled_error_handler)
 
 
 @app.get("/")

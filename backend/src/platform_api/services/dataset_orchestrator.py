@@ -60,7 +60,7 @@ class DatasetOrchestrator:
         self,
         *,
         dataset_id: str,
-        request: DatasetUploadCompleteRequest,
+        request: DatasetUploadCompleteRequest | None = None,
         context: RequestContext,
     ) -> DatasetResponse:
         dataset = self._require_dataset(dataset_id=dataset_id, request_id=context.request_id)
@@ -72,7 +72,7 @@ class DatasetOrchestrator:
         self,
         *,
         dataset_id: str,
-        request: DatasetValidateRequest,
+        request: DatasetValidateRequest | None = None,
         context: RequestContext,
     ) -> DatasetResponse:
         dataset = self._require_dataset(dataset_id=dataset_id, request_id=context.request_id)
@@ -107,21 +107,24 @@ class DatasetOrchestrator:
         self,
         *,
         dataset_id: str,
-        request: DatasetPublishLonaRequest,
+        request: DatasetPublishLonaRequest | None = None,
         context: RequestContext,
     ) -> DatasetResponse:
         dataset = self._require_dataset(dataset_id=dataset_id, request_id=context.request_id)
         dataset.status = "publishing_lona"
         dataset.updated_at = utc_now()
+        mode = request.mode if request is not None else "explicit"
 
         try:
             provider_data_id = await self._data_bridge_adapter.ensure_published(
                 dataset_id=dataset_id,
-                mode=request.mode,
+                mode=mode,
                 tenant_id=context.tenant_id,
                 user_id=context.user_id,
             )
         except AdapterError as exc:
+            dataset.status = "publish_failed"
+            dataset.updated_at = utc_now()
             raise PlatformAPIError(
                 status_code=exc.status_code,
                 code=exc.code,

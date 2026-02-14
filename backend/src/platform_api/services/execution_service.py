@@ -23,7 +23,7 @@ from src.platform_api.schemas_v1 import (
     PortfolioResponse,
     RequestContext,
 )
-from src.platform_api.state_store import InMemoryStateStore
+from src.platform_api.state_store import InMemoryStateStore, utc_now
 
 
 class ExecutionService:
@@ -135,13 +135,18 @@ class ExecutionService:
                 request_id=context.request_id,
             )
 
-        await self._execution_adapter.stop_deployment(
+        stop_result = await self._execution_adapter.stop_deployment(
             provider_deployment_id=provider_ref,
             reason=reason,
             tenant_id=context.tenant_id,
             user_id=context.user_id,
         )
-        record.status = "stopping"
+
+        provider_status = str(stop_result.get("status", "failed"))
+        if provider_status not in {"queued", "running", "paused", "stopping", "stopped", "failed"}:
+            provider_status = "failed"
+        record.status = provider_status
+        record.updated_at = utc_now()
         return DeploymentResponse(requestId=context.request_id, deployment=Deployment(**deployment_to_dict(record)))
 
     async def list_portfolios(self, *, context: RequestContext) -> PortfolioListResponse:

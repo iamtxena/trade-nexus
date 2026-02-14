@@ -292,8 +292,8 @@ async def init_dataset_upload_v1(
 )
 async def complete_dataset_upload_v1(
     datasetId: str,
-    request: DatasetUploadCompleteRequest,
     context: ContextDep,
+    request: DatasetUploadCompleteRequest | None = None,
 ) -> DatasetResponse:
     return await _dataset_service.complete_upload(dataset_id=datasetId, request=request, context=context)
 
@@ -306,8 +306,8 @@ async def complete_dataset_upload_v1(
 )
 async def validate_dataset_v1(
     datasetId: str,
-    request: DatasetValidateRequest,
     context: ContextDep,
+    request: DatasetValidateRequest | None = None,
 ) -> DatasetResponse:
     return await _dataset_service.validate_dataset(dataset_id=datasetId, request=request, context=context)
 
@@ -334,8 +334,8 @@ async def transform_dataset_v1(
 )
 async def publish_dataset_lona_v1(
     datasetId: str,
-    request: DatasetPublishLonaRequest,
     context: ContextDep,
+    request: DatasetPublishLonaRequest | None = None,
 ) -> DatasetResponse:
     return await _dataset_service.publish_lona(dataset_id=datasetId, request=request, context=context)
 

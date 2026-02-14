@@ -48,6 +48,7 @@ const path = require('path');
 const repoRoot = process.argv[2];
 const packageJsonPath = path.join(repoRoot, 'sdk/typescript/package.json');
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+const backtestsApiPath = path.join(repoRoot, 'sdk/typescript/src/apis/BacktestsApi.ts');
 
 packageJson.description = 'Generated TypeScript SDK for the Trade Nexus Platform API';
 packageJson.license = 'MIT';
@@ -60,6 +61,25 @@ packageJson.bugs = { url: 'https://github.com/iamtxena/trade-nexus/issues' };
 packageJson.publishConfig = { access: 'public' };
 
 fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
+
+if (fs.existsSync(backtestsApiPath)) {
+  const backtestsApi = fs.readFileSync(backtestsApiPath, 'utf8');
+  const nullableSignature = 'createBacktestRequest: CreateBacktestRequest | null;';
+  const requiredSignature = 'createBacktestRequest: CreateBacktestRequest;';
+  let normalizedBacktestsApi = backtestsApi;
+
+  if (normalizedBacktestsApi.includes(nullableSignature)) {
+    normalizedBacktestsApi = normalizedBacktestsApi.replace(nullableSignature, requiredSignature);
+  }
+
+  if (!normalizedBacktestsApi.includes(requiredSignature)) {
+    throw new Error('Failed to normalize BacktestsApi request signature.');
+  }
+
+  if (normalizedBacktestsApi !== backtestsApi) {
+    fs.writeFileSync(backtestsApiPath, normalizedBacktestsApi, 'utf8');
+  }
+}
 NODE
 
 # Remove generator metadata to keep drift checks stable across environments.

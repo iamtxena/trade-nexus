@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from src.platform_api.adapters.lona_adapter import AdapterError
-from src.platform_api.state_store import InMemoryStateStore, utc_now
+from src.platform_api.state_store import InMemoryStateStore
 
 
 class DataBridgeAdapter(Protocol):
@@ -84,7 +84,4 @@ class InMemoryDataBridgeAdapter:
 
         provider_id = f"lona-symbol-{dataset_id}"
         self._store.dataset_provider_map[dataset_id] = provider_id
-        dataset.provider_data_id = provider_id
-        dataset.status = "published_lona"
-        dataset.updated_at = utc_now()
         return provider_id

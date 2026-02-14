@@ -45,6 +45,8 @@ def main() -> int:
     entries = source_map.get("entries", [])
 
     CHUNKS_DIR.mkdir(parents=True, exist_ok=True)
+    for existing in CHUNKS_DIR.glob("*.md"):
+        existing.unlink()
 
     index_entries = []
     trace_entries = []

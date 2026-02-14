@@ -1,5 +1,49 @@
 [
   {
+    "chunk": "docs/llm/chunks/architecture_delivery_plan_v1.md",
+    "chunk_hash": "572c9841b04ede56434ec71a87c75c4b0be03bdf889378a99660185445306b27",
+    "concepts": [
+      "team_topology",
+      "gates",
+      "ownership"
+    ],
+    "endpoints": [],
+    "id": "architecture_delivery_plan_v1",
+    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/106",
+    "owners": [
+      "Gate1 Docs Team"
+    ],
+    "source": "docs/architecture/DELIVERY_PLAN_AND_TEAM_TOPOLOGY.md",
+    "source_hash": "644bdd9cff849d81b043653a2f8fa39169bbfc991b223fd252a745813cf419a8",
+    "title": "Delivery Plan and Team Topology",
+    "topic": "delivery",
+    "workflows": [
+      "parent_gate_execution"
+    ]
+  },
+  {
+    "chunk": "docs/llm/chunks/architecture_gate_playbook_v1.md",
+    "chunk_hash": "937dddaeb0c3903f803e626b0abcc95195a7ae060e45f85c35a2766928cd5f5c",
+    "concepts": [
+      "gate_updates",
+      "status_template",
+      "closeout"
+    ],
+    "endpoints": [],
+    "id": "architecture_gate_playbook_v1",
+    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81",
+    "owners": [
+      "Gate1 Docs Team"
+    ],
+    "source": "docs/architecture/GATE_TEAM_EXECUTION_PLAYBOOK.md",
+    "source_hash": "3655ab181959f257498ee814b496c41ed671f820fc0bf00f039f3c4eee294bab",
+    "title": "Gate Team Execution Playbook",
+    "topic": "operations",
+    "workflows": [
+      "gate_reporting"
+    ]
+  },
+  {
     "chunk": "docs/llm/chunks/architecture_interfaces_v1.md",
     "chunk_hash": "cd682197b12fdd0b74c5b597d2f3040779c6bc0b45fdf9ee7740c938062b2103",
     "concepts": [
@@ -48,187 +92,6 @@
     "topic": "architecture",
     "workflows": [
       "gate_program_execution"
-    ]
-  },
-  {
-    "chunk": "docs/llm/chunks/portal_api_contract_v1.md",
-    "chunk_hash": "4e99e3af0fea91639ff86149585396c4dac1d8710d2a9be9b727b1693929bb15",
-    "concepts": [
-      "platform_api",
-      "contract",
-      "boundaries"
-    ],
-    "endpoints": [
-      "research",
-      "strategies",
-      "backtests",
-      "deployments",
-      "portfolios",
-      "orders"
-    ],
-    "id": "portal_api_contract_v1",
-    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/76",
-    "owners": [
-      "Gate1 Docs Team"
-    ],
-    "source": "docs/portal/api/platform-api.md",
-    "source_hash": "8cb57c9ac734d11b65984f30294e3fb331f78546884631aee7f5cbabf7b07542",
-    "title": "Platform API Contract",
-    "topic": "api",
-    "workflows": [
-      "api_integration"
-    ]
-  },
-  {
-    "chunk": "docs/llm/chunks/portal_cli_workflows_v1.md",
-    "chunk_hash": "88e1054ad70876ca7c138ccf17a80a357ff755ca9d2fe06683c4c704c6cb5f90",
-    "concepts": [
-      "cli",
-      "workflow",
-      "strategy"
-    ],
-    "endpoints": [
-      "research",
-      "strategies",
-      "backtests",
-      "deployments",
-      "portfolios",
-      "orders"
-    ],
-    "id": "portal_cli_workflows_v1",
-    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/80",
-    "owners": [
-      "Gate1 Docs Team"
-    ],
-    "source": "docs/portal/cli/workflows.md",
-    "source_hash": "3e967243e00cb2493a961e37d3225b38393bcc8c463a075dc5c79114c47665ca",
-    "title": "CLI Workflows",
-    "topic": "cli",
-    "workflows": [
-      "strategy_lifecycle"
-    ]
-  },
-  {
-    "chunk": "docs/llm/chunks/portal_dataset_command_model_v1.md",
-    "chunk_hash": "aa7d17f47bd38191fe84944d10a2f40e04796c13ab748764a7b6cc6d88284245",
-    "concepts": [
-      "dataset",
-      "ingest",
-      "validate",
-      "publish"
-    ],
-    "endpoints": [
-      "backtests",
-      "deployments"
-    ],
-    "id": "portal_dataset_command_model_v1",
-    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/78",
-    "owners": [
-      "Gate1 Docs Team"
-    ],
-    "source": "docs/portal/data-lifecycle/command-model.md",
-    "source_hash": "22979e6de7ace559a0254d92db1869304415fdfc7b47f5ec29e0bac3a9eff111",
-    "title": "Dataset Lifecycle Command Model",
-    "topic": "data",
-    "workflows": [
-      "dataset_lifecycle"
-    ]
-  },
-  {
-    "chunk": "docs/llm/chunks/portal_gate_workflow_v1.md",
-    "chunk_hash": "ced46e285826da7eabe2d2e6a23d61649dc2ccd5b31d338a48be4ec665a34f0f",
-    "concepts": [
-      "gate",
-      "status_update",
-      "delivery"
-    ],
-    "endpoints": [],
-    "id": "portal_gate_workflow_v1",
-    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81",
-    "owners": [
-      "Gate1 Docs Team"
-    ],
-    "source": "docs/portal/operations/gate-workflow.md",
-    "source_hash": "a4ed7f454cc68d25367f51e88663a7568d4a30d0d6507b5a23221112fe3ac6bf",
-    "title": "Gate Workflow",
-    "topic": "operations",
-    "workflows": [
-      "gate_reporting"
-    ]
-  },
-  {
-    "chunk": "docs/llm/chunks/portal_onboarding_v1.md",
-    "chunk_hash": "8a1f309f22fb48b2296f9688ca5e43baa1e3345f60a463d8ad71f6a8ccfe4468",
-    "concepts": [
-      "onboarding",
-      "integrator",
-      "team"
-    ],
-    "endpoints": [],
-    "id": "portal_onboarding_v1",
-    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/106",
-    "owners": [
-      "Gate1 Docs Team"
-    ],
-    "source": "docs/portal/getting-started/onboarding.md",
-    "source_hash": "28ea694b48e77c8e18b00575dc25d1fd4fee96f57d315426092fb5fd121a8f2b",
-    "title": "Onboarding Paths",
-    "topic": "onboarding",
-    "workflows": [
-      "internal_onboarding",
-      "external_integrator_onboarding"
-    ]
-  },
-  {
-    "chunk": "docs/llm/chunks/portal_quickstart_v1.md",
-    "chunk_hash": "d67b4434c35e4b77ae96b605df71583ab59a46d74eb37827283c4cbf6dcf28d7",
-    "concepts": [
-      "quickstart",
-      "research",
-      "backtest",
-      "deploy"
-    ],
-    "endpoints": [
-      "research",
-      "strategies",
-      "backtests",
-      "deployments",
-      "portfolios",
-      "orders"
-    ],
-    "id": "portal_quickstart_v1",
-    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/106",
-    "owners": [
-      "Gate1 Docs Team"
-    ],
-    "source": "docs/portal/getting-started/quickstart.md",
-    "source_hash": "78a28c1e218d327884f8f4ad2e7d43ddab53a642ec3628a3ad912e98aa42fc61",
-    "title": "Portal Quickstart",
-    "topic": "workflow",
-    "workflows": [
-      "research_to_deploy"
-    ]
-  },
-  {
-    "chunk": "docs/llm/chunks/portal_traceability_v1.md",
-    "chunk_hash": "19fe429953322462d33d15e3c709973b03370c9070cf383e2e7f4901a0feeca7",
-    "concepts": [
-      "traceability",
-      "gate0",
-      "gate1"
-    ],
-    "endpoints": [],
-    "id": "portal_traceability_v1",
-    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/106",
-    "owners": [
-      "Gate1 Docs Team"
-    ],
-    "source": "docs/portal/operations/gate0-gate1-traceability.md",
-    "source_hash": "8cf8ea60066d913cbb98b327b0c6fd35dce33cbcbc5a40a3f12bf3c17f36e11b",
-    "title": "Gate0 and Gate1 Traceability",
-    "topic": "traceability",
-    "workflows": [
-      "delivery_traceability"
     ]
   }
 ]

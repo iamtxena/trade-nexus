@@ -98,13 +98,17 @@ def main() -> int:
         if f"Stable ID: `{entry_id}`" not in chunk_text:
             errors.append(f"Chunk stable ID marker missing for {entry_id}")
 
-    api_chunk = ROOT / "docs/llm/chunks/portal_api_contract_v1.md"
-    if api_chunk.exists():
-        api_text = api_chunk.read_text(encoding="utf-8")
-        if "docs/architecture/specs/platform-api.openapi.yaml" not in api_text:
-            errors.append("API contract chunk missing canonical OpenAPI path reference")
-    else:
-        errors.append("Missing API contract chunk: docs/llm/chunks/portal_api_contract_v1.md")
+    openapi_reference_found = False
+    for trace_item in trace_by_id.values():
+        chunk_path = ROOT / trace_item.get("chunk", "")
+        if not chunk_path.exists():
+            continue
+        chunk_text = chunk_path.read_text(encoding="utf-8")
+        if "docs/architecture/specs/platform-api.openapi.yaml" in chunk_text:
+            openapi_reference_found = True
+            break
+    if not openapi_reference_found:
+        errors.append("LLM chunks are missing canonical OpenAPI path reference")
 
     if manifest.get("entry_count") != len(entries):
         errors.append("Manifest entry_count does not match source-map entries")

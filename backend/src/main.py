@@ -1,9 +1,10 @@
 """FastAPI application entry point."""
 
+import logging
 import os
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.lona_routes import router as lona_router
@@ -15,6 +16,8 @@ from src.platform_api.errors import (
 )
 from src.platform_api.router_v1 import router as platform_api_v1_router
 from src.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
@@ -42,6 +45,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def platform_api_unhandled_error_middleware(request: Request, call_next):
+    """Apply fallback v1 error envelope only to Platform API routes."""
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        if request.url.path.startswith("/v1/"):
+            logger.exception("Unhandled exception for Platform API request %s", request.url.path)
+            return await unhandled_error_handler(request, exc)
+        raise
+
+
 # Include routes
 app.include_router(router, prefix="/api")
 app.include_router(lona_router, prefix="/api")
@@ -49,7 +65,6 @@ app.include_router(platform_api_v1_router)
 
 # Register platform API error envelope handlers.
 app.add_exception_handler(PlatformAPIError, platform_api_error_handler)
-app.add_exception_handler(Exception, unhandled_error_handler)
 
 
 @app.get("/")

@@ -24,6 +24,10 @@ def _assert_error_envelope(payload: dict[str, object]) -> None:
     assert "message" in error
 
 
+def test_platform_error_handler_not_registered_globally() -> None:
+    assert Exception not in app.exception_handlers
+
+
 def test_404_responses_use_error_envelope() -> None:
     client = TestClient(app)
 

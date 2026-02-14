@@ -64,7 +64,7 @@ async def platform_api_error_handler(request: Request, exc: PlatformAPIError) ->
 
 async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """Fallback handler preserving the OpenAPI error envelope."""
-    request_id = getattr(request.state, "request_id", None) or "req-unknown"
+    request_id = getattr(request.state, "request_id", None) or request.headers.get("X-Request-Id") or "req-unknown"
     return JSONResponse(
         status_code=500,
         content=error_envelope(

@@ -296,6 +296,9 @@ class ExecutionService:
                 provider_order_id=str(provider_result.get("providerOrderId", order_id)),
             )
             self._store.orders[order_id] = record
+        else:
+            record.status = apply_order_transition(record.status, str(provider_result.get("status", record.status)))
+            record.provider_order_id = record.provider_order_id or str(provider_result.get("providerOrderId", order_id))
         order_dict = order_to_dict(record)
         self._store.save_idempotent_response(
             scope="orders",

@@ -43,6 +43,7 @@ class KnowledgeIngestionPipeline:
             asset="BTCUSDT",
             regime="sideways",
             volatility="medium",
+            start_at="2026-02-10T00:00:00Z",
             indicators={"rsi": 49.5, "atr_pct": 2.3},
             notes="Seed regime for Gate3 baseline.",
         )

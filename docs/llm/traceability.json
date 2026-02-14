@@ -36,10 +36,10 @@
   },
   {
     "chunk": "docs/llm/chunks/portal_gate3_kb_data_schemas_v1.md",
-    "chunk_hash": "cfb51ad7cfd6db349b585b627b7439d3cfb4f114268eca74bcabaca024ca4019",
+    "chunk_hash": "23990b0bd835216a4d9e4eaa4d4a01afe7410ab8bf7535876f069b11e9481f52",
     "id": "portal_gate3_kb_data_schemas_v1",
     "source": "docs/portal/data-lifecycle/gate3-kb-data-schemas.md",
-    "source_hash": "9f4925a99e146fb275d8c340983f0b351b8b1352beefad1a2b881a98ca8068fe"
+    "source_hash": "0873287149d83bc09c5265b1a4afcd09f89791a076a5eb9f3ad77fa4352fc766"
   },
   {
     "chunk": "docs/llm/chunks/portal_gate3_research_loop_context_v1.md",

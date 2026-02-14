@@ -22,8 +22,8 @@ Entities:
 
 Authoritative artifacts:
 
-- `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/backend/src/platform_api/knowledge/models.py`
-- `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/supabase/migrations/002_kb_schema.sql`
+- `trade-nexus/backend/src/platform_api/knowledge/models.py`
+- `trade-nexus/supabase/migrations/002_kb_schema.sql`
 
 ## Canonical Market Data Model
 
@@ -38,7 +38,7 @@ Entities:
 
 Authoritative artifacts:
 
-- `/Users/txena/sandbox/16.enjoy/trading/trader-data/src/trader_data/models/market_data.py`
+- `trader-data/src/trader_data/models/market_data.py`
 
 ## Pipeline Ownership
 

@@ -15,10 +15,10 @@
   },
   {
     "chunk": "docs/llm/chunks/architecture_interfaces_v1.md",
-    "chunk_hash": "f4d185e94946023765c118bb824fe57debd4325dfd3d8da606c9bc798d41af8f",
+    "chunk_hash": "15e9e5b74d331180410aeefb73e954c69d1345978fbb4baf7501b89110a65ced",
     "id": "architecture_interfaces_v1",
     "source": "docs/architecture/INTERFACES.md",
-    "source_hash": "2618b633a9b8ac5e13c9d1b455bb6432e0020a42143a34f7f40a365098437669"
+    "source_hash": "62a15bfb6a765554862c8a841c16b572ec08248932e244fe92194aabe3ec35fe"
   },
   {
     "chunk": "docs/llm/chunks/architecture_target_v2_v1.md",
@@ -26,5 +26,26 @@
     "id": "architecture_target_v2_v1",
     "source": "docs/architecture/TARGET_ARCHITECTURE_V2.md",
     "source_hash": "39f48820a0140e2268a4abd2bea3642df9b167d98493e4e3e08d444010ac87b3"
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate3_execution_hardening_v1.md",
+    "chunk_hash": "b128a7928f63d52ee470b0e9bc1253d951685ab6a1af67e97b5a9624efc84ee4",
+    "id": "portal_gate3_execution_hardening_v1",
+    "source": "docs/portal/operations/gate3-execution-hardening.md",
+    "source_hash": "623d90a005653c1199d26359bac5dc482cd7c58ac49a718ecaef05c357907d36"
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate3_kb_data_schemas_v1.md",
+    "chunk_hash": "23990b0bd835216a4d9e4eaa4d4a01afe7410ab8bf7535876f069b11e9481f52",
+    "id": "portal_gate3_kb_data_schemas_v1",
+    "source": "docs/portal/data-lifecycle/gate3-kb-data-schemas.md",
+    "source_hash": "0873287149d83bc09c5265b1a4afcd09f89791a076a5eb9f3ad77fa4352fc766"
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate3_research_loop_context_v1.md",
+    "chunk_hash": "ca2064da1af4b4d634e19d52c26e61872a3a6771377c8b519aab71ffcef84d8c",
+    "id": "portal_gate3_research_loop_context_v1",
+    "source": "docs/portal/platform/gate3-research-loop-context.md",
+    "source_hash": "1178986aeb57c9e03210a2dab0fcb89b8889db430c1ac8f6cc316aaed06c5b28"
   }
 ]

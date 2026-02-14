@@ -80,7 +80,8 @@ def test_v1_path_set_is_frozen() -> None:
 def test_all_operations_define_unique_operation_ids() -> None:
     spec = _spec_text()
     operation_ids = re.findall(r"^\s+operationId:\s+([A-Za-z0-9_]+)\s*$", spec, flags=re.MULTILINE)
-    assert set(operation_ids) == EXPECTED_OPERATION_IDS
+    v1_operation_ids = {operation_id for operation_id in operation_ids if operation_id.endswith("V1")}
+    assert v1_operation_ids == EXPECTED_OPERATION_IDS
     assert len(operation_ids) == len(set(operation_ids)), "operationId values must be unique."
 
 

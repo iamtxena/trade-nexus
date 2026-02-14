@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.platform_api import router_v1
+from src.platform_api.state_store import OrderRecord
 
 
 HEADERS = {
@@ -350,3 +351,66 @@ def test_stop_deployment_uses_adapter_failure_status(monkeypatch) -> None:
     )
     assert stop_response.status_code == 202
     assert stop_response.json()["deployment"]["status"] == "failed"
+
+
+def test_cancel_order_maps_unknown_provider_status_to_failed(monkeypatch) -> None:
+    client = _client()
+    create_order = client.post(
+        "/v1/orders",
+        headers={**HEADERS, "Idempotency-Key": "idem-order-map-001"},
+        json={
+            "symbol": "BTCUSDT",
+            "side": "buy",
+            "type": "limit",
+            "quantity": 0.1,
+            "price": 64500,
+            "deploymentId": "dep-001",
+        },
+    )
+    assert create_order.status_code == 201
+    order_id = create_order.json()["order"]["id"]
+
+    async def _cancel_unknown(**_: object) -> dict[str, str]:
+        return {"status": "processing"}
+
+    monkeypatch.setattr(router_v1._execution_adapter, "cancel_order", _cancel_unknown)
+
+    cancel_response = client.delete(f"/v1/orders/{order_id}", headers=HEADERS)
+    assert cancel_response.status_code == 200
+    assert cancel_response.json()["order"]["status"] == "failed"
+
+
+def test_create_order_maps_provider_status_for_existing_store_record(monkeypatch) -> None:
+    client = _client()
+
+    async def _place_order_existing(**_: object) -> dict[str, str]:
+        order_id = "ord-existing-001"
+        router_v1._store.orders[order_id] = OrderRecord(
+            id=order_id,
+            symbol="BTCUSDT",
+            side="buy",
+            order_type="limit",
+            quantity=0.1,
+            price=64500,
+            status="pending",
+            deployment_id="dep-001",
+            provider_order_id="live-order-existing-001",
+        )
+        return {"orderId": order_id, "providerOrderId": "live-order-existing-001", "status": "processing"}
+
+    monkeypatch.setattr(router_v1._execution_adapter, "place_order", _place_order_existing)
+
+    create_order = client.post(
+        "/v1/orders",
+        headers={**HEADERS, "Idempotency-Key": "idem-order-existing-map-001"},
+        json={
+            "symbol": "BTCUSDT",
+            "side": "buy",
+            "type": "limit",
+            "quantity": 0.1,
+            "price": 64500,
+            "deploymentId": "dep-001",
+        },
+    )
+    assert create_order.status_code == 201
+    assert create_order.json()["order"]["status"] == "failed"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from src.platform_api.adapters.lona_adapter import AdapterError, LonaAdapter
 from src.platform_api.errors import PlatformAPIError
+from src.platform_api.knowledge.ingestion import KnowledgeIngestionPipeline
 from src.platform_api.schemas_v1 import (
     Backtest,
     BacktestMetrics,
@@ -31,10 +32,12 @@ class StrategyBacktestService:
         store: InMemoryStateStore,
         lona_adapter: LonaAdapter,
         backtest_resolution_service: BacktestResolutionService,
+        knowledge_ingestion_pipeline: KnowledgeIngestionPipeline | None = None,
     ) -> None:
         self._store = store
         self._lona_adapter = lona_adapter
         self._backtest_resolution_service = backtest_resolution_service
+        self._knowledge_ingestion_pipeline = knowledge_ingestion_pipeline
 
     async def market_scan(self, *, request: MarketScanRequest, context: RequestContext) -> MarketScanResponse:
         ideas = [
@@ -221,6 +224,10 @@ class StrategyBacktestService:
                 record.metrics = provider_report.metrics
             if provider_report.error:
                 record.error = provider_report.error
+
+        if self._knowledge_ingestion_pipeline is not None and record.status in {"completed", "failed", "cancelled"}:
+            strategy = self._store.strategies.get(record.strategy_id)
+            self._knowledge_ingestion_pipeline.ingest_backtest_outcome(strategy=strategy, backtest=record)
 
         return self._to_backtest(record)
 

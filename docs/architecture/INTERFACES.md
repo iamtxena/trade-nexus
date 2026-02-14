@@ -29,12 +29,14 @@ Public endpoints exposed to clients (CLI, web, agents):
 
 - health
 - research
+- knowledge (v2)
 - strategies
 - backtests
 - deployments
 - portfolios
 - orders
 - datasets
+- data exports/context (v2)
 
 ### Contract shape
 

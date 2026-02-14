@@ -5,7 +5,7 @@
   "scripts": {
     "api:build": "redocly build-docs ../architecture/specs/platform-api.openapi.yaml -o static/api/platform-api.html",
     "check:schema": "python3 ../../scripts/docs/check_frontmatter.py",
-    "check:links": "python3 ../../scripts/docs/check_links.py",
+    "check:links": "CHECK_EXTERNAL_LINKS=1 python3 ../../scripts/docs/check_links.py",
     "check:stale": "python3 ../../scripts/docs/check_stale_references.py",
     "start": "npm run api:build && docusaurus start",
     "build": "npm run api:build && docusaurus build",

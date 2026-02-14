@@ -36,3 +36,15 @@ Gate update:
 - Parent `#106` is not closed by Docs Team.
 - Child issues are closed when their PR is merged and CI is green.
 - After `#108` merge, handoff to Review Team on `#109`.
+
+## Contributor Checklist
+
+1. Post `STARTED` comment before implementation.
+2. Open exactly one PR per active child issue.
+3. Include docs changes, index/navigation updates, and validation evidence in PR body.
+4. Post `IN_REVIEW` and `MERGED` comments using the gate template.
+5. Update parent issue with gate progress and next child handoff.
+
+## Traceability
+
+Use [Gate0 and Gate1 Traceability](gate0-gate1-traceability.md) to map docs claims to merged issue/PR evidence.

@@ -22,6 +22,13 @@ Portal sections follow the IA defined in `/docs/architecture/DOCUMENTATION_IA_AN
 - Data Lifecycle
 - Operations
 
+## Start Here
+
+- User quickstart: [Quickstart](getting-started/quickstart.md)
+- Team and integrator onboarding: [Onboarding Paths](getting-started/onboarding.md)
+- Strategy/backtest/deploy path: [Strategy to Deploy Flow](cli/strategy-backtest-deploy.md)
+- Gate evidence matrix: [Gate0 and Gate1 Traceability](operations/gate0-gate1-traceability.md)
+
 ## Canonical References
 
 - Architecture baseline: `/docs/architecture/README.md`

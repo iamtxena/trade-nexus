@@ -22,3 +22,5 @@ Data lifecycle behavior is documented and implemented behind architecture bounda
 - `/docs/architecture/DATA_LIFECYCLE_AND_LONA_CONNECTOR_V2.md`
 - `/docs/architecture/TARGET_ARCHITECTURE_V2.md`
 - `/docs/architecture/INTERFACES.md`
+
+Command baseline: [Dataset Lifecycle Command Model](command-model.md)

@@ -27,3 +27,9 @@ updated: 2026-02-14
   - `python3 scripts/docs/check_links.py`
   - `python3 scripts/docs/check_stale_references.py`
   - `npm --prefix docs/portal-site run build`
+
+## Escalation Paths
+
+- Onboarding and setup issues: [Onboarding Paths](../getting-started/onboarding.md)
+- Gate reporting issues: [Gate Workflow](gate-workflow.md)
+- Cross-repo traceability checks: [Gate0 and Gate1 Traceability](gate0-gate1-traceability.md)

@@ -17,6 +17,23 @@ Trade Nexus is the orchestration platform for research, strategy management, bac
 - `trader-data`: Data lifecycle and ingestion boundary implementation.
 - `live-engine`: Execution runtime used through adapter contracts.
 
+Repository links:
+
+- [`trade-nexus`](https://github.com/iamtxena/trade-nexus)
+- [`trading-cli`](https://github.com/iamtxena/trading-cli)
+- [`trader-data`](https://github.com/iamtxena/trader-data)
+- [`live-engine`](https://github.com/iamtxena/live-engine)
+
+## Ownership Model
+
+- Parent `#76`: contracts and governance authority.
+- Parent `#77`: platform domain services.
+- Parent `#78`: data and knowledge boundaries.
+- Parent `#79`: execution integration.
+- Parent `#80`: client surface and CLI lane.
+- Parent `#81`: cross-parent governance and closeout.
+- Parent `#106`: docs distribution and documentation quality program.
+
 ## Authoritative Architecture Sources
 
 - `/docs/architecture/TARGET_ARCHITECTURE_V2.md`

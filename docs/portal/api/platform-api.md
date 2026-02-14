@@ -20,6 +20,16 @@ All public API behavior, request/response schemas, and examples are governed by 
 2. Endpoint usage must map to OpenAPI-defined `operationId`s.
 3. Breaking changes require architecture approval and major-version strategy.
 
+## Workflow Endpoints by Domain
+
+- Research domain: market scan and discovery operations.
+- Strategy domain: create, update, list, and inspect strategies.
+- Backtest domain: create and inspect backtest runs.
+- Deployment domain: start, stop, and monitor deployments.
+- Portfolio and order domains: portfolio state and order lifecycle.
+
+Use the generated API reference for exact payload examples and response envelopes.
+
 ## Supporting Docs
 
 - `/docs/architecture/INTERFACES.md`

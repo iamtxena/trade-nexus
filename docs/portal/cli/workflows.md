@@ -18,6 +18,18 @@ updated: 2026-02-14
 4. Deployment lifecycle and status checks.
 5. Portfolio views and order lifecycle.
 
+## Baseline User Flow
+
+1. Run research scan and shortlist opportunities.
+2. Create a strategy draft and iterate on parameters.
+3. Execute backtests with dataset references.
+4. Deploy a validated strategy to target runtime.
+5. Monitor deployment, portfolio, and order status.
+
+Detailed playbook: [Strategy to Deploy Flow](strategy-backtest-deploy.md)
+
+Dataset command model: [Dataset Lifecycle Command Model](../data-lifecycle/command-model.md)
+
 ## Usage References
 
 - CLI interface model: `/docs/architecture/CLI_INTERFACE.md`

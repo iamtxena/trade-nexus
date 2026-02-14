@@ -1,0 +1,97 @@
+[
+  {
+    "chunk": "docs/llm/chunks/architecture_delivery_plan_v1.md",
+    "chunk_hash": "572c9841b04ede56434ec71a87c75c4b0be03bdf889378a99660185445306b27",
+    "concepts": [
+      "team_topology",
+      "gates",
+      "ownership"
+    ],
+    "endpoints": [],
+    "id": "architecture_delivery_plan_v1",
+    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/106",
+    "owners": [
+      "Gate1 Docs Team"
+    ],
+    "source": "docs/architecture/DELIVERY_PLAN_AND_TEAM_TOPOLOGY.md",
+    "source_hash": "644bdd9cff849d81b043653a2f8fa39169bbfc991b223fd252a745813cf419a8",
+    "title": "Delivery Plan and Team Topology",
+    "topic": "delivery",
+    "workflows": [
+      "parent_gate_execution"
+    ]
+  },
+  {
+    "chunk": "docs/llm/chunks/architecture_gate_playbook_v1.md",
+    "chunk_hash": "937dddaeb0c3903f803e626b0abcc95195a7ae060e45f85c35a2766928cd5f5c",
+    "concepts": [
+      "gate_updates",
+      "status_template",
+      "closeout"
+    ],
+    "endpoints": [],
+    "id": "architecture_gate_playbook_v1",
+    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81",
+    "owners": [
+      "Gate1 Docs Team"
+    ],
+    "source": "docs/architecture/GATE_TEAM_EXECUTION_PLAYBOOK.md",
+    "source_hash": "3655ab181959f257498ee814b496c41ed671f820fc0bf00f039f3c4eee294bab",
+    "title": "Gate Team Execution Playbook",
+    "topic": "operations",
+    "workflows": [
+      "gate_reporting"
+    ]
+  },
+  {
+    "chunk": "docs/llm/chunks/architecture_interfaces_v1.md",
+    "chunk_hash": "cd682197b12fdd0b74c5b597d2f3040779c6bc0b45fdf9ee7740c938062b2103",
+    "concepts": [
+      "interfaces",
+      "public_api",
+      "adapters"
+    ],
+    "endpoints": [
+      "research",
+      "strategies",
+      "backtests",
+      "deployments",
+      "portfolios",
+      "orders"
+    ],
+    "id": "architecture_interfaces_v1",
+    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/76",
+    "owners": [
+      "Architecture/Contracts lead"
+    ],
+    "source": "docs/architecture/INTERFACES.md",
+    "source_hash": "aa7d6c2712b1d15efdb89e6908f2b627972d507e0f168a6b0a67f3e5709014c0",
+    "title": "Architecture Interfaces",
+    "topic": "architecture",
+    "workflows": [
+      "contract_first_delivery"
+    ]
+  },
+  {
+    "chunk": "docs/llm/chunks/architecture_target_v2_v1.md",
+    "chunk_hash": "54e1a35091d66f7be63b83bae62438ab55143362aa391766748aa69cfa88ebf3",
+    "concepts": [
+      "target_architecture",
+      "boundaries",
+      "repos"
+    ],
+    "endpoints": [],
+    "id": "architecture_target_v2_v1",
+    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81",
+    "owners": [
+      "Architecture/Contracts lead"
+    ],
+    "source": "docs/architecture/TARGET_ARCHITECTURE_V2.md",
+    "source_hash": "39f48820a0140e2268a4abd2bea3642df9b167d98493e4e3e08d444010ac87b3",
+    "title": "Target Architecture V2",
+    "topic": "architecture",
+    "workflows": [
+      "gate_program_execution"
+    ]
+  }
+]

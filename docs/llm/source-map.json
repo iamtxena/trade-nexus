@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "entries": [
+    {
+      "id": "architecture_interfaces_v1",
+      "title": "Architecture Interfaces",
+      "source": "docs/architecture/INTERFACES.md",
+      "topic": "architecture",
+      "concepts": ["interfaces", "public_api", "adapters"],
+      "endpoints": ["research", "strategies", "backtests", "deployments", "portfolios", "orders"],
+      "workflows": ["contract_first_delivery"],
+      "owners": ["Architecture/Contracts lead"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/76"
+    },
+    {
+      "id": "architecture_target_v2_v1",
+      "title": "Target Architecture V2",
+      "source": "docs/architecture/TARGET_ARCHITECTURE_V2.md",
+      "topic": "architecture",
+      "concepts": ["target_architecture", "boundaries", "repos"],
+      "endpoints": [],
+      "workflows": ["gate_program_execution"],
+      "owners": ["Architecture/Contracts lead"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81"
+    },
+    {
+      "id": "architecture_delivery_plan_v1",
+      "title": "Delivery Plan and Team Topology",
+      "source": "docs/architecture/DELIVERY_PLAN_AND_TEAM_TOPOLOGY.md",
+      "topic": "delivery",
+      "concepts": ["team_topology", "gates", "ownership"],
+      "endpoints": [],
+      "workflows": ["parent_gate_execution"],
+      "owners": ["Gate1 Docs Team"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/106"
+    },
+    {
+      "id": "architecture_gate_playbook_v1",
+      "title": "Gate Team Execution Playbook",
+      "source": "docs/architecture/GATE_TEAM_EXECUTION_PLAYBOOK.md",
+      "topic": "operations",
+      "concepts": ["gate_updates", "status_template", "closeout"],
+      "endpoints": [],
+      "workflows": ["gate_reporting"],
+      "owners": ["Gate1 Docs Team"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81"
+    }
+  ]
+}

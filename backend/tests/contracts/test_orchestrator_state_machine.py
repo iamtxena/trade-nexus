@@ -6,10 +6,12 @@ import pytest
 
 from src.platform_api.services.orchestrator_state_machine import (
     ALLOWED_ORCHESTRATOR_TRANSITIONS,
+    INITIAL_ORCHESTRATOR_STATE,
     TERMINAL_ORCHESTRATOR_STATES,
     VALID_ORCHESTRATOR_STATES,
     OrchestratorTransitionError,
     can_transition,
+    is_valid_orchestrator_state,
     transition_state,
 )
 
@@ -25,6 +27,12 @@ def test_orchestrator_state_set_matches_gate4_contract() -> None:
         "failed",
         "cancelled",
     }
+
+
+def test_initial_state_and_state_validation_contract() -> None:
+    assert INITIAL_ORCHESTRATOR_STATE == "received"
+    assert is_valid_orchestrator_state("queued")
+    assert not is_valid_orchestrator_state("unknown")
 
 
 @pytest.mark.parametrize(

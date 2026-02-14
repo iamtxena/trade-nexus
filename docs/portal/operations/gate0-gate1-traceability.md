@@ -29,6 +29,8 @@ updated: 2026-02-14
 | G1 | [#20](https://github.com/iamtxena/trade-nexus/issues/20) | `trade-nexus` | [#96](https://github.com/iamtxena/trade-nexus/pull/96) | Architecture/contract issue templates |
 | G1 | [#107](https://github.com/iamtxena/trade-nexus/issues/107) | `trade-nexus` | [#112](https://github.com/iamtxena/trade-nexus/pull/112) | Documentation IA and governance |
 | G1 | [#111](https://github.com/iamtxena/trade-nexus/issues/111) | `trade-nexus` | [#113](https://github.com/iamtxena/trade-nexus/pull/113) | Docs portal and docs CI gates |
+| G1 | [#110](https://github.com/iamtxena/trade-nexus/issues/110) | `trade-nexus` | [#115](https://github.com/iamtxena/trade-nexus/pull/115) | Baseline API/CLI/user and operations docs |
+| G1 | [#108](https://github.com/iamtxena/trade-nexus/issues/108) | `trade-nexus` | [#117](https://github.com/iamtxena/trade-nexus/pull/117) | LLM package generation and validation |
 
 ## Usage
 

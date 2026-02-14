@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -94,3 +94,52 @@ class MarketScanV2Response(BaseModel):
     strategyIdeas: list[MarketScanIdea]
     knowledgeEvidence: list[KnowledgeSearchItem]
     dataContextSummary: str
+
+
+ConversationChannel = Literal["cli", "web", "openclaw"]
+ConversationRole = Literal["user", "assistant", "system"]
+ConversationSessionStatus = Literal["active", "closed"]
+
+
+class CreateConversationSessionRequest(BaseModel):
+    channel: ConversationChannel
+    topic: str | None = Field(default=None, min_length=1)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ConversationSession(BaseModel):
+    id: str
+    channel: ConversationChannel
+    status: ConversationSessionStatus
+    topic: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    createdAt: str
+    updatedAt: str
+    lastTurnAt: str | None = None
+
+
+class ConversationSessionResponse(BaseModel):
+    requestId: str
+    session: ConversationSession
+
+
+class CreateConversationTurnRequest(BaseModel):
+    role: ConversationRole
+    message: str = Field(min_length=1)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ConversationTurn(BaseModel):
+    id: str
+    sessionId: str
+    role: ConversationRole
+    message: str
+    suggestions: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    createdAt: str
+
+
+class ConversationTurnResponse(BaseModel):
+    requestId: str
+    sessionId: str
+    turn: ConversationTurn

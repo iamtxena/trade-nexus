@@ -20,6 +20,9 @@ def test_v2_paths_are_declared() -> None:
         "/v2/data/exports/backtest:",
         "/v2/data/exports/{exportId}:",
         "/v2/research/market-scan:",
+        "/v2/conversations/sessions:",
+        "/v2/conversations/sessions/{sessionId}:",
+        "/v2/conversations/sessions/{sessionId}/turns:",
     ):
         assert path in spec, f"Missing required v2 path: {path}"
 
@@ -33,6 +36,9 @@ def test_v2_operation_ids_are_declared() -> None:
         "createBacktestDataExportV2",
         "getBacktestDataExportV2",
         "postMarketScanV2",
+        "createConversationSessionV2",
+        "getConversationSessionV2",
+        "createConversationTurnV2",
     ):
         assert f"operationId: {operation_id}" in spec
 
@@ -47,5 +53,9 @@ def test_v2_schema_components_are_present() -> None:
         "BacktestDataExportRequest:",
         "BacktestDataExportResponse:",
         "MarketScanV2Response:",
+        "CreateConversationSessionRequest:",
+        "ConversationSessionResponse:",
+        "CreateConversationTurnRequest:",
+        "ConversationTurnResponse:",
     ):
         assert component in spec

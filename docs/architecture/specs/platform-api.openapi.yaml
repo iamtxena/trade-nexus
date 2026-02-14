@@ -18,6 +18,7 @@ tags:
   - name: Health
   - name: Research
   - name: Knowledge
+  - name: Conversations
   - name: Strategies
   - name: Backtests
   - name: Deployments
@@ -1141,6 +1142,126 @@ paths:
         '429':
           $ref: '#/components/responses/Error429'
 
+  /v2/conversations/sessions:
+    post:
+      tags: [Conversations]
+      summary: Create conversation session across CLI, Web, and OpenClaw lanes
+      operationId: createConversationSessionV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationSessionRequest'
+            example:
+              channel: openclaw
+              topic: risk-aware deployment
+              metadata:
+                source: openclaw-skill
+      responses:
+        '201':
+          description: Conversation session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationSessionResponse'
+              example:
+                requestId: req-conversation-session-001
+                session:
+                  id: conv-0001
+                  channel: openclaw
+                  status: active
+                  topic: risk-aware deployment
+                  metadata:
+                    source: openclaw-skill
+                  createdAt: '2026-02-14T23:00:00Z'
+                  updatedAt: '2026-02-14T23:00:00Z'
+                  lastTurnAt: null
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+
+  /v2/conversations/sessions/{sessionId}:
+    get:
+      tags: [Conversations]
+      summary: Get conversation session metadata
+      operationId: getConversationSessionV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Conversation session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationSessionResponse'
+              example:
+                requestId: req-conversation-session-get-001
+                session:
+                  id: conv-0001
+                  channel: openclaw
+                  status: active
+                  topic: risk-aware deployment
+                  metadata:
+                    source: openclaw-skill
+                  createdAt: '2026-02-14T23:00:00Z'
+                  updatedAt: '2026-02-14T23:01:00Z'
+                  lastTurnAt: '2026-02-14T23:01:00Z'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v2/conversations/sessions/{sessionId}/turns:
+    post:
+      tags: [Conversations]
+      summary: Append conversation turn to a session
+      operationId: createConversationTurnV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationTurnRequest'
+            example:
+              role: user
+              message: deploy my strategy after backtest
+              metadata:
+                source: cli
+      responses:
+        '201':
+          description: Conversation turn created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationTurnResponse'
+              example:
+                requestId: req-conversation-turn-001
+                sessionId: conv-0001
+                turn:
+                  id: turn-0001
+                  sessionId: conv-0001
+                  role: user
+                  message: deploy my strategy after backtest
+                  suggestions:
+                    - Review latest backtest metrics and drawdown before deployment.
+                  metadata:
+                    source: cli
+                  createdAt: '2026-02-14T23:01:00Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1212,6 +1333,12 @@ components:
         type: string
     ExportId:
       name: exportId
+      in: path
+      required: true
+      schema:
+        type: string
+    SessionId:
+      name: sessionId
       in: path
       required: true
       schema:
@@ -2084,3 +2211,111 @@ components:
             $ref: '#/components/schemas/KnowledgeSearchItem'
         dataContextSummary:
           type: string
+
+    ConversationChannel:
+      type: string
+      enum: [cli, web, openclaw]
+
+    ConversationRole:
+      type: string
+      enum: [user, assistant, system]
+
+    ConversationSessionStatus:
+      type: string
+      enum: [active, closed]
+
+    CreateConversationSessionRequest:
+      type: object
+      required: [channel]
+      properties:
+        channel:
+          $ref: '#/components/schemas/ConversationChannel'
+        topic:
+          type: string
+          minLength: 1
+        metadata:
+          type: object
+          additionalProperties: true
+
+    ConversationSession:
+      type: object
+      required: [id, channel, status, metadata, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        channel:
+          $ref: '#/components/schemas/ConversationChannel'
+        status:
+          $ref: '#/components/schemas/ConversationSessionStatus'
+        topic:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastTurnAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ConversationSessionResponse:
+      type: object
+      required: [requestId, session]
+      properties:
+        requestId:
+          type: string
+        session:
+          $ref: '#/components/schemas/ConversationSession'
+
+    CreateConversationTurnRequest:
+      type: object
+      required: [role, message]
+      properties:
+        role:
+          $ref: '#/components/schemas/ConversationRole'
+        message:
+          type: string
+          minLength: 1
+        metadata:
+          type: object
+          additionalProperties: true
+
+    ConversationTurn:
+      type: object
+      required: [id, sessionId, role, message, suggestions, metadata, createdAt]
+      properties:
+        id:
+          type: string
+        sessionId:
+          type: string
+        role:
+          $ref: '#/components/schemas/ConversationRole'
+        message:
+          type: string
+        suggestions:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+
+    ConversationTurnResponse:
+      type: object
+      required: [requestId, sessionId, turn]
+      properties:
+        requestId:
+          type: string
+        sessionId:
+          type: string
+        turn:
+          $ref: '#/components/schemas/ConversationTurn'

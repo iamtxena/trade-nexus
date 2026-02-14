@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+from time import monotonic
+from typing import Literal
+
 from src.platform_api.adapters.execution_adapter import (
     ExecutionAdapter,
     deployment_to_dict,
@@ -24,9 +28,12 @@ from src.platform_api.schemas_v1 import (
     PortfolioResponse,
     RequestContext,
 )
-from src.platform_api.services.execution_lifecycle_mapping import apply_deployment_transition
+from src.platform_api.services.execution_lifecycle_mapping import apply_deployment_transition, apply_order_transition
 from src.platform_api.services.reconciliation_service import ReconciliationService
 from src.platform_api.state_store import DeploymentRecord, InMemoryStateStore, OrderRecord, utc_now
+
+ReconciliationScope = Literal["deployments", "orders"]
+logger = logging.getLogger(__name__)
 
 
 class ExecutionService:
@@ -39,11 +46,17 @@ class ExecutionService:
         execution_adapter: ExecutionAdapter,
         reconciliation_service: ReconciliationService | None = None,
         knowledge_ingestion_pipeline: KnowledgeIngestionPipeline | None = None,
+        reconciliation_min_interval_seconds: float = 5.0,
     ) -> None:
         self._store = store
         self._execution_adapter = execution_adapter
         self._reconciliation_service = reconciliation_service
         self._knowledge_ingestion_pipeline = knowledge_ingestion_pipeline
+        self._reconciliation_min_interval_seconds = max(0.0, reconciliation_min_interval_seconds)
+        self._last_reconciliation_run_by_scope: dict[ReconciliationScope, float] = {
+            "deployments": 0.0,
+            "orders": 0.0,
+        }
 
     async def list_deployments(
         self,
@@ -52,7 +65,7 @@ class ExecutionService:
         cursor: str | None,
         context: RequestContext,
     ) -> DeploymentListResponse:
-        await self._run_drift_checks(context=context)
+        await self._run_drift_checks(context=context, scope="deployments")
         records = await self._execution_adapter.list_deployments(status=status)
         return DeploymentListResponse(
             requestId=context.request_id,
@@ -187,8 +200,9 @@ class ExecutionService:
             user_id=context.user_id,
         )
 
+        previous_status = record.status
         provider_status = str(stop_result.get("status", "failed"))
-        record.status = apply_deployment_transition(record.status, provider_status)
+        record.status = apply_deployment_transition(previous_status, provider_status)
         record.updated_at = utc_now()
         if self._knowledge_ingestion_pipeline is not None:
             self._knowledge_ingestion_pipeline.ingest_deployment_outcome(record)
@@ -224,7 +238,7 @@ class ExecutionService:
         cursor: str | None,
         context: RequestContext,
     ) -> OrderListResponse:
-        await self._run_drift_checks(context=context)
+        await self._run_drift_checks(context=context, scope="orders")
         records = await self._execution_adapter.list_orders(status=status)
         return OrderListResponse(
             requestId=context.request_id,
@@ -277,7 +291,7 @@ class ExecutionService:
                 order_type=request.type,
                 quantity=request.quantity,
                 price=request.price,
-                status=str(provider_result.get("status", "pending")),
+                status=apply_order_transition("pending", str(provider_result.get("status", "pending"))),
                 deployment_id=request.deploymentId,
                 provider_order_id=str(provider_result.get("providerOrderId", order_id)),
             )
@@ -308,7 +322,7 @@ class ExecutionService:
                 user_id=context.user_id,
             )
             if provider_record is not None:
-                record.status = provider_record.status
+                record.status = apply_order_transition(record.status, provider_record.status)
         return OrderResponse(requestId=context.request_id, order=Order(**order_to_dict(record)))
 
     async def cancel_order(self, *, order_id: str, context: RequestContext) -> OrderResponse:
@@ -343,14 +357,36 @@ class ExecutionService:
                 request_id=context.request_id,
             )
 
-        record.status = str(result.get("status", "cancelled"))
+        record.status = apply_order_transition(record.status, str(result.get("status", "cancelled")))
         return OrderResponse(requestId=context.request_id, order=Order(**order_to_dict(record)))
 
-    async def _run_drift_checks(self, *, context: RequestContext) -> None:
+    async def _run_drift_checks(self, *, context: RequestContext, scope: ReconciliationScope) -> None:
         if self._reconciliation_service is None:
             return
-        await self._reconciliation_service.run_drift_checks(
-            tenant_id=context.tenant_id,
-            user_id=context.user_id,
-            request_id=context.request_id,
-        )
+
+        now = monotonic()
+        if self._reconciliation_min_interval_seconds > 0:
+            last_run = self._last_reconciliation_run_by_scope[scope]
+            if last_run > 0 and (now - last_run) < self._reconciliation_min_interval_seconds:
+                return
+        self._last_reconciliation_run_by_scope[scope] = now
+
+        try:
+            if scope == "deployments":
+                await self._reconciliation_service.run_deployment_drift_checks(
+                    tenant_id=context.tenant_id,
+                    user_id=context.user_id,
+                    request_id=context.request_id,
+                )
+            else:
+                await self._reconciliation_service.run_order_drift_checks(
+                    tenant_id=context.tenant_id,
+                    user_id=context.user_id,
+                    request_id=context.request_id,
+                )
+        except Exception:
+            logger.exception(
+                "Reconciliation drift check failed; continuing list request.",
+                extra={"scope": scope, "request_id": context.request_id},
+            )
+            return

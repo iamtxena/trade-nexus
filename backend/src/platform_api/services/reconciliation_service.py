@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from src.platform_api.adapters.execution_adapter import ExecutionAdapter
-from src.platform_api.services.execution_lifecycle_mapping import apply_deployment_transition
+from src.platform_api.services.execution_lifecycle_mapping import apply_deployment_transition, apply_order_transition
 from src.platform_api.state_store import DriftEventRecord, InMemoryStateStore, utc_now
 
 
@@ -31,7 +31,8 @@ class ReconciliationService:
         request_id: str | None = None,
     ) -> list[DriftEventRecord]:
         events: list[DriftEventRecord] = []
-        for deployment in self._store.deployments.values():
+        # Snapshot to avoid runtime errors if store mutates while reconciliation runs.
+        for deployment in list(self._store.deployments.values()):
             if not deployment.provider_ref_id:
                 continue
             provider = await self._execution_adapter.get_deployment(
@@ -74,7 +75,8 @@ class ReconciliationService:
         request_id: str | None = None,
     ) -> list[DriftEventRecord]:
         events: list[DriftEventRecord] = []
-        for order in self._store.orders.values():
+        # Snapshot to avoid runtime errors if store mutates while reconciliation runs.
+        for order in list(self._store.orders.values()):
             if not order.provider_order_id:
                 continue
             provider_order = await self._execution_adapter.get_order(
@@ -85,9 +87,10 @@ class ReconciliationService:
             if provider_order is None:
                 continue
             provider_state = provider_order.status
-            if provider_state != order.status:
+            next_state = apply_order_transition(order.status, provider_state)
+            if next_state != order.status:
                 previous_state = order.status
-                order.status = provider_state
+                order.status = next_state
                 events.append(
                     self._record_drift(
                         resource_type="order",
@@ -95,7 +98,7 @@ class ReconciliationService:
                         provider_ref_id=order.provider_order_id,
                         previous_state=previous_state,
                         provider_state=provider_state,
-                        resolution=f"synced_to_{provider_state}",
+                        resolution=f"mapped_to_{next_state}",
                         tenant_id=tenant_id,
                         user_id=user_id,
                         request_id=request_id,
@@ -110,20 +113,56 @@ class ReconciliationService:
         user_id: str,
         request_id: str | None = None,
     ) -> ReconciliationSummary:
-        deployment_events = await self.reconcile_deployments(
+        deployment_summary = await self.run_deployment_drift_checks(
             tenant_id=tenant_id,
             user_id=user_id,
             request_id=request_id,
         )
-        order_events = await self.reconcile_orders(
+        order_summary = await self.run_order_drift_checks(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            request_id=request_id,
+        )
+        return ReconciliationSummary(
+            deployment_checks=deployment_summary.deployment_checks,
+            order_checks=order_summary.order_checks,
+            drift_count=deployment_summary.drift_count + order_summary.drift_count,
+        )
+
+    async def run_deployment_drift_checks(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        request_id: str | None = None,
+    ) -> ReconciliationSummary:
+        deployment_events = await self.reconcile_deployments(
             tenant_id=tenant_id,
             user_id=user_id,
             request_id=request_id,
         )
         return ReconciliationSummary(
             deployment_checks=len(self._store.deployments),
+            order_checks=0,
+            drift_count=len(deployment_events),
+        )
+
+    async def run_order_drift_checks(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        request_id: str | None = None,
+    ) -> ReconciliationSummary:
+        order_events = await self.reconcile_orders(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            request_id=request_id,
+        )
+        return ReconciliationSummary(
+            deployment_checks=0,
             order_checks=len(self._store.orders),
-            drift_count=len(deployment_events) + len(order_events),
+            drift_count=len(order_events),
         )
 
     def _record_drift(

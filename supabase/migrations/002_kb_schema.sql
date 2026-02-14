@@ -67,3 +67,4 @@ create index if not exists idx_kb_patterns_type on kb_patterns (pattern_type);
 create index if not exists idx_kb_regimes_asset on kb_market_regimes (asset, start_at desc);
 create index if not exists idx_kb_lessons_category on kb_lessons_learned (category, created_at desc);
 create index if not exists idx_kb_events_impact on kb_macro_events (impact, occurred_at desc);
+create index if not exists idx_kb_correlations_assets on kb_correlations (source_asset, target_asset);

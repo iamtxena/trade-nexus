@@ -61,7 +61,7 @@ _use_remote_trader_data = os.getenv("PLATFORM_USE_TRADER_DATA_REMOTE", "false").
 _lona_adapter = LonaAdapterBaseline(use_remote_provider=_use_remote_lona)
 if _use_remote_execution:
     _execution_adapter = LiveEngineExecutionAdapter(
-        base_url=os.getenv("LIVE_ENGINE_URL", "http://localhost:3000"),
+        base_url=os.getenv("LIVE_ENGINE_URL", "https://live.lona.agency"),
         service_api_key=os.getenv("LIVE_ENGINE_SERVICE_API_KEY", ""),
         timeout_seconds=float(os.getenv("LIVE_ENGINE_TIMEOUT_SECONDS", "8.0")),
     )

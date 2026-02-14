@@ -139,9 +139,13 @@ class InMemoryExecutionAdapter:
         deployment = self._find_deployment_by_provider_ref(provider_deployment_id)
         if deployment is None:
             return {"status": "failed"}
-        deployment.status = "stopping"
+        if deployment.status in {"failed", "stopped"}:
+            next_status = deployment.status
+        else:
+            next_status = "stopping"
+        deployment.status = next_status
         deployment.updated_at = utc_now()
-        return {"status": "stopping"}
+        return {"status": next_status}
 
     async def get_deployment(
         self,

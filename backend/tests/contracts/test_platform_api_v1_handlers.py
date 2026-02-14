@@ -350,3 +350,30 @@ def test_stop_deployment_uses_adapter_failure_status(monkeypatch) -> None:
     )
     assert stop_response.status_code == 202
     assert stop_response.json()["deployment"]["status"] == "failed"
+
+
+def test_cancel_order_maps_unknown_provider_status_to_failed(monkeypatch) -> None:
+    client = _client()
+    create_order = client.post(
+        "/v1/orders",
+        headers={**HEADERS, "Idempotency-Key": "idem-order-map-001"},
+        json={
+            "symbol": "BTCUSDT",
+            "side": "buy",
+            "type": "limit",
+            "quantity": 0.1,
+            "price": 64500,
+            "deploymentId": "dep-001",
+        },
+    )
+    assert create_order.status_code == 201
+    order_id = create_order.json()["order"]["id"]
+
+    async def _cancel_unknown(**_: object) -> dict[str, str]:
+        return {"status": "processing"}
+
+    monkeypatch.setattr(router_v1._execution_adapter, "cancel_order", _cancel_unknown)
+
+    cancel_response = client.delete(f"/v1/orders/{order_id}", headers=HEADERS)
+    assert cancel_response.status_code == 200
+    assert cancel_response.json()["order"]["status"] == "failed"

@@ -52,6 +52,7 @@ def test_lesson_macro_and_correlation_records_include_schema_version() -> None:
         title="CPI release",
         summary="Inflation came above consensus.",
         impact="high",
+        occurred_at="2026-02-10T13:30:00Z",
     )
     edge = CorrelationEdgeRecord(
         id="kbc-0001",

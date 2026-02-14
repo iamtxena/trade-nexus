@@ -7,7 +7,16 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.platform_api.knowledge.models import (
+        CorrelationEdgeRecord,
+        KnowledgePatternRecord,
+        LessonLearnedRecord,
+        MacroEventRecord,
+        MarketRegimeRecord,
+    )
 
 
 def utc_now() -> str:
@@ -237,11 +246,11 @@ class InMemoryStateStore:
         self.dataset_provider_map: dict[str, str] = {
             "dataset-btc-1h-2025": "lona-symbol-001",
         }
-        self.knowledge_patterns: dict[str, Any] = {}
-        self.market_regimes: dict[str, Any] = {}
-        self.lessons_learned: dict[str, Any] = {}
-        self.macro_events: dict[str, Any] = {}
-        self.correlations: dict[str, Any] = {}
+        self.knowledge_patterns: dict[str, KnowledgePatternRecord] = {}
+        self.market_regimes: dict[str, MarketRegimeRecord] = {}
+        self.lessons_learned: dict[str, LessonLearnedRecord] = {}
+        self.macro_events: dict[str, MacroEventRecord] = {}
+        self.correlations: dict[str, CorrelationEdgeRecord] = {}
         self.knowledge_ingestion_events: set[str] = set()
         self.data_exports: dict[str, DataExportRecord] = {}
         self.drift_events: dict[str, DriftEventRecord] = {}

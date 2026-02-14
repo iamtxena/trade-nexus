@@ -18,7 +18,6 @@ const config = {
           sidebarPath: require.resolve('./sidebars.js')
         },
         blog: false,
-        pages: false,
         theme: {
           customCss: require.resolve('./src/css/custom.css')
         }

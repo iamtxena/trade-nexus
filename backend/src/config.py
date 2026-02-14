@@ -31,6 +31,15 @@ class Settings(BaseSettings):
 
     # Live Engine
     live_engine_url: str = "https://live.lona.agency"
+    platform_use_remote_execution: bool = False
+    live_engine_service_api_key: str = ""
+    live_engine_timeout_seconds: float = 8.0
+
+    # Trader Data Module
+    platform_use_trader_data_remote: bool = False
+    trader_data_url: str = "http://localhost:8100"
+    trader_data_service_api_key: str = ""
+    trader_data_timeout_seconds: float = 8.0
 
     # Portfolio
     initial_capital: float = 100_000.0

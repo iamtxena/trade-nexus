@@ -15,6 +15,7 @@ from src.platform_api.errors import (
     unhandled_error_handler,
 )
 from src.platform_api.router_v1 import router as platform_api_v1_router
+from src.platform_api.router_v2 import router as platform_api_v2_router
 from src.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,7 @@ async def platform_api_unhandled_error_middleware(request: Request, call_next):
     try:
         return await call_next(request)
     except Exception as exc:
-        if request.url.path.startswith("/v1/"):
+        if request.url.path.startswith("/v1/") or request.url.path.startswith("/v2/"):
             logger.exception("Unhandled exception for Platform API request %s", request.url.path)
             return await unhandled_error_handler(request, exc)
         raise
@@ -62,6 +63,7 @@ async def platform_api_unhandled_error_middleware(request: Request, call_next):
 app.include_router(router, prefix="/api")
 app.include_router(lona_router, prefix="/api")
 app.include_router(platform_api_v1_router)
+app.include_router(platform_api_v2_router)
 
 # Register platform API error envelope handlers.
 app.add_exception_handler(PlatformAPIError, platform_api_error_handler)

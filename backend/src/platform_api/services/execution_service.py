@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+from time import monotonic
+from typing import Literal
+
 from src.platform_api.adapters.execution_adapter import (
     ExecutionAdapter,
     deployment_to_dict,
@@ -9,6 +13,7 @@ from src.platform_api.adapters.execution_adapter import (
     portfolio_to_dict,
 )
 from src.platform_api.errors import PlatformAPIError
+from src.platform_api.knowledge.ingestion import KnowledgeIngestionPipeline
 from src.platform_api.schemas_v1 import (
     CreateDeploymentRequest,
     CreateOrderRequest,
@@ -23,15 +28,35 @@ from src.platform_api.schemas_v1 import (
     PortfolioResponse,
     RequestContext,
 )
-from src.platform_api.state_store import InMemoryStateStore, utc_now
+from src.platform_api.services.execution_lifecycle_mapping import apply_deployment_transition, apply_order_transition
+from src.platform_api.services.reconciliation_service import ReconciliationService
+from src.platform_api.state_store import DeploymentRecord, InMemoryStateStore, OrderRecord, utc_now
+
+ReconciliationScope = Literal["deployments", "orders"]
+logger = logging.getLogger(__name__)
 
 
 class ExecutionService:
     """Platform service for execution and portfolio endpoints."""
 
-    def __init__(self, *, store: InMemoryStateStore, execution_adapter: ExecutionAdapter) -> None:
+    def __init__(
+        self,
+        *,
+        store: InMemoryStateStore,
+        execution_adapter: ExecutionAdapter,
+        reconciliation_service: ReconciliationService | None = None,
+        knowledge_ingestion_pipeline: KnowledgeIngestionPipeline | None = None,
+        reconciliation_min_interval_seconds: float = 5.0,
+    ) -> None:
         self._store = store
         self._execution_adapter = execution_adapter
+        self._reconciliation_service = reconciliation_service
+        self._knowledge_ingestion_pipeline = knowledge_ingestion_pipeline
+        self._reconciliation_min_interval_seconds = max(0.0, reconciliation_min_interval_seconds)
+        self._last_reconciliation_run_by_scope: dict[ReconciliationScope, float] = {
+            "deployments": 0.0,
+            "orders": 0.0,
+        }
 
     async def list_deployments(
         self,
@@ -40,6 +65,7 @@ class ExecutionService:
         cursor: str | None,
         context: RequestContext,
     ) -> DeploymentListResponse:
+        await self._run_drift_checks(context=context, scope="deployments")
         records = await self._execution_adapter.list_deployments(status=status)
         return DeploymentListResponse(
             requestId=context.request_id,
@@ -88,7 +114,21 @@ class ExecutionService:
         )
 
         deployment_id = str(provider_result["deploymentId"])
-        record = self._store.deployments[deployment_id]
+        record = self._store.deployments.get(deployment_id)
+        if record is None:
+            record = DeploymentRecord(
+                id=deployment_id,
+                strategy_id=request.strategyId,
+                mode=request.mode,
+                status=apply_deployment_transition("queued", str(provider_result.get("status", "queued"))),
+                capital=request.capital,
+                provider_ref_id=str(provider_result.get("providerDeploymentId", deployment_id)),
+                latest_pnl=None,
+            )
+            self._store.deployments[deployment_id] = record
+        else:
+            record.status = apply_deployment_transition(record.status, str(provider_result.get("status", record.status)))
+            record.updated_at = utc_now()
         deployment_dict = deployment_to_dict(record)
         self._store.save_idempotent_response(
             scope="deployments",
@@ -96,6 +136,9 @@ class ExecutionService:
             payload=payload,
             response=deployment_dict,
         )
+
+        if self._knowledge_ingestion_pipeline is not None:
+            self._knowledge_ingestion_pipeline.ingest_deployment_outcome(record)
 
         return DeploymentResponse(requestId=context.request_id, deployment=Deployment(**deployment_dict))
 
@@ -108,6 +151,21 @@ class ExecutionService:
                 message=f"Deployment {deployment_id} not found.",
                 request_id=context.request_id,
             )
+        if record.provider_ref_id:
+            provider_state = await self._execution_adapter.get_deployment(
+                provider_deployment_id=record.provider_ref_id,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            )
+            previous_status = record.status
+            record.status = apply_deployment_transition(record.status, str(provider_state.get("status", record.status)))
+            latest_pnl = provider_state.get("latestPnl")
+            if isinstance(latest_pnl, (int, float)):
+                record.latest_pnl = float(latest_pnl)
+            if record.status != previous_status:
+                record.updated_at = utc_now()
+                if self._knowledge_ingestion_pipeline is not None:
+                    self._knowledge_ingestion_pipeline.ingest_deployment_outcome(record)
         return DeploymentResponse(requestId=context.request_id, deployment=Deployment(**deployment_to_dict(record)))
 
     async def stop_deployment(
@@ -142,11 +200,12 @@ class ExecutionService:
             user_id=context.user_id,
         )
 
+        previous_status = record.status
         provider_status = str(stop_result.get("status", "failed"))
-        if provider_status not in {"queued", "running", "paused", "stopping", "stopped", "failed"}:
-            provider_status = "failed"
-        record.status = provider_status
+        record.status = apply_deployment_transition(previous_status, provider_status)
         record.updated_at = utc_now()
+        if self._knowledge_ingestion_pipeline is not None:
+            self._knowledge_ingestion_pipeline.ingest_deployment_outcome(record)
         return DeploymentResponse(requestId=context.request_id, deployment=Deployment(**deployment_to_dict(record)))
 
     async def list_portfolios(self, *, context: RequestContext) -> PortfolioListResponse:
@@ -179,6 +238,7 @@ class ExecutionService:
         cursor: str | None,
         context: RequestContext,
     ) -> OrderListResponse:
+        await self._run_drift_checks(context=context, scope="orders")
         records = await self._execution_adapter.list_orders(status=status)
         return OrderListResponse(
             requestId=context.request_id,
@@ -222,7 +282,23 @@ class ExecutionService:
         )
 
         order_id = str(provider_result["orderId"])
-        record = self._store.orders[order_id]
+        record = self._store.orders.get(order_id)
+        if record is None:
+            record = OrderRecord(
+                id=order_id,
+                symbol=request.symbol,
+                side=request.side,
+                order_type=request.type,
+                quantity=request.quantity,
+                price=request.price,
+                status=apply_order_transition("pending", str(provider_result.get("status", "pending"))),
+                deployment_id=request.deploymentId,
+                provider_order_id=str(provider_result.get("providerOrderId", order_id)),
+            )
+            self._store.orders[order_id] = record
+        else:
+            record.status = apply_order_transition(record.status, str(provider_result.get("status", record.status)))
+            record.provider_order_id = record.provider_order_id or str(provider_result.get("providerOrderId", order_id))
         order_dict = order_to_dict(record)
         self._store.save_idempotent_response(
             scope="orders",
@@ -242,6 +318,14 @@ class ExecutionService:
                 message=f"Order {order_id} not found.",
                 request_id=context.request_id,
             )
+        if record.provider_order_id:
+            provider_record = await self._execution_adapter.get_order(
+                provider_order_id=record.provider_order_id,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            )
+            if provider_record is not None:
+                record.status = apply_order_transition(record.status, provider_record.status)
         return OrderResponse(requestId=context.request_id, order=Order(**order_to_dict(record)))
 
     async def cancel_order(self, *, order_id: str, context: RequestContext) -> OrderResponse:
@@ -276,5 +360,36 @@ class ExecutionService:
                 request_id=context.request_id,
             )
 
-        record.status = "cancelled"
+        record.status = apply_order_transition(record.status, str(result.get("status", "cancelled")))
         return OrderResponse(requestId=context.request_id, order=Order(**order_to_dict(record)))
+
+    async def _run_drift_checks(self, *, context: RequestContext, scope: ReconciliationScope) -> None:
+        if self._reconciliation_service is None:
+            return
+
+        now = monotonic()
+        if self._reconciliation_min_interval_seconds > 0:
+            last_run = self._last_reconciliation_run_by_scope[scope]
+            if last_run > 0 and (now - last_run) < self._reconciliation_min_interval_seconds:
+                return
+        self._last_reconciliation_run_by_scope[scope] = now
+
+        try:
+            if scope == "deployments":
+                await self._reconciliation_service.run_deployment_drift_checks(
+                    tenant_id=context.tenant_id,
+                    user_id=context.user_id,
+                    request_id=context.request_id,
+                )
+            else:
+                await self._reconciliation_service.run_order_drift_checks(
+                    tenant_id=context.tenant_id,
+                    user_id=context.user_id,
+                    request_id=context.request_id,
+                )
+        except Exception:
+            logger.exception(
+                "Reconciliation drift check failed; continuing list request.",
+                extra={"scope": scope, "request_id": context.request_id},
+            )
+            return

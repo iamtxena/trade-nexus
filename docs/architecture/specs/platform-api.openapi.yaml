@@ -17,12 +17,14 @@ servers:
 tags:
   - name: Health
   - name: Research
+  - name: Knowledge
   - name: Strategies
   - name: Backtests
   - name: Deployments
   - name: Portfolios
   - name: Orders
   - name: Datasets
+  - name: Data
 
 security:
   - bearerAuth: []
@@ -987,6 +989,158 @@ paths:
         '404':
           $ref: '#/components/responses/Error404'
 
+  /v2/knowledge/search:
+    post:
+      tags: [Knowledge]
+      summary: Search Knowledge Base entries
+      operationId: searchKnowledgeV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeSearchRequest'
+            example:
+              query: momentum sideways
+              assets: [BTCUSDT]
+              limit: 5
+      responses:
+        '200':
+          description: Knowledge search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSearchResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+
+  /v2/knowledge/patterns:
+    get:
+      tags: [Knowledge]
+      summary: List canonical knowledge patterns
+      operationId: listKnowledgePatternsV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: asset
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Knowledge pattern list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgePatternListResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+
+  /v2/knowledge/regimes/{asset}:
+    get:
+      tags: [Knowledge]
+      summary: Get active market regime from Knowledge Base
+      operationId: getKnowledgeRegimeV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/Asset'
+      responses:
+        '200':
+          description: Active regime
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeRegimeResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v2/data/exports/backtest:
+    post:
+      tags: [Data]
+      summary: Create backtest data export artifact
+      operationId: createBacktestDataExportV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BacktestDataExportRequest'
+      responses:
+        '202':
+          description: Export accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BacktestDataExportResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+
+  /v2/data/exports/{exportId}:
+    get:
+      tags: [Data]
+      summary: Get backtest data export status
+      operationId: getBacktestDataExportV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/ExportId'
+      responses:
+        '200':
+          description: Backtest export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BacktestDataExportResponse'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v2/research/market-scan:
+    post:
+      tags: [Research]
+      summary: Analyze market with KB/data context and return strategy ideas
+      operationId: postMarketScanV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarketScanRequest'
+      responses:
+        '200':
+          description: Enriched research result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketScanV2Response'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '429':
+          $ref: '#/components/responses/Error429'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1046,6 +1200,18 @@ components:
         type: string
     DatasetId:
       name: datasetId
+      in: path
+      required: true
+      schema:
+        type: string
+    Asset:
+      name: asset
+      in: path
+      required: true
+      schema:
+        type: string
+    ExportId:
+      name: exportId
       in: path
       required: true
       schema:
@@ -1699,3 +1865,222 @@ components:
           type: string
         qualityReport:
           $ref: '#/components/schemas/DatasetQualityReport'
+
+    KnowledgeSearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+        assets:
+          type: array
+          items:
+            type: string
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
+
+    KnowledgeSearchItem:
+      type: object
+      required: [kind, id, title, summary, score]
+      properties:
+        kind:
+          type: string
+        id:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+        score:
+          type: number
+        evidence:
+          type: object
+          additionalProperties: true
+
+    KnowledgeSearchResponse:
+      type: object
+      required: [requestId, items]
+      properties:
+        requestId:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeSearchItem'
+
+    KnowledgePattern:
+      type: object
+      required:
+        [id, name, type, description, suitableRegimes, assets, timeframes, confidenceScore, schemaVersion, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+        suitableRegimes:
+          type: array
+          items:
+            type: string
+        assets:
+          type: array
+          items:
+            type: string
+        timeframes:
+          type: array
+          items:
+            type: string
+        confidenceScore:
+          type: number
+        sourceRef:
+          type: string
+          nullable: true
+        schemaVersion:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    KnowledgePatternListResponse:
+      type: object
+      required: [requestId, items]
+      properties:
+        requestId:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgePattern'
+
+    KnowledgeRegime:
+      type: object
+      required: [id, asset, regime, volatility, indicators, startAt, schemaVersion, createdAt]
+      properties:
+        id:
+          type: string
+        asset:
+          type: string
+        regime:
+          type: string
+        volatility:
+          type: string
+        indicators:
+          type: object
+          additionalProperties:
+            type: number
+        startAt:
+          type: string
+          format: date-time
+        endAt:
+          type: string
+          format: date-time
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        schemaVersion:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    KnowledgeRegimeResponse:
+      type: object
+      required: [requestId, regime]
+      properties:
+        requestId:
+          type: string
+        regime:
+          $ref: '#/components/schemas/KnowledgeRegime'
+
+    BacktestDataExportRequest:
+      type: object
+      required: [datasetIds]
+      properties:
+        datasetIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        assetClasses:
+          type: array
+          items:
+            type: string
+
+    BacktestDataExport:
+      type: object
+      required: [id, status, datasetIds, assetClasses, lineage, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, completed, failed, cancelled]
+        datasetIds:
+          type: array
+          items:
+            type: string
+        assetClasses:
+          type: array
+          items:
+            type: string
+        downloadUrl:
+          type: string
+          nullable: true
+        lineage:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    BacktestDataExportResponse:
+      type: object
+      required: [requestId, export]
+      properties:
+        requestId:
+          type: string
+        export:
+          $ref: '#/components/schemas/BacktestDataExport'
+
+    MarketScanV2Response:
+      type: object
+      required: [requestId, regimeSummary, strategyIdeas, knowledgeEvidence, dataContextSummary]
+      properties:
+        requestId:
+          type: string
+        regimeSummary:
+          type: string
+        strategyIdeas:
+          type: array
+          items:
+            type: object
+            required: [name, assetClass, description]
+            properties:
+              name:
+                type: string
+              assetClass:
+                type: string
+              description:
+                type: string
+              rationale:
+                type: string
+        knowledgeEvidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeSearchItem'
+        dataContextSummary:
+          type: string

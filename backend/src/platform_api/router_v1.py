@@ -10,8 +10,11 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Header, Request, status
 
 from src.platform_api.adapters.data_bridge_adapter import InMemoryDataBridgeAdapter
-from src.platform_api.adapters.execution_adapter import InMemoryExecutionAdapter
+from src.platform_api.adapters.data_knowledge_adapter import InMemoryDataKnowledgeAdapter, TraderDataHTTPAdapter
+from src.platform_api.adapters.execution_adapter import InMemoryExecutionAdapter, LiveEngineExecutionAdapter
 from src.platform_api.adapters.lona_adapter import LonaAdapterBaseline
+from src.platform_api.knowledge.ingestion import KnowledgeIngestionPipeline
+from src.platform_api.knowledge.query import KnowledgeQueryService
 from src.platform_api.schemas_v1 import (
     BacktestResponse,
     CreateBacktestRequest,
@@ -45,6 +48,7 @@ from src.platform_api.schemas_v1 import (
 from src.platform_api.services.backtest_resolution_service import BacktestResolutionService
 from src.platform_api.services.dataset_orchestrator import DatasetOrchestrator
 from src.platform_api.services.execution_service import ExecutionService
+from src.platform_api.services.reconciliation_service import ReconciliationService
 from src.platform_api.services.strategy_backtest_service import StrategyBacktestService
 from src.platform_api.state_store import InMemoryStateStore
 
@@ -52,16 +56,46 @@ router = APIRouter(prefix="/v1")
 
 _store = InMemoryStateStore()
 _use_remote_lona = os.getenv("PLATFORM_USE_REMOTE_LONA", "false").lower() in {"1", "true", "yes"}
+_use_remote_execution = os.getenv("PLATFORM_USE_REMOTE_EXECUTION", "false").lower() in {"1", "true", "yes"}
+_use_remote_trader_data = os.getenv("PLATFORM_USE_TRADER_DATA_REMOTE", "false").lower() in {"1", "true", "yes"}
 _lona_adapter = LonaAdapterBaseline(use_remote_provider=_use_remote_lona)
-_execution_adapter = InMemoryExecutionAdapter(_store)
+if _use_remote_execution:
+    _execution_adapter = LiveEngineExecutionAdapter(
+        base_url=os.getenv("LIVE_ENGINE_URL", "https://live.lona.agency"),
+        service_api_key=os.getenv("LIVE_ENGINE_SERVICE_API_KEY", ""),
+        timeout_seconds=float(os.getenv("LIVE_ENGINE_TIMEOUT_SECONDS", "8.0")),
+    )
+else:
+    _execution_adapter = InMemoryExecutionAdapter(_store)
 _data_bridge_adapter = InMemoryDataBridgeAdapter(_store)
+if _use_remote_trader_data:
+    _data_knowledge_adapter = TraderDataHTTPAdapter(
+        base_url=os.getenv("TRADER_DATA_URL", "http://localhost:8100"),
+        service_api_key=os.getenv("TRADER_DATA_SERVICE_API_KEY", ""),
+        timeout_seconds=float(os.getenv("TRADER_DATA_TIMEOUT_SECONDS", "8.0")),
+    )
+else:
+    _data_knowledge_adapter = InMemoryDataKnowledgeAdapter(_store)
+_knowledge_ingestion_pipeline = KnowledgeIngestionPipeline(_store)
+_knowledge_ingestion_pipeline.seed_defaults()
+_knowledge_query_service = KnowledgeQueryService(_store)
 _backtest_resolution = BacktestResolutionService(_data_bridge_adapter)
 _strategy_service = StrategyBacktestService(
     store=_store,
     lona_adapter=_lona_adapter,
     backtest_resolution_service=_backtest_resolution,
+    knowledge_ingestion_pipeline=_knowledge_ingestion_pipeline,
 )
-_execution_service = ExecutionService(store=_store, execution_adapter=_execution_adapter)
+_reconciliation_service = ReconciliationService(
+    store=_store,
+    execution_adapter=_execution_adapter,
+)
+_execution_service = ExecutionService(
+    store=_store,
+    execution_adapter=_execution_adapter,
+    reconciliation_service=_reconciliation_service,
+    knowledge_ingestion_pipeline=_knowledge_ingestion_pipeline,
+)
 _dataset_service = DatasetOrchestrator(store=_store, data_bridge_adapter=_data_bridge_adapter)
 
 

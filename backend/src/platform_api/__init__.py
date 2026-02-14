@@ -1,1 +1,1 @@
-"""Trade Nexus Platform API v1 package."""
+"""Trade Nexus Platform API package (v1 + additive v2)."""

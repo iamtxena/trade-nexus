@@ -31,10 +31,13 @@ Public endpoints exposed to clients (CLI, web, agents):
 - research
 - strategies
 - backtests
-- datasets
 - deployments
 - portfolios
 - orders
+
+Planned public endpoints (not part of current OpenAPI v1 freeze):
+
+- datasets (target issue: `#97`, target gate: `G2`)
 
 ### Contract shape
 
@@ -253,7 +256,7 @@ Long-running operations use resource status:
 Affected resources:
 
 - backtests
-- datasets
+- datasets (planned public API surface in `#97`; internal lifecycle resources until then)
 - deployments
 - research jobs (if promoted to async)
 

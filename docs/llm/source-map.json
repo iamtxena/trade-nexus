@@ -44,6 +44,39 @@
       "workflows": ["gate_reporting"],
       "owners": ["Gate1 Docs Team"],
       "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81"
+    },
+    {
+      "id": "portal_gate3_execution_hardening_v1",
+      "title": "Gate3 Execution Hardening",
+      "source": "docs/portal/operations/gate3-execution-hardening.md",
+      "topic": "operations",
+      "concepts": ["execution_adapter", "lifecycle_mapping", "reconciliation", "drift_detection"],
+      "endpoints": ["/v1/deployments", "/v1/orders"],
+      "workflows": ["execution_drift_reconciliation"],
+      "owners": ["Team D", "Team F", "Team G"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81"
+    },
+    {
+      "id": "portal_gate3_kb_data_schemas_v1",
+      "title": "Gate3 KB and Data Schemas",
+      "source": "docs/portal/data-lifecycle/gate3-kb-data-schemas.md",
+      "topic": "data_lifecycle",
+      "concepts": ["knowledge_schema", "market_data_model", "internal_service_boundary"],
+      "endpoints": ["/v2/knowledge/search", "/v2/data/exports/backtest"],
+      "workflows": ["schema_first_delivery"],
+      "owners": ["Team C", "Team Data", "Team G"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/78"
+    },
+    {
+      "id": "portal_gate3_research_loop_context_v1",
+      "title": "Gate3 Research Loop with Context",
+      "source": "docs/portal/platform/gate3-research-loop-context.md",
+      "topic": "platform",
+      "concepts": ["research_loop", "knowledge_evidence", "data_context_summary"],
+      "endpoints": ["/v2/research/market-scan"],
+      "workflows": ["research_enrichment"],
+      "owners": ["Team B", "Team C", "Team G"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/77"
     }
   ]
 }

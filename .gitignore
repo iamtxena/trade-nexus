@@ -74,3 +74,6 @@ bun.lockb
 # Docs portal generated artifacts
 docs/portal-site/.docusaurus/
 docs/portal-site/static/api/platform-api.html
+
+# OpenAPI generator local config artifact
+openapitools.json

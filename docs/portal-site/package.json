@@ -13,8 +13,8 @@
     "ci": "npm run api:build && npm run check:schema && npm run check:links && npm run check:stale && docusaurus build"
   },
   "dependencies": {
-    "@docusaurus/core": "3.5.2",
-    "@docusaurus/preset-classic": "3.5.2"
+    "@docusaurus/core": "^3.0.0",
+    "@docusaurus/preset-classic": "^3.0.0"
   },
   "devDependencies": {
     "@redocly/cli": "1.34.5"

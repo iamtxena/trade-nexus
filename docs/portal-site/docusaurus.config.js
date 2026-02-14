@@ -7,6 +7,10 @@ const config = {
   baseUrl: '/',
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'throw',
+  i18n: {
+    defaultLocale: 'en',
+    locales: ['en']
+  },
 
   presets: [
     [
@@ -25,24 +29,7 @@ const config = {
     ]
   ],
 
-  themeConfig: {
-    navbar: {
-      title: 'Trade Nexus Docs',
-      items: [
-        {
-          type: 'docSidebar',
-          sidebarId: 'docsSidebar',
-          position: 'left',
-          label: 'Portal'
-        },
-        {
-          href: '/api/platform-api.html',
-          label: 'API Reference',
-          position: 'right'
-        }
-      ]
-    }
-  }
+  themeConfig: {}
 };
 
 module.exports = config;

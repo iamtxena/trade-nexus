@@ -31,7 +31,7 @@ External Clients
 
 ### Scope
 
-Public endpoints exposed to clients (CLI, web, agents):
+Public endpoints exposed to clients (CLI, web, OpenClaw, and other agents):
 
 - health
 - research
@@ -46,13 +46,25 @@ Public endpoints exposed to clients (CLI, web, agents):
 
 ### Contract shape
 
-- URL versioning: `/v1/...`
+- URL versioning: `/vN/...`
 - Auth: bearer token or API key
 - Error envelope: standardized (`ErrorResponse`)
 - Idempotency: required for side-effecting POST endpoints
 - Pagination: cursor-based (`nextCursor`)
 
 See the OpenAPI file for exact request/response schemas.
+
+### Client Lane Contract (OC-01)
+
+OpenClaw is a first-class **client lane** with the same boundary rules as web and CLI.
+
+Required client-lane rules:
+
+1. OpenClaw calls Platform API contracts only.
+2. OpenClaw can use direct SDK/API calls or CLI-mediated calls.
+3. OpenClaw does not call provider APIs directly (Lona, execution engines, data vendors).
+4. Provider calls remain isolated inside platform adapters.
+5. OpenClaw does not introduce dedicated `/v1/openclaw/*` endpoints.
 
 ## 2) Internal Adapter Contracts
 

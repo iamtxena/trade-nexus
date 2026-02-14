@@ -70,3 +70,7 @@ bun.lockb
 
 # Azure secrets (sensitive credentials)
 .azure-secrets.md
+
+# Docs portal generated artifacts
+docs/portal-site/.docusaurus/
+docs/portal-site/static/api/platform-api.html

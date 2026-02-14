@@ -22,6 +22,7 @@ tags:
   - name: Deployments
   - name: Portfolios
   - name: Orders
+  - name: Datasets
 
 security:
   - bearerAuth: []
@@ -695,6 +696,297 @@ paths:
         '404':
           $ref: '#/components/responses/Error404'
 
+  /v1/datasets/uploads:init:
+    post:
+      tags: [Datasets]
+      summary: Initialize dataset upload session
+      operationId: initDatasetUploadV1
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatasetUploadInitRequest'
+            example:
+              filename: btc-1h-2025.csv
+              contentType: text/csv
+              sizeBytes: 2048
+      responses:
+        '202':
+          description: Dataset upload initialized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetUploadInitResponse'
+              example:
+                requestId: req-dataset-init-001
+                datasetId: dataset-001
+                uploadUrl: https://uploads.trade-nexus.local/dataset-001
+                status: uploading
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+
+  /v1/datasets/{datasetId}/uploads:complete:
+    post:
+      tags: [Datasets]
+      summary: Complete dataset upload session
+      operationId: completeDatasetUploadV1
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/DatasetId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatasetUploadCompleteRequest'
+            example:
+              uploadToken: upload-token-001
+      responses:
+        '202':
+          description: Dataset upload completion accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetResponse'
+              example:
+                requestId: req-dataset-complete-001
+                dataset:
+                  id: dataset-001
+                  filename: btc-1h-2025.csv
+                  contentType: text/csv
+                  sizeBytes: 2048
+                  status: uploaded
+                  providerDataId: null
+                  uploadUrl: https://uploads.trade-nexus.local/dataset-001
+                  createdAt: '2026-02-14T09:00:00Z'
+                  updatedAt: '2026-02-14T09:01:00Z'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v1/datasets/{datasetId}/validate:
+    post:
+      tags: [Datasets]
+      summary: Trigger dataset validation
+      operationId: validateDatasetV1
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/DatasetId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatasetValidateRequest'
+            example:
+              columnMapping:
+                timestamp: timestamp
+                close: close
+      responses:
+        '202':
+          description: Dataset validation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetResponse'
+              example:
+                requestId: req-dataset-validate-001
+                dataset:
+                  id: dataset-001
+                  filename: btc-1h-2025.csv
+                  contentType: text/csv
+                  sizeBytes: 2048
+                  status: validated
+                  providerDataId: null
+                  uploadUrl: https://uploads.trade-nexus.local/dataset-001
+                  createdAt: '2026-02-14T09:00:00Z'
+                  updatedAt: '2026-02-14T09:02:00Z'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v1/datasets/{datasetId}/transform/candles:
+    post:
+      tags: [Datasets]
+      summary: Trigger dataset transform to candle format
+      operationId: transformDatasetCandlesV1
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/DatasetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatasetTransformCandlesRequest'
+            example:
+              frequency: 1h
+      responses:
+        '202':
+          description: Dataset transform accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetResponse'
+              example:
+                requestId: req-dataset-transform-001
+                dataset:
+                  id: dataset-001
+                  filename: btc-1h-2025.csv
+                  contentType: text/csv
+                  sizeBytes: 2048
+                  status: ready
+                  providerDataId: null
+                  uploadUrl: https://uploads.trade-nexus.local/dataset-001
+                  createdAt: '2026-02-14T09:00:00Z'
+                  updatedAt: '2026-02-14T09:03:00Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v1/datasets/{datasetId}/publish/lona:
+    post:
+      tags: [Datasets]
+      summary: Publish dataset to Lona-compatible provider representation
+      operationId: publishDatasetLonaV1
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/DatasetId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatasetPublishLonaRequest'
+            example:
+              mode: explicit
+      responses:
+        '202':
+          description: Dataset publish accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetResponse'
+              example:
+                requestId: req-dataset-publish-001
+                dataset:
+                  id: dataset-001
+                  filename: btc-1h-2025.csv
+                  contentType: text/csv
+                  sizeBytes: 2048
+                  status: published_lona
+                  providerDataId: lona-symbol-001
+                  uploadUrl: https://uploads.trade-nexus.local/dataset-001
+                  createdAt: '2026-02-14T09:00:00Z'
+                  updatedAt: '2026-02-14T09:04:00Z'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v1/datasets:
+    get:
+      tags: [Datasets]
+      summary: List datasets
+      operationId: listDatasetsV1
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dataset list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetListResponse'
+              example:
+                requestId: req-dataset-list-001
+                items:
+                  - id: dataset-001
+                    filename: btc-1h-2025.csv
+                    contentType: text/csv
+                    sizeBytes: 2048
+                    status: published_lona
+                    providerDataId: lona-symbol-001
+                    uploadUrl: https://uploads.trade-nexus.local/dataset-001
+                    createdAt: '2026-02-14T09:00:00Z'
+                    updatedAt: '2026-02-14T09:04:00Z'
+                nextCursor: null
+        '401':
+          $ref: '#/components/responses/Error401'
+
+  /v1/datasets/{datasetId}:
+    get:
+      tags: [Datasets]
+      summary: Get dataset metadata and lifecycle status
+      operationId: getDatasetV1
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/DatasetId'
+      responses:
+        '200':
+          description: Dataset details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetResponse'
+              example:
+                requestId: req-dataset-get-001
+                dataset:
+                  id: dataset-001
+                  filename: btc-1h-2025.csv
+                  contentType: text/csv
+                  sizeBytes: 2048
+                  status: published_lona
+                  providerDataId: lona-symbol-001
+                  uploadUrl: https://uploads.trade-nexus.local/dataset-001
+                  createdAt: '2026-02-14T09:00:00Z'
+                  updatedAt: '2026-02-14T09:04:00Z'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v1/datasets/{datasetId}/quality-report:
+    get:
+      tags: [Datasets]
+      summary: Get dataset quality report
+      operationId: getDatasetQualityReportV1
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/DatasetId'
+      responses:
+        '200':
+          description: Quality report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetQualityReportResponse'
+              example:
+                requestId: req-dataset-quality-001
+                qualityReport:
+                  datasetId: dataset-001
+                  status: validated
+                  summary: Dataset passed schema and timestamp-order checks.
+                  issues: []
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -748,6 +1040,12 @@ components:
         type: string
     OrderId:
       name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+    DatasetId:
+      name: datasetId
       in: path
       required: true
       schema:
@@ -1001,9 +1299,21 @@ components:
 
     CreateBacktestRequest:
       type: object
-      required: [dataIds, startDate, endDate]
+      required: [startDate, endDate]
+      oneOf:
+        - required: [dataIds]
+          not:
+            required: [datasetIds]
+        - required: [datasetIds]
+          not:
+            required: [dataIds]
       properties:
         dataIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        datasetIds:
           type: array
           minItems: 1
           items:
@@ -1238,3 +1548,154 @@ components:
         deploymentId:
           type: string
           minLength: 1
+
+    DatasetLifecycleStatus:
+      type: string
+      enum:
+        - uploading
+        - uploaded
+        - validating
+        - validated
+        - validation_failed
+        - transforming
+        - ready
+        - transform_failed
+        - publishing_lona
+        - published_lona
+        - publish_failed
+        - archived
+
+    DatasetPublishMode:
+      type: string
+      enum: [explicit, just_in_time]
+
+    Dataset:
+      type: object
+      required: [id, filename, contentType, sizeBytes, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        filename:
+          type: string
+        contentType:
+          type: string
+        sizeBytes:
+          type: integer
+          minimum: 1
+        status:
+          $ref: '#/components/schemas/DatasetLifecycleStatus'
+        providerDataId:
+          type: string
+          nullable: true
+        uploadUrl:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DatasetResponse:
+      type: object
+      required: [requestId, dataset]
+      properties:
+        requestId:
+          type: string
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+
+    DatasetListResponse:
+      type: object
+      required: [requestId, items, nextCursor]
+      properties:
+        requestId:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Dataset'
+        nextCursor:
+          type: string
+          nullable: true
+
+    DatasetUploadInitRequest:
+      type: object
+      required: [filename, contentType, sizeBytes]
+      properties:
+        filename:
+          type: string
+          minLength: 1
+        contentType:
+          type: string
+          minLength: 1
+        sizeBytes:
+          type: integer
+          minimum: 1
+
+    DatasetUploadInitResponse:
+      type: object
+      required: [requestId, datasetId, uploadUrl, status]
+      properties:
+        requestId:
+          type: string
+        datasetId:
+          type: string
+        uploadUrl:
+          type: string
+        status:
+          $ref: '#/components/schemas/DatasetLifecycleStatus'
+
+    DatasetUploadCompleteRequest:
+      type: object
+      properties:
+        uploadToken:
+          type: string
+
+    DatasetValidateRequest:
+      type: object
+      properties:
+        columnMapping:
+          type: object
+          additionalProperties:
+            type: string
+
+    DatasetTransformCandlesRequest:
+      type: object
+      required: [frequency]
+      properties:
+        frequency:
+          type: string
+          minLength: 1
+
+    DatasetPublishLonaRequest:
+      type: object
+      properties:
+        mode:
+          $ref: '#/components/schemas/DatasetPublishMode'
+
+    DatasetQualityReport:
+      type: object
+      required: [datasetId, status, summary, issues]
+      properties:
+        datasetId:
+          type: string
+        status:
+          $ref: '#/components/schemas/DatasetLifecycleStatus'
+        summary:
+          type: string
+        issues:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    DatasetQualityReportResponse:
+      type: object
+      required: [requestId, qualityReport]
+      properties:
+        requestId:
+          type: string
+        qualityReport:
+          $ref: '#/components/schemas/DatasetQualityReport'

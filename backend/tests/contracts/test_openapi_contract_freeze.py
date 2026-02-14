@@ -27,6 +27,14 @@ EXPECTED_V1_PATHS = {
     "/v1/portfolios/{portfolioId}",
     "/v1/orders",
     "/v1/orders/{orderId}",
+    "/v1/datasets/uploads:init",
+    "/v1/datasets/{datasetId}/uploads:complete",
+    "/v1/datasets/{datasetId}/validate",
+    "/v1/datasets/{datasetId}/transform/candles",
+    "/v1/datasets/{datasetId}/publish/lona",
+    "/v1/datasets",
+    "/v1/datasets/{datasetId}",
+    "/v1/datasets/{datasetId}/quality-report",
 }
 
 EXPECTED_OPERATION_IDS = {
@@ -48,6 +56,14 @@ EXPECTED_OPERATION_IDS = {
     "createOrderV1",
     "getOrderV1",
     "cancelOrderV1",
+    "initDatasetUploadV1",
+    "completeDatasetUploadV1",
+    "validateDatasetV1",
+    "transformDatasetCandlesV1",
+    "publishDatasetLonaV1",
+    "listDatasetsV1",
+    "getDatasetV1",
+    "getDatasetQualityReportV1",
 }
 
 
@@ -57,7 +73,7 @@ def _spec_text() -> str:
 
 def test_v1_path_set_is_frozen() -> None:
     spec = _spec_text()
-    discovered_paths = set(re.findall(r"^  (/v1/[^:]+):$", spec, flags=re.MULTILINE))
+    discovered_paths = set(re.findall(r"^  (/v1/.+):$", spec, flags=re.MULTILINE))
     assert discovered_paths == EXPECTED_V1_PATHS
 
 

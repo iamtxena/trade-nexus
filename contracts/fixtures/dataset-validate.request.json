@@ -1,0 +1,6 @@
+{
+  "columnMapping": {
+    "timestamp": "timestamp",
+    "close": "close"
+  }
+}

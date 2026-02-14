@@ -29,6 +29,14 @@ def test_versioned_platform_paths_are_present() -> None:
         "/v1/deployments:",
         "/v1/portfolios:",
         "/v1/orders:",
+        "/v1/datasets/uploads:init:",
+        "/v1/datasets/{datasetId}/uploads:complete:",
+        "/v1/datasets/{datasetId}/validate:",
+        "/v1/datasets/{datasetId}/transform/candles:",
+        "/v1/datasets/{datasetId}/publish/lona:",
+        "/v1/datasets:",
+        "/v1/datasets/{datasetId}:",
+        "/v1/datasets/{datasetId}/quality-report:",
     ):
         assert path in spec, f"Missing required path in OpenAPI: {path}"
 
@@ -61,5 +69,6 @@ def test_public_tags_are_declared() -> None:
         "name: Deployments",
         "name: Portfolios",
         "name: Orders",
+        "name: Datasets",
     ):
         assert tag in spec, f"Missing expected tag declaration: {tag}"

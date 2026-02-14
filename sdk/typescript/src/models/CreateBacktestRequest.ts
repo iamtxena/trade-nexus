@@ -24,7 +24,13 @@ export interface CreateBacktestRequest {
      * @type {Array<string>}
      * @memberof CreateBacktestRequest
      */
-    dataIds: Array<string>;
+    dataIds?: Array<string>;
+    /**
+     * 
+     * @type {Array<string>}
+     * @memberof CreateBacktestRequest
+     */
+    datasetIds?: Array<string>;
     /**
      * 
      * @type {Date}
@@ -49,7 +55,6 @@ export interface CreateBacktestRequest {
  * Check if a given object implements the CreateBacktestRequest interface.
  */
 export function instanceOfCreateBacktestRequest(value: object): value is CreateBacktestRequest {
-    if (!('dataIds' in value) || value['dataIds'] === undefined) return false;
     if (!('startDate' in value) || value['startDate'] === undefined) return false;
     if (!('endDate' in value) || value['endDate'] === undefined) return false;
     return true;
@@ -65,7 +70,8 @@ export function CreateBacktestRequestFromJSONTyped(json: any, ignoreDiscriminato
     }
     return {
         
-        'dataIds': json['dataIds'],
+        'dataIds': json['dataIds'] == null ? undefined : json['dataIds'],
+        'datasetIds': json['datasetIds'] == null ? undefined : json['datasetIds'],
         'startDate': (new Date(json['startDate'])),
         'endDate': (new Date(json['endDate'])),
         'initialCash': json['initialCash'] == null ? undefined : json['initialCash'],
@@ -84,6 +90,7 @@ export function CreateBacktestRequestToJSONTyped(value?: CreateBacktestRequest |
     return {
         
         'dataIds': value['dataIds'],
+        'datasetIds': value['datasetIds'],
         'startDate': ((value['startDate']).toISOString().substring(0,10)),
         'endDate': ((value['endDate']).toISOString().substring(0,10)),
         'initialCash': value['initialCash'],

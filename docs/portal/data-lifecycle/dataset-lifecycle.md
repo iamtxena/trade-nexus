@@ -19,9 +19,17 @@ Data lifecycle behavior is documented and implemented behind architecture bounda
 
 ## Contract Status
 
-- Dataset lifecycle API endpoints are planned for Gate2 (`#97`).
-- Current canonical OpenAPI v1 does not include `/v1/datasets` routes.
-- Until `#97` lands, treat dataset lifecycle as planned interface work, not active public v1 contract.
+- Dataset lifecycle API endpoints are part of the canonical OpenAPI v1 contract.
+- Active dataset routes are:
+  - `POST /v1/datasets/uploads:init`
+  - `POST /v1/datasets/{datasetId}/uploads:complete`
+  - `POST /v1/datasets/{datasetId}/validate`
+  - `POST /v1/datasets/{datasetId}/transform/candles`
+  - `POST /v1/datasets/{datasetId}/publish/lona`
+  - `GET /v1/datasets`
+  - `GET /v1/datasets/{datasetId}`
+  - `GET /v1/datasets/{datasetId}/quality-report`
+- Gate2 implementation is a thin-stub baseline for orchestration and contract flow.
 
 ## Canonical References
 

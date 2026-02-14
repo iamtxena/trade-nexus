@@ -22,7 +22,7 @@ create table if not exists kb_market_regimes (
   regime text not null,
   volatility text not null,
   indicators jsonb not null default '{}'::jsonb,
-  start_at timestamptz not null default now(),
+  start_at timestamptz not null,
   end_at timestamptz,
   notes text,
   created_at timestamptz not null default now()

@@ -34,6 +34,7 @@ def test_market_regime_schema_defaults() -> None:
         asset="BTCUSDT",
         regime="sideways",
         volatility="medium",
+        start_at="2026-02-10T00:00:00Z",
         indicators={"rsi": 50.0},
     )
     assert record.schema_version == KB_SCHEMA_VERSION

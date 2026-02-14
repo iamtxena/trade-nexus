@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from src.platform_api.adapters.execution_adapter import ExecutionAdapter
-from src.platform_api.services.execution_lifecycle_mapping import apply_deployment_transition
+from src.platform_api.services.execution_lifecycle_mapping import apply_deployment_transition, apply_order_transition
 from src.platform_api.state_store import DriftEventRecord, InMemoryStateStore, utc_now
 
 
@@ -87,9 +87,10 @@ class ReconciliationService:
             if provider_order is None:
                 continue
             provider_state = provider_order.status
-            if provider_state != order.status:
+            next_state = apply_order_transition(order.status, provider_state)
+            if next_state != order.status:
                 previous_state = order.status
-                order.status = provider_state
+                order.status = next_state
                 events.append(
                     self._record_drift(
                         resource_type="order",
@@ -97,7 +98,7 @@ class ReconciliationService:
                         provider_ref_id=order.provider_order_id,
                         previous_state=previous_state,
                         provider_state=provider_state,
-                        resolution=f"synced_to_{provider_state}",
+                        resolution=f"mapped_to_{next_state}",
                         tenant_id=tenant_id,
                         user_id=user_id,
                         request_id=request_id,

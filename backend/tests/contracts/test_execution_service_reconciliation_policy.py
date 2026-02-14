@@ -59,6 +59,7 @@ class _FailingReconciliationService(_StubReconciliationService):
         request_id: str | None = None,
     ):
         _ = (tenant_id, user_id, request_id)
+        self.deployment_runs += 1
         raise RuntimeError("deployment drift backend unavailable")
 
     async def run_order_drift_checks(  # type: ignore[no-untyped-def]
@@ -69,6 +70,7 @@ class _FailingReconciliationService(_StubReconciliationService):
         request_id: str | None = None,
     ):
         _ = (tenant_id, user_id, request_id)
+        self.order_runs += 1
         raise RuntimeError("order drift backend unavailable")
 
 
@@ -121,3 +123,31 @@ async def _exercise_list_fail_open_policy() -> None:
 
 def test_list_endpoints_fail_open_when_reconciliation_errors() -> None:
     asyncio.run(_exercise_list_fail_open_policy())
+
+
+async def _exercise_failed_reconciliation_throttle_policy() -> None:
+    store = InMemoryStateStore()
+    reconciliation = _FailingReconciliationService()
+    service = ExecutionService(
+        store=store,
+        execution_adapter=_StubExecutionAdapter(),
+        reconciliation_service=reconciliation,
+        reconciliation_min_interval_seconds=30.0,
+    )
+    context = RequestContext(
+        request_id="req-policy-003",
+        tenant_id="tenant-a",
+        user_id="user-a",
+    )
+
+    await service.list_deployments(status=None, cursor=None, context=context)
+    await service.list_deployments(status=None, cursor=None, context=context)
+    await service.list_orders(status=None, cursor=None, context=context)
+    await service.list_orders(status=None, cursor=None, context=context)
+
+    assert reconciliation.deployment_runs == 1
+    assert reconciliation.order_runs == 1
+
+
+def test_list_endpoints_throttle_reconciliation_after_failures() -> None:
+    asyncio.run(_exercise_failed_reconciliation_throttle_policy())

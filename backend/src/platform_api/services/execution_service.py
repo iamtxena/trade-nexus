@@ -28,7 +28,7 @@ from src.platform_api.schemas_v1 import (
     PortfolioResponse,
     RequestContext,
 )
-from src.platform_api.services.execution_lifecycle_mapping import apply_deployment_transition
+from src.platform_api.services.execution_lifecycle_mapping import apply_deployment_transition, apply_order_transition
 from src.platform_api.services.reconciliation_service import ReconciliationService
 from src.platform_api.state_store import DeploymentRecord, InMemoryStateStore, OrderRecord, utc_now
 
@@ -291,7 +291,7 @@ class ExecutionService:
                 order_type=request.type,
                 quantity=request.quantity,
                 price=request.price,
-                status=str(provider_result.get("status", "pending")),
+                status=apply_order_transition("pending", str(provider_result.get("status", "pending"))),
                 deployment_id=request.deploymentId,
                 provider_order_id=str(provider_result.get("providerOrderId", order_id)),
             )
@@ -322,7 +322,7 @@ class ExecutionService:
                 user_id=context.user_id,
             )
             if provider_record is not None:
-                record.status = provider_record.status
+                record.status = apply_order_transition(record.status, provider_record.status)
         return OrderResponse(requestId=context.request_id, order=Order(**order_to_dict(record)))
 
     async def cancel_order(self, *, order_id: str, context: RequestContext) -> OrderResponse:
@@ -357,7 +357,7 @@ class ExecutionService:
                 request_id=context.request_id,
             )
 
-        record.status = str(result.get("status", "cancelled"))
+        record.status = apply_order_transition(record.status, str(result.get("status", "cancelled")))
         return OrderResponse(requestId=context.request_id, order=Order(**order_to_dict(record)))
 
     async def _run_drift_checks(self, *, context: RequestContext, scope: ReconciliationScope) -> None:
@@ -369,6 +369,7 @@ class ExecutionService:
             last_run = self._last_reconciliation_run_by_scope[scope]
             if last_run > 0 and (now - last_run) < self._reconciliation_min_interval_seconds:
                 return
+        self._last_reconciliation_run_by_scope[scope] = now
 
         try:
             if scope == "deployments":
@@ -389,4 +390,3 @@ class ExecutionService:
                 extra={"scope": scope, "request_id": context.request_id},
             )
             return
-        self._last_reconciliation_run_by_scope[scope] = now

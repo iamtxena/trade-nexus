@@ -38,6 +38,12 @@ Trade Nexus is the central orchestration layer for an autonomous trading system.
     └─────────┘                        └─────────────┘
 ```
 
+## Documentation
+
+- [Documentation Index](./docs/README.md)
+- [Architecture Baseline](./docs/architecture/README.md)
+- [Documentation IA and Governance](./docs/architecture/DOCUMENTATION_IA_AND_GOVERNANCE.md)
+
 ## Tech Stack
 
 ### Frontend

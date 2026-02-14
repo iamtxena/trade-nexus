@@ -224,7 +224,6 @@ class InMemoryStateStore:
         self.lessons_learned: dict[str, LessonLearnedRecord] = {}
         self.macro_events: dict[str, MacroEventRecord] = {}
         self.correlations: dict[str, CorrelationEdgeRecord] = {}
-        self.knowledge_ingestion_events: set[str] = set()
 
         self._id_counters: dict[str, int] = {
             "strategy": 2,

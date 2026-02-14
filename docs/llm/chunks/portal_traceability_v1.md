@@ -1,10 +1,8 @@
----
-title: Gate0 and Gate1 Traceability
-summary: Traceability matrix from Gate0 and Gate1 documentation deliverables to issues and PRs.
-owners:
-  - Gate1 Docs Team
-updated: 2026-02-14
----
+# Gate0 and Gate1 Traceability
+
+Source: `docs/portal/operations/gate0-gate1-traceability.md`
+Topic: `traceability`
+Stable ID: `portal_traceability_v1`
 
 # Gate0 and Gate1 Traceability
 

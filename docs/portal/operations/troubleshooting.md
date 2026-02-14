@@ -22,8 +22,10 @@ updated: 2026-02-14
 ## Docs Pipeline
 
 - Regenerate API reference: `npm --prefix docs/portal-site run api:build`
+- Regenerate LLM package: `python3 scripts/docs/generate_llm_package.py`
 - Validate docs checks:
   - `python3 scripts/docs/check_frontmatter.py`
   - `python3 scripts/docs/check_links.py`
   - `python3 scripts/docs/check_stale_references.py`
+  - `python3 scripts/docs/check_llm_package.py`
   - `npm --prefix docs/portal-site run build`

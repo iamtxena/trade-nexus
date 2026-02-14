@@ -77,12 +77,15 @@ Documentation updates are required for architecture, contract, and user workflow
 1. Update relevant portal pages under `docs/portal/`.
 2. Regenerate API reference when contract changes:
    - `npm --prefix docs/portal-site run api:build`
-3. Run docs validations locally:
+3. Regenerate LLM docs package when docs sources change:
+   - `python3 scripts/docs/generate_llm_package.py`
+4. Run docs validations locally:
    - `python3 scripts/docs/check_frontmatter.py`
    - `python3 scripts/docs/check_links.py`
    - `python3 scripts/docs/check_stale_references.py`
+   - `python3 scripts/docs/check_llm_package.py`
    - `npm --prefix docs/portal-site run build`
-4. Ensure `.github/workflows/docs-governance.yml` is green in PR.
+5. Ensure `.github/workflows/docs-governance.yml` is green in PR.
 
 ## Pull Request Process
 

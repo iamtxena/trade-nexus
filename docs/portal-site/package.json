@@ -4,13 +4,15 @@
   "private": true,
   "scripts": {
     "api:build": "redocly build-docs ../architecture/specs/platform-api.openapi.yaml -o static/api/platform-api.html",
+    "llm:generate": "python3 ../../scripts/docs/generate_llm_package.py",
     "check:schema": "python3 ../../scripts/docs/check_frontmatter.py",
-    "check:links": "python3 ../../scripts/docs/check_links.py",
+    "check:links": "CHECK_EXTERNAL_LINKS=1 python3 ../../scripts/docs/check_links.py",
     "check:stale": "python3 ../../scripts/docs/check_stale_references.py",
+    "check:llm": "python3 ../../scripts/docs/check_llm_package.py",
     "start": "npm run api:build && docusaurus start",
     "build": "npm run api:build && docusaurus build",
     "serve": "docusaurus serve",
-    "ci": "npm run api:build && npm run check:schema && npm run check:links && npm run check:stale && docusaurus build"
+    "ci": "npm run api:build && npm run llm:generate && npm run check:schema && npm run check:links && npm run check:stale && npm run check:llm && docusaurus build"
   },
   "dependencies": {
     "@docusaurus/core": "^3.0.0",

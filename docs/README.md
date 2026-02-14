@@ -16,6 +16,7 @@ This index is the canonical navigation entry point for Gate-based documentation 
 - Documentation IA and governance: `/docs/architecture/DOCUMENTATION_IA_AND_GOVERNANCE.md`
 - Gate execution playbook: `/docs/architecture/GATE_TEAM_EXECUTION_PLAYBOOK.md`
 - Contract governance: `/docs/architecture/API_CONTRACT_GOVERNANCE.md`
+- LLM package guide: `/docs/llm/README.md`
 
 ## Parent Epic Delivery Mapping
 

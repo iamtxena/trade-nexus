@@ -1,0 +1,104 @@
+{
+  "schema_version": "1.0",
+  "entries": [
+    {
+      "id": "portal_quickstart_v1",
+      "title": "Portal Quickstart",
+      "source": "docs/portal/getting-started/quickstart.md",
+      "topic": "workflow",
+      "concepts": ["quickstart", "research", "backtest", "deploy"],
+      "endpoints": ["research", "strategies", "backtests", "deployments", "portfolios", "orders"],
+      "workflows": ["research_to_deploy"],
+      "owners": ["Gate1 Docs Team"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/106"
+    },
+    {
+      "id": "portal_onboarding_v1",
+      "title": "Onboarding Paths",
+      "source": "docs/portal/getting-started/onboarding.md",
+      "topic": "onboarding",
+      "concepts": ["onboarding", "integrator", "team"],
+      "endpoints": [],
+      "workflows": ["internal_onboarding", "external_integrator_onboarding"],
+      "owners": ["Gate1 Docs Team"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/106"
+    },
+    {
+      "id": "portal_api_contract_v1",
+      "title": "Platform API Contract",
+      "source": "docs/portal/api/platform-api.md",
+      "topic": "api",
+      "concepts": ["platform_api", "contract", "boundaries"],
+      "endpoints": ["research", "strategies", "backtests", "deployments", "portfolios", "orders"],
+      "workflows": ["api_integration"],
+      "owners": ["Gate1 Docs Team"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/76"
+    },
+    {
+      "id": "portal_cli_workflows_v1",
+      "title": "CLI Workflows",
+      "source": "docs/portal/cli/workflows.md",
+      "topic": "cli",
+      "concepts": ["cli", "workflow", "strategy"],
+      "endpoints": ["research", "strategies", "backtests", "deployments", "portfolios", "orders"],
+      "workflows": ["strategy_lifecycle"],
+      "owners": ["Gate1 Docs Team"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/80"
+    },
+    {
+      "id": "portal_dataset_command_model_v1",
+      "title": "Dataset Lifecycle Command Model",
+      "source": "docs/portal/data-lifecycle/command-model.md",
+      "topic": "data",
+      "concepts": ["dataset", "ingest", "validate", "publish"],
+      "endpoints": ["backtests", "deployments"],
+      "workflows": ["dataset_lifecycle"],
+      "owners": ["Gate1 Docs Team"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/78"
+    },
+    {
+      "id": "portal_gate_workflow_v1",
+      "title": "Gate Workflow",
+      "source": "docs/portal/operations/gate-workflow.md",
+      "topic": "operations",
+      "concepts": ["gate", "status_update", "delivery"],
+      "endpoints": [],
+      "workflows": ["gate_reporting"],
+      "owners": ["Gate1 Docs Team"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81"
+    },
+    {
+      "id": "portal_traceability_v1",
+      "title": "Gate0 and Gate1 Traceability",
+      "source": "docs/portal/operations/gate0-gate1-traceability.md",
+      "topic": "traceability",
+      "concepts": ["traceability", "gate0", "gate1"],
+      "endpoints": [],
+      "workflows": ["delivery_traceability"],
+      "owners": ["Gate1 Docs Team"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/106"
+    },
+    {
+      "id": "architecture_interfaces_v1",
+      "title": "Architecture Interfaces",
+      "source": "docs/architecture/INTERFACES.md",
+      "topic": "architecture",
+      "concepts": ["interfaces", "public_api", "adapters"],
+      "endpoints": ["research", "strategies", "backtests", "deployments", "portfolios", "orders"],
+      "workflows": ["contract_first_delivery"],
+      "owners": ["Architecture/Contracts lead"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/76"
+    },
+    {
+      "id": "architecture_target_v2_v1",
+      "title": "Target Architecture V2",
+      "source": "docs/architecture/TARGET_ARCHITECTURE_V2.md",
+      "topic": "architecture",
+      "concepts": ["target_architecture", "boundaries", "repos"],
+      "endpoints": [],
+      "workflows": ["gate_program_execution"],
+      "owners": ["Architecture/Contracts lead"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81"
+    }
+  ]
+}

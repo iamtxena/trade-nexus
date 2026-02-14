@@ -6,5 +6,6 @@ This Docusaurus application builds the Trade Nexus docs portal from source files
 
 - Install dependencies: `npm --prefix docs/portal-site install`
 - Build API reference from OpenAPI: `npm --prefix docs/portal-site run api:build`
+- Regenerate LLM package: `python3 scripts/docs/generate_llm_package.py`
 - Run CI checks locally: `npm --prefix docs/portal-site run ci`
 - Build portal: `npm --prefix docs/portal-site run build`

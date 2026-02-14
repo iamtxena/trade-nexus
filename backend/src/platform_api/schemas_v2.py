@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from src.platform_api.schemas_v1 import MarketScanIdea
 
@@ -105,6 +105,13 @@ class CreateConversationSessionRequest(BaseModel):
     channel: ConversationChannel
     topic: str | None = Field(default=None, min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_null_topic(cls, value: Any) -> Any:
+        if isinstance(value, dict) and "topic" in value and value["topic"] is None:
+            raise ValueError("topic must be omitted or a non-empty string.")
+        return value
 
 
 class ConversationSession(BaseModel):

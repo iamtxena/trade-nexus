@@ -106,6 +106,13 @@ def test_conversation_v2_routes() -> None:
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "CONVERSATION_SESSION_NOT_FOUND"
 
+    null_topic = client.post(
+        "/v2/conversations/sessions",
+        headers=HEADERS,
+        json={"channel": "web", "topic": None},
+    )
+    assert null_topic.status_code == 422
+
 
 def test_backtest_feedback_is_ingested_into_kb() -> None:
     client = _client()

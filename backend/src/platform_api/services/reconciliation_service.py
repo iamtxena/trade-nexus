@@ -110,20 +110,56 @@ class ReconciliationService:
         user_id: str,
         request_id: str | None = None,
     ) -> ReconciliationSummary:
-        deployment_events = await self.reconcile_deployments(
+        deployment_summary = await self.run_deployment_drift_checks(
             tenant_id=tenant_id,
             user_id=user_id,
             request_id=request_id,
         )
-        order_events = await self.reconcile_orders(
+        order_summary = await self.run_order_drift_checks(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            request_id=request_id,
+        )
+        return ReconciliationSummary(
+            deployment_checks=deployment_summary.deployment_checks,
+            order_checks=order_summary.order_checks,
+            drift_count=deployment_summary.drift_count + order_summary.drift_count,
+        )
+
+    async def run_deployment_drift_checks(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        request_id: str | None = None,
+    ) -> ReconciliationSummary:
+        deployment_events = await self.reconcile_deployments(
             tenant_id=tenant_id,
             user_id=user_id,
             request_id=request_id,
         )
         return ReconciliationSummary(
             deployment_checks=len(self._store.deployments),
+            order_checks=0,
+            drift_count=len(deployment_events),
+        )
+
+    async def run_order_drift_checks(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        request_id: str | None = None,
+    ) -> ReconciliationSummary:
+        order_events = await self.reconcile_orders(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            request_id=request_id,
+        )
+        return ReconciliationSummary(
+            deployment_checks=0,
             order_checks=len(self._store.orders),
-            drift_count=len(deployment_events) + len(order_events),
+            drift_count=len(order_events),
         )
 
     def _record_drift(

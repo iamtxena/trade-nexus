@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from time import monotonic
+from typing import Literal
+
 from src.platform_api.adapters.execution_adapter import (
     ExecutionAdapter,
     deployment_to_dict,
@@ -28,6 +31,8 @@ from src.platform_api.services.execution_lifecycle_mapping import apply_deployme
 from src.platform_api.services.reconciliation_service import ReconciliationService
 from src.platform_api.state_store import DeploymentRecord, InMemoryStateStore, OrderRecord, utc_now
 
+ReconciliationScope = Literal["deployments", "orders"]
+
 
 class ExecutionService:
     """Platform service for execution and portfolio endpoints."""
@@ -39,11 +44,17 @@ class ExecutionService:
         execution_adapter: ExecutionAdapter,
         reconciliation_service: ReconciliationService | None = None,
         knowledge_ingestion_pipeline: KnowledgeIngestionPipeline | None = None,
+        reconciliation_min_interval_seconds: float = 5.0,
     ) -> None:
         self._store = store
         self._execution_adapter = execution_adapter
         self._reconciliation_service = reconciliation_service
         self._knowledge_ingestion_pipeline = knowledge_ingestion_pipeline
+        self._reconciliation_min_interval_seconds = max(0.0, reconciliation_min_interval_seconds)
+        self._last_reconciliation_run_by_scope: dict[ReconciliationScope, float] = {
+            "deployments": 0.0,
+            "orders": 0.0,
+        }
 
     async def list_deployments(
         self,
@@ -52,7 +63,7 @@ class ExecutionService:
         cursor: str | None,
         context: RequestContext,
     ) -> DeploymentListResponse:
-        await self._run_drift_checks(context=context)
+        await self._run_drift_checks(context=context, scope="deployments")
         records = await self._execution_adapter.list_deployments(status=status)
         return DeploymentListResponse(
             requestId=context.request_id,
@@ -224,7 +235,7 @@ class ExecutionService:
         cursor: str | None,
         context: RequestContext,
     ) -> OrderListResponse:
-        await self._run_drift_checks(context=context)
+        await self._run_drift_checks(context=context, scope="orders")
         records = await self._execution_adapter.list_orders(status=status)
         return OrderListResponse(
             requestId=context.request_id,
@@ -346,11 +357,26 @@ class ExecutionService:
         record.status = str(result.get("status", "cancelled"))
         return OrderResponse(requestId=context.request_id, order=Order(**order_to_dict(record)))
 
-    async def _run_drift_checks(self, *, context: RequestContext) -> None:
+    async def _run_drift_checks(self, *, context: RequestContext, scope: ReconciliationScope) -> None:
         if self._reconciliation_service is None:
             return
-        await self._reconciliation_service.run_drift_checks(
-            tenant_id=context.tenant_id,
-            user_id=context.user_id,
-            request_id=context.request_id,
-        )
+
+        now = monotonic()
+        if self._reconciliation_min_interval_seconds > 0:
+            last_run = self._last_reconciliation_run_by_scope[scope]
+            if last_run > 0 and (now - last_run) < self._reconciliation_min_interval_seconds:
+                return
+
+        if scope == "deployments":
+            await self._reconciliation_service.run_deployment_drift_checks(
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+                request_id=context.request_id,
+            )
+        else:
+            await self._reconciliation_service.run_order_drift_checks(
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+                request_id=context.request_id,
+            )
+        self._last_reconciliation_run_by_scope[scope] = now

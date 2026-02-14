@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from time import monotonic
 from typing import Literal
 
@@ -32,6 +33,7 @@ from src.platform_api.services.reconciliation_service import ReconciliationServi
 from src.platform_api.state_store import DeploymentRecord, InMemoryStateStore, OrderRecord, utc_now
 
 ReconciliationScope = Literal["deployments", "orders"]
+logger = logging.getLogger(__name__)
 
 
 class ExecutionService:
@@ -198,8 +200,9 @@ class ExecutionService:
             user_id=context.user_id,
         )
 
+        previous_status = record.status
         provider_status = str(stop_result.get("status", "failed"))
-        record.status = apply_deployment_transition(record.status, provider_status)
+        record.status = apply_deployment_transition(previous_status, provider_status)
         record.updated_at = utc_now()
         if self._knowledge_ingestion_pipeline is not None:
             self._knowledge_ingestion_pipeline.ingest_deployment_outcome(record)
@@ -367,16 +370,23 @@ class ExecutionService:
             if last_run > 0 and (now - last_run) < self._reconciliation_min_interval_seconds:
                 return
 
-        if scope == "deployments":
-            await self._reconciliation_service.run_deployment_drift_checks(
-                tenant_id=context.tenant_id,
-                user_id=context.user_id,
-                request_id=context.request_id,
+        try:
+            if scope == "deployments":
+                await self._reconciliation_service.run_deployment_drift_checks(
+                    tenant_id=context.tenant_id,
+                    user_id=context.user_id,
+                    request_id=context.request_id,
+                )
+            else:
+                await self._reconciliation_service.run_order_drift_checks(
+                    tenant_id=context.tenant_id,
+                    user_id=context.user_id,
+                    request_id=context.request_id,
+                )
+        except Exception:
+            logger.exception(
+                "Reconciliation drift check failed; continuing list request.",
+                extra={"scope": scope, "request_id": context.request_id},
             )
-        else:
-            await self._reconciliation_service.run_order_drift_checks(
-                tenant_id=context.tenant_id,
-                user_id=context.user_id,
-                request_id=context.request_id,
-            )
+            return
         self._last_reconciliation_run_by_scope[scope] = now

@@ -31,7 +31,8 @@ class ReconciliationService:
         request_id: str | None = None,
     ) -> list[DriftEventRecord]:
         events: list[DriftEventRecord] = []
-        for deployment in self._store.deployments.values():
+        # Snapshot to avoid runtime errors if store mutates while reconciliation runs.
+        for deployment in list(self._store.deployments.values()):
             if not deployment.provider_ref_id:
                 continue
             provider = await self._execution_adapter.get_deployment(
@@ -74,7 +75,8 @@ class ReconciliationService:
         request_id: str | None = None,
     ) -> list[DriftEventRecord]:
         events: list[DriftEventRecord] = []
-        for order in self._store.orders.values():
+        # Snapshot to avoid runtime errors if store mutates while reconciliation runs.
+        for order in list(self._store.orders.values()):
             if not order.provider_order_id:
                 continue
             provider_order = await self._execution_adapter.get_order(

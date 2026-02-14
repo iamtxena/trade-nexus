@@ -50,6 +50,28 @@ class _StubReconciliationService:
         raise AssertionError("ExecutionService should not call full run_drift_checks for list endpoints.")
 
 
+class _FailingReconciliationService(_StubReconciliationService):
+    async def run_deployment_drift_checks(  # type: ignore[no-untyped-def]
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        request_id: str | None = None,
+    ):
+        _ = (tenant_id, user_id, request_id)
+        raise RuntimeError("deployment drift backend unavailable")
+
+    async def run_order_drift_checks(  # type: ignore[no-untyped-def]
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        request_id: str | None = None,
+    ):
+        _ = (tenant_id, user_id, request_id)
+        raise RuntimeError("order drift backend unavailable")
+
+
 async def _exercise_list_reconciliation_policy() -> None:
     store = InMemoryStateStore()
     reconciliation = _StubReconciliationService()
@@ -76,3 +98,26 @@ async def _exercise_list_reconciliation_policy() -> None:
 
 def test_list_endpoints_use_scoped_throttled_reconciliation() -> None:
     asyncio.run(_exercise_list_reconciliation_policy())
+
+
+async def _exercise_list_fail_open_policy() -> None:
+    store = InMemoryStateStore()
+    service = ExecutionService(
+        store=store,
+        execution_adapter=_StubExecutionAdapter(),
+        reconciliation_service=_FailingReconciliationService(),
+    )
+    context = RequestContext(
+        request_id="req-policy-002",
+        tenant_id="tenant-a",
+        user_id="user-a",
+    )
+
+    deployments = await service.list_deployments(status=None, cursor=None, context=context)
+    orders = await service.list_orders(status=None, cursor=None, context=context)
+    assert deployments.items == []
+    assert orders.items == []
+
+
+def test_list_endpoints_fail_open_when_reconciliation_errors() -> None:
+    asyncio.run(_exercise_list_fail_open_policy())

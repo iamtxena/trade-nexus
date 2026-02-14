@@ -271,14 +271,37 @@ Affected resources:
 - deployments
 - research jobs (if promoted to async)
 
-## 5) Compatibility Rules
+## 5) Risk Policy Schema Contract (AG-RISK-01)
+
+Risk policy is defined as a machine-readable, versioned schema:
+
+- `/contracts/schemas/risk-policy.v1.schema.json`
+
+Required top-level fields:
+
+- `version`
+- `mode`
+- `limits`
+- `killSwitch`
+- `actionsOnBreach`
+
+Version and validation rules:
+
+1. Current supported version is `risk-policy.v1`.
+2. `mode` is constrained to `advisory | enforced`.
+3. `limits` must define notional, position, drawdown, and daily-loss bounds with non-negative values.
+4. `killSwitch` must include at least `enabled` and may carry trigger metadata.
+5. `actionsOnBreach` is required and must contain one or more canonical breach actions.
+6. Invalid schema structure or unsupported version must fail validation.
+
+## 6) Compatibility Rules
 
 1. Public API changes follow semantic versioning and `/vN` URLs.
 2. Internal adapter interfaces can evolve, but each change must be released with adapter tests.
 3. Existing fields are never repurposed with different meaning.
 4. Deprecated fields must have a removal date.
 
-## 6) Team Independence Checklist
+## 7) Team Independence Checklist
 
 A workstream is considered independent when:
 
@@ -287,7 +310,7 @@ A workstream is considered independent when:
 3. It passes contract tests against mock responses.
 4. It does not require undocumented endpoints.
 
-## 7) Migration Notes from Prototype Interfaces
+## 8) Migration Notes from Prototype Interfaces
 
 Prototype routes that do not match OpenAPI should be treated as `legacy` and excluded from new integrations.
 

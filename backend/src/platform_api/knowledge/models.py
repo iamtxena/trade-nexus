@@ -60,8 +60,8 @@ class MacroEventRecord:
     title: str
     summary: str
     impact: str
+    occurred_at: str
     assets: list[str] = field(default_factory=list)
-    occurred_at: str = field(default_factory=utc_now)
     source_url: str | None = None
     schema_version: str = KB_SCHEMA_VERSION
     created_at: str = field(default_factory=utc_now)

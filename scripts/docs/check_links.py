@@ -17,7 +17,7 @@ LINK_PATTERN = re.compile(r"!?\[[^\]]+\]\(([^)]+)\)")
 
 
 def should_skip(link: str) -> bool:
-    return link.startswith(("http://", "https://", "mailto:", "#", "/"))
+    return link.startswith(("http://", "https://", "mailto:", "#", "/", "pathname://"))
 
 
 def link_target(path: Path, link: str) -> Path | None:

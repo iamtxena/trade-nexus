@@ -13,4 +13,4 @@ The API reference is generated from `/docs/architecture/specs/platform-api.opena
 - Generated artifact: `docs/portal-site/static/api/platform-api.html`
 - Regenerate command: `npm --prefix docs/portal-site run api:build`
 
-[Open the generated API reference](/api/platform-api.html)
+[Open the generated API reference](pathname:///api/platform-api.html)

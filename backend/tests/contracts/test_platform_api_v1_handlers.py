@@ -91,6 +91,47 @@ def test_strategy_and_backtest_routes() -> None:
     assert get_backtest.json()["backtest"]["id"] == backtest_id
 
 
+def test_backtest_request_rejects_empty_data_id_lists() -> None:
+    client = _client()
+
+    create_resp = client.post(
+        "/v1/strategies",
+        headers=HEADERS,
+        json={
+            "name": "Backtest Validation Strategy",
+            "description": "Strategy used to validate CreateBacktestRequest constraints.",
+            "provider": "xai",
+        },
+    )
+    assert create_resp.status_code == 201
+    strategy_id = create_resp.json()["strategy"]["id"]
+
+    empty_data_ids = client.post(
+        f"/v1/strategies/{strategy_id}/backtests",
+        headers=HEADERS,
+        json={
+            "dataIds": [],
+            "startDate": "2025-01-01",
+            "endDate": "2025-12-31",
+            "initialCash": 100000,
+        },
+    )
+    assert empty_data_ids.status_code == 422
+
+    empty_with_dataset_ids = client.post(
+        f"/v1/strategies/{strategy_id}/backtests",
+        headers=HEADERS,
+        json={
+            "dataIds": [],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "startDate": "2025-01-01",
+            "endDate": "2025-12-31",
+            "initialCash": 100000,
+        },
+    )
+    assert empty_with_dataset_ids.status_code == 422
+
+
 def test_execution_routes_and_idempotency() -> None:
     client = _client()
 

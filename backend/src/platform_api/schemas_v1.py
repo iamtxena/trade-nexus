@@ -137,10 +137,14 @@ class CreateBacktestRequest(BaseModel):
 
     @model_validator(mode="after")
     def _validate_data_source(self) -> "CreateBacktestRequest":
-        has_data_ids = bool(self.dataIds)
-        has_dataset_ids = bool(self.datasetIds)
+        has_data_ids = self.dataIds is not None
+        has_dataset_ids = self.datasetIds is not None
         if has_data_ids == has_dataset_ids:
             raise ValueError("Exactly one of dataIds or datasetIds must be provided.")
+        if self.dataIds is not None and len(self.dataIds) == 0:
+            raise ValueError("dataIds must include at least one id.")
+        if self.datasetIds is not None and len(self.datasetIds) == 0:
+            raise ValueError("datasetIds must include at least one id.")
         return self
 
 

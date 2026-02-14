@@ -1,0 +1,290 @@
+# Interface Definitions (v2)
+
+Source: `docs/architecture/INTERFACES.md`
+Topic: `architecture`
+Stable ID: `architecture_interfaces_v1`
+
+# Interface Definitions (v2)
+
+This document defines the interface model for the to-be architecture.
+
+## Canonical Sources
+
+1. Public API contract: `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/specs/platform-api.openapi.yaml`
+2. Governance rules: `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/API_CONTRACT_GOVERNANCE.md`
+3. Architecture boundary decisions: `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/TARGET_ARCHITECTURE_V2.md`
+4. Generated SDK source: `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/sdk/typescript` (package `@trade-nexus/sdk`)
+
+If any previous endpoint list conflicts with the OpenAPI file, the OpenAPI file wins.
+
+## Interface Layers
+
+```text
+External Clients
+  -> Platform API (public, versioned)
+    -> Domain Services (internal)
+      -> Adapters (internal provider contracts)
+        -> Lona / Execution Engine / Data Providers
+```
+
+## 1) Public Interface (Platform API)
+
+### Scope
+
+Public endpoints exposed to clients (CLI, web, agents):
+
+- health
+- research
+- strategies
+- backtests
+- datasets
+- deployments
+- portfolios
+- orders
+
+### Contract shape
+
+- URL versioning: `/v1/...`
+- Auth: bearer token or API key
+- Error envelope: standardized (`ErrorResponse`)
+- Idempotency: required for side-effecting POST endpoints
+- Pagination: cursor-based (`nextCursor`)
+
+See the OpenAPI file for exact request/response schemas.
+
+## 2) Internal Adapter Contracts
+
+These interfaces are implementation contracts inside the platform.
+
+### LonaAdapter
+
+```ts
+export interface LonaAdapter {
+  createStrategyFromDescription(input: {
+    name?: string;
+    description: string;
+    provider?: 'xai';
+    tenantId: string;
+    userId: string;
+  }): Promise<{
+    providerRefId: string;
+    name: string;
+    explanation?: string;
+  }>;
+
+  runBacktest(input: {
+    providerRefId: string;
+    dataIds: string[];
+    startDate: string;
+    endDate: string;
+    initialCash?: number;
+    tenantId: string;
+    userId: string;
+  }): Promise<{ providerReportId: string }>;
+
+  getBacktestReport(input: {
+    providerReportId: string;
+    tenantId: string;
+    userId: string;
+  }): Promise<{
+    status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+    metrics?: {
+      sharpeRatio?: number;
+      maxDrawdownPct?: number;
+      winRatePct?: number;
+      totalReturnPct?: number;
+    };
+    error?: string;
+  }>;
+
+  listSymbols(input: {
+    isGlobal?: boolean;
+    limit?: number;
+    tenantId: string;
+    userId: string;
+  }): Promise<Array<{ id: string; name: string }>>;
+
+  downloadMarketData(input: {
+    symbol: string;
+    interval: string;
+    startDate: string;
+    endDate: string;
+    tenantId: string;
+    userId: string;
+  }): Promise<{ dataId: string }>;
+}
+```
+
+### ExecutionAdapter
+
+```ts
+export interface ExecutionAdapter {
+  createDeployment(input: {
+    strategyId: string;
+    mode: 'paper' | 'live';
+    capital: number;
+    tenantId: string;
+    userId: string;
+    idempotencyKey: string;
+  }): Promise<{ providerDeploymentId: string; status: 'queued' | 'running' }>;
+
+  stopDeployment(input: {
+    providerDeploymentId: string;
+    reason?: string;
+    tenantId: string;
+    userId: string;
+  }): Promise<{ status: 'stopping' | 'stopped' }>;
+
+  getDeployment(input: {
+    providerDeploymentId: string;
+    tenantId: string;
+    userId: string;
+  }): Promise<{
+    status: 'queued' | 'running' | 'paused' | 'stopping' | 'stopped' | 'failed';
+    latestPnl?: number;
+  }>;
+
+  placeOrder(input: {
+    symbol: string;
+    side: 'buy' | 'sell';
+    type: 'market' | 'limit';
+    quantity: number;
+    price?: number;
+    deploymentId?: string;
+    tenantId: string;
+    userId: string;
+    idempotencyKey: string;
+  }): Promise<{ providerOrderId: string; status: 'pending' | 'filled' }>;
+
+  cancelOrder(input: {
+    providerOrderId: string;
+    tenantId: string;
+    userId: string;
+  }): Promise<{ status: 'cancelled' | 'failed' }>;
+
+  getPortfolioSnapshot(input: {
+    portfolioId: string;
+    tenantId: string;
+    userId: string;
+  }): Promise<{
+    cash: number;
+    totalValue: number;
+    pnlTotal?: number;
+    positions: Array<{
+      symbol: string;
+      quantity: number;
+      avgPrice: number;
+      currentPrice: number;
+      unrealizedPnl: number;
+    }>;
+  }>;
+}
+```
+
+### DataKnowledgeAdapter
+
+```ts
+export interface DataKnowledgeAdapter {
+  initUpload(input: {
+    filename: string;
+    contentType: string;
+    sizeBytes: number;
+    tenantId: string;
+    userId: string;
+  }): Promise<{
+    datasetId: string;
+    uploadUrl: string;
+  }>;
+
+  completeUpload(input: {
+    datasetId: string;
+    uploadToken?: string;
+    tenantId: string;
+    userId: string;
+  }): Promise<{ status: 'uploaded' | 'failed' }>;
+
+  validateDataset(input: {
+    datasetId: string;
+    columnMapping: Record<string, string>;
+    tenantId: string;
+    userId: string;
+  }): Promise<{ status: 'queued' | 'running' | 'completed' | 'failed' }>;
+
+  transformDataset(input: {
+    datasetId: string;
+    targetType: 'candles';
+    frequency: string;
+    tenantId: string;
+    userId: string;
+  }): Promise<{ outputDatasetId: string; status: 'queued' | 'running' | 'completed' | 'failed' }>;
+
+  publishToLona(input: {
+    datasetId: string;
+    mode: 'explicit' | 'just_in_time';
+    tenantId: string;
+    userId: string;
+  }): Promise<{ providerDataId: string; status: 'queued' | 'running' | 'completed' | 'failed' }>;
+
+  getMarketContext(input: {
+    assetClasses: string[];
+    tenantId: string;
+    userId: string;
+  }): Promise<{
+    regimeSummary: string;
+    signals: Array<{ name: string; value: string }>;
+  }>;
+}
+```
+
+## 3) Identity Contract
+
+Every request crossing module boundaries must carry:
+
+- `tenant_id` (string)
+- `user_id` (string)
+- `request_id` (string)
+
+No service is allowed to synthesize fallback identities for production flows.
+
+## 4) Async Resource Contract
+
+Long-running operations use resource status:
+
+- `queued`
+- `running`
+- `completed`
+- `failed`
+- `cancelled`
+
+Affected resources:
+
+- backtests
+- datasets
+- deployments
+- research jobs (if promoted to async)
+
+## 5) Compatibility Rules
+
+1. Public API changes follow semantic versioning and `/vN` URLs.
+2. Internal adapter interfaces can evolve, but each change must be released with adapter tests.
+3. Existing fields are never repurposed with different meaning.
+4. Deprecated fields must have a removal date.
+
+## 6) Team Independence Checklist
+
+A workstream is considered independent when:
+
+1. It depends only on OpenAPI schema and generated SDK/mocks.
+2. It does not import provider SDKs directly in client code.
+3. It passes contract tests against mock responses.
+4. It does not require undocumented endpoints.
+
+## 7) Migration Notes from Prototype Interfaces
+
+Prototype routes that do not match OpenAPI should be treated as `legacy` and excluded from new integrations.
+
+Examples of migration direction:
+
+- direct CLI calls to provider APIs -> replace with Platform API SDK calls,
+- provider-specific response payloads -> normalize to API schemas,
+- ad-hoc error payloads -> replace with `ErrorResponse`.

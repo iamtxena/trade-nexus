@@ -1,0 +1,37 @@
+name: llm-package-governance
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "scripts/docs/**"
+      - ".github/workflows/llm-package-governance.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - "scripts/docs/**"
+      - ".github/workflows/llm-package-governance.yml"
+
+jobs:
+  llm-package-governance:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate LLM package
+        run: python3 scripts/docs/generate_llm_package.py
+
+      - name: Validate LLM package
+        run: python3 scripts/docs/check_llm_package.py
+
+      - name: Verify generated LLM package is committed
+        run: git diff --exit-code docs/llm

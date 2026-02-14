@@ -12,8 +12,8 @@ The Knowledge Base provides hybrid storage (SQL + Vector) for:
 
 The Gate3 canonical schema is frozen at version `1.0` and implemented by:
 
-- migration: `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/supabase/migrations/002_kb_schema.sql`
-- runtime models: `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/backend/src/platform_api/knowledge/models.py`
+- migration: `supabase/migrations/002_kb_schema.sql`
+- runtime models: `backend/src/platform_api/knowledge/models.py`
 
 Canonical entities:
 

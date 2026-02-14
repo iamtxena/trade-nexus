@@ -7,7 +7,16 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.platform_api.knowledge.models import (
+        CorrelationEdgeRecord,
+        KnowledgePatternRecord,
+        LessonLearnedRecord,
+        MacroEventRecord,
+        MarketRegimeRecord,
+    )
 
 
 def utc_now() -> str:
@@ -106,33 +115,6 @@ class QualityReportRecord:
     status: str
     summary: str
     issues: list[dict[str, Any]] = field(default_factory=list)
-
-
-@dataclass
-class DataExportRecord:
-    id: str
-    status: str
-    dataset_ids: list[str]
-    asset_classes: list[str]
-    target: str = "backtest"
-    provider_export_ref: str | None = None
-    download_url: str | None = None
-    lineage: dict[str, Any] = field(default_factory=dict)
-    created_at: str = field(default_factory=utc_now)
-    updated_at: str = field(default_factory=utc_now)
-
-
-@dataclass
-class DriftEventRecord:
-    id: str
-    resource_type: str
-    resource_id: str
-    provider_ref_id: str | None
-    previous_state: str
-    provider_state: str
-    resolution: str
-    detected_at: str = field(default_factory=utc_now)
-    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class InMemoryStateStore:
@@ -237,14 +219,12 @@ class InMemoryStateStore:
         self.dataset_provider_map: dict[str, str] = {
             "dataset-btc-1h-2025": "lona-symbol-001",
         }
-        self.knowledge_patterns: dict[str, Any] = {}
-        self.market_regimes: dict[str, Any] = {}
-        self.lessons_learned: dict[str, Any] = {}
-        self.macro_events: dict[str, Any] = {}
-        self.correlations: dict[str, Any] = {}
+        self.knowledge_patterns: dict[str, KnowledgePatternRecord] = {}
+        self.market_regimes: dict[str, MarketRegimeRecord] = {}
+        self.lessons_learned: dict[str, LessonLearnedRecord] = {}
+        self.macro_events: dict[str, MacroEventRecord] = {}
+        self.correlations: dict[str, CorrelationEdgeRecord] = {}
         self.knowledge_ingestion_events: set[str] = set()
-        self.data_exports: dict[str, DataExportRecord] = {}
-        self.drift_events: dict[str, DriftEventRecord] = {}
 
         self._id_counters: dict[str, int] = {
             "strategy": 2,
@@ -257,8 +237,6 @@ class InMemoryStateStore:
             "knowledge_lesson": 1,
             "knowledge_event": 1,
             "knowledge_corr": 1,
-            "export": 1,
-            "drift": 1,
         }
         self._idempotency: dict[str, dict[str, tuple[str, dict[str, Any]]]] = {
             "deployments": {},
@@ -288,10 +266,6 @@ class InMemoryStateStore:
             return f"kbe-{idx:04d}"
         if scope == "knowledge_corr":
             return f"kbc-{idx:04d}"
-        if scope == "export":
-            return f"exp-{idx:04d}"
-        if scope == "drift":
-            return f"drift-{idx:04d}"
         return f"{scope}-{idx:03d}"
 
     @staticmethod

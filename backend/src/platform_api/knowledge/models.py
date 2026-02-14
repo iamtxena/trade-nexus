@@ -32,8 +32,8 @@ class MarketRegimeRecord:
     asset: str
     regime: str
     volatility: str
+    start_at: str
     indicators: dict[str, float] = field(default_factory=dict)
-    start_at: str = field(default_factory=utc_now)
     end_at: str | None = None
     notes: str | None = None
     schema_version: str = KB_SCHEMA_VERSION

@@ -1,6 +1,9 @@
 /* tslint:disable */
 /* eslint-disable */
 export * from './Backtest';
+export * from './BacktestDataExport';
+export * from './BacktestDataExportRequest';
+export * from './BacktestDataExportResponse';
 export * from './BacktestMetrics';
 export * from './BacktestResponse';
 export * from './BacktestStatus';
@@ -30,12 +33,20 @@ export * from './DeploymentStatus';
 export * from './ErrorResponse';
 export * from './ErrorResponseError';
 export * from './GetHealthV1200Response';
+export * from './KnowledgePattern';
+export * from './KnowledgePatternListResponse';
+export * from './KnowledgeRegime';
+export * from './KnowledgeRegimeResponse';
+export * from './KnowledgeSearchItem';
+export * from './KnowledgeSearchRequest';
+export * from './KnowledgeSearchResponse';
 export * from './LimitOrder';
 export * from './MarketOrder';
 export * from './MarketScanRequest';
 export * from './MarketScanRequestConstraints';
 export * from './MarketScanResponse';
 export * from './MarketScanResponseStrategyIdeasInner';
+export * from './MarketScanV2Response';
 export * from './Order';
 export * from './OrderListResponse';
 export * from './OrderResponse';

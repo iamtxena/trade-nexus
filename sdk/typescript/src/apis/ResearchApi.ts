@@ -18,6 +18,7 @@ import type {
   ErrorResponse,
   MarketScanRequest,
   MarketScanResponse,
+  MarketScanV2Response,
 } from '../models/index';
 import {
     ErrorResponseFromJSON,
@@ -26,9 +27,16 @@ import {
     MarketScanRequestToJSON,
     MarketScanResponseFromJSON,
     MarketScanResponseToJSON,
+    MarketScanV2ResponseFromJSON,
+    MarketScanV2ResponseToJSON,
 } from '../models/index';
 
 export interface PostMarketScanV1Request {
+    marketScanRequest: MarketScanRequest;
+    xRequestId?: string;
+}
+
+export interface PostMarketScanV2Request {
     marketScanRequest: MarketScanRequest;
     xRequestId?: string;
 }
@@ -55,6 +63,22 @@ export interface ResearchApiInterface {
      * Analyze market conditions and return strategy ideas
      */
     postMarketScanV1(requestParameters: PostMarketScanV1Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<MarketScanResponse>;
+
+    /**
+     * 
+     * @summary Analyze market with KB/data context and return strategy ideas
+     * @param {MarketScanRequest} marketScanRequest 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ResearchApiInterface
+     */
+    postMarketScanV2Raw(requestParameters: PostMarketScanV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<MarketScanV2Response>>;
+
+    /**
+     * Analyze market with KB/data context and return strategy ideas
+     */
+    postMarketScanV2(requestParameters: PostMarketScanV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<MarketScanV2Response>;
 
 }
 
@@ -115,6 +139,61 @@ export class ResearchApi extends runtime.BaseAPI implements ResearchApiInterface
      */
     async postMarketScanV1(requestParameters: PostMarketScanV1Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<MarketScanResponse> {
         const response = await this.postMarketScanV1Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Analyze market with KB/data context and return strategy ideas
+     */
+    async postMarketScanV2Raw(requestParameters: PostMarketScanV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<MarketScanV2Response>> {
+        if (requestParameters['marketScanRequest'] == null) {
+            throw new runtime.RequiredError(
+                'marketScanRequest',
+                'Required parameter "marketScanRequest" was null or undefined when calling postMarketScanV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/research/market-scan`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: MarketScanRequestToJSON(requestParameters['marketScanRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => MarketScanV2ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Analyze market with KB/data context and return strategy ideas
+     */
+    async postMarketScanV2(requestParameters: PostMarketScanV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<MarketScanV2Response> {
+        const response = await this.postMarketScanV2Raw(requestParameters, initOverrides);
         return await response.value();
     }
 

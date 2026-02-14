@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from src.platform_api.adapters.execution_adapter import InMemoryExecutionAdapter
 from src.platform_api.state_store import InMemoryStateStore
 
 
-async def test_execution_adapter_deployment_and_order_contracts() -> None:
+async def _run_execution_adapter_deployment_and_order_contracts() -> None:
     store = InMemoryStateStore()
     adapter = InMemoryExecutionAdapter(store)
 
@@ -58,7 +60,7 @@ async def test_execution_adapter_deployment_and_order_contracts() -> None:
     assert cancel["status"] in {"cancelled", "failed"}
 
 
-async def test_execution_adapter_portfolio_contracts() -> None:
+async def _run_execution_adapter_portfolio_contracts() -> None:
     store = InMemoryStateStore()
     adapter = InMemoryExecutionAdapter(store)
 
@@ -72,3 +74,11 @@ async def test_execution_adapter_portfolio_contracts() -> None:
     )
     assert snapshot is not None
     assert snapshot.cash >= 0
+
+
+def test_execution_adapter_deployment_and_order_contracts() -> None:
+    asyncio.run(_run_execution_adapter_deployment_and_order_contracts())
+
+
+def test_execution_adapter_portfolio_contracts() -> None:
+    asyncio.run(_run_execution_adapter_portfolio_contracts())

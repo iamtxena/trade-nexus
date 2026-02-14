@@ -34,10 +34,7 @@ Public endpoints exposed to clients (CLI, web, agents):
 - deployments
 - portfolios
 - orders
-
-Planned public endpoints (not part of current OpenAPI v1 freeze):
-
-- datasets (target issue: `#97`, target gate: `G2`)
+- datasets
 
 ### Contract shape
 

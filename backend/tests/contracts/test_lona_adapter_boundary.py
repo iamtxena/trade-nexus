@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from src.platform_api.adapters.lona_adapter import LonaAdapterBaseline
 
 
-async def test_lona_adapter_baseline_strategy_and_backtest_contract() -> None:
+async def _run_lona_adapter_baseline_strategy_and_backtest_contract() -> None:
     adapter = LonaAdapterBaseline(use_remote_provider=False)
 
     strategy = await adapter.create_strategy_from_description(
@@ -37,7 +39,7 @@ async def test_lona_adapter_baseline_strategy_and_backtest_contract() -> None:
     assert report.status in {"queued", "running", "completed", "failed", "cancelled"}
 
 
-async def test_lona_adapter_baseline_symbol_and_download_contract() -> None:
+async def _run_lona_adapter_baseline_symbol_and_download_contract() -> None:
     adapter = LonaAdapterBaseline(use_remote_provider=False)
 
     symbols = await adapter.list_symbols(
@@ -58,3 +60,11 @@ async def test_lona_adapter_baseline_symbol_and_download_contract() -> None:
         user_id="user-a",
     )
     assert "dataId" in download
+
+
+def test_lona_adapter_baseline_strategy_and_backtest_contract() -> None:
+    asyncio.run(_run_lona_adapter_baseline_strategy_and_backtest_contract())
+
+
+def test_lona_adapter_baseline_symbol_and_download_contract() -> None:
+    asyncio.run(_run_lona_adapter_baseline_symbol_and_download_contract())

@@ -101,7 +101,9 @@ Responsibilities:
 
 - market/news context retrieval,
 - normalized signals for research and strategy evaluation,
-- cached query endpoints for clients.
+- cached query endpoints for clients,
+- dataset lifecycle orchestration (upload/validate/transform/publish),
+- lineage from raw artifacts to backtest-ready datasets.
 
 Ownership: Data/Knowledge team.
 
@@ -126,6 +128,7 @@ Each external dependency is wrapped behind an internal interface.
 - `getBacktestReport(...)`
 - `listSymbols(...)`
 - `downloadMarketData(...)`
+- `publishDataset(...)` (connector path only, no Lona internal changes)
 
 ### Execution Adapter (replaceable)
 
@@ -135,6 +138,16 @@ Each external dependency is wrapped behind an internal interface.
 - `placeOrder(...)`
 - `cancelOrder(...)`
 - `getPortfolioSnapshot(...)`
+
+### Data Adapter (source of truth for datasets)
+
+- `initUpload(...)`
+- `completeUpload(...)`
+- `validateDataset(...)`
+- `transformDataset(...)`
+- `publishToLona(...)`
+- `getDataset(...)`
+- `listDatasets(...)`
 
 This allows replacing live-engine without breaking API consumers.
 
@@ -228,6 +241,11 @@ Required cross-cutting controls:
 - async workers for long tasks,
 - event stream/webhooks,
 - multi-region and disaster recovery.
+
+For detailed data-plane implementation and gate execution, see:
+
+- `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/DATA_LIFECYCLE_AND_LONA_CONNECTOR_V2.md`
+- `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/GATE_TEAM_EXECUTION_PLAYBOOK.md`
 
 ## Acceptance Criteria
 

@@ -128,6 +128,8 @@ All architecture documents are in `docs/architecture/`:
 | **[API_CONTRACT_GOVERNANCE.md](./architecture/API_CONTRACT_GOVERNANCE.md)** | Contract-first workflow and change policy |
 | **[GAP_ANALYSIS_ASIS_TOBE.md](./architecture/GAP_ANALYSIS_ASIS_TOBE.md)** | As-is to to-be gap closure plan |
 | **[DELIVERY_PLAN_AND_TEAM_TOPOLOGY.md](./architecture/DELIVERY_PLAN_AND_TEAM_TOPOLOGY.md)** | Team structure, repo creation plan, and ticket sectors |
+| **[DATA_LIFECYCLE_AND_LONA_CONNECTOR_V2.md](./architecture/DATA_LIFECYCLE_AND_LONA_CONNECTOR_V2.md)** | Large-file dataset lifecycle and non-invasive Lona publish connector |
+| **[GATE_TEAM_EXECUTION_PLAYBOOK.md](./architecture/GATE_TEAM_EXECUTION_PLAYBOOK.md)** | Gate-by-gate execution model and team update templates |
 | **[specs/platform-api.openapi.yaml](./architecture/specs/platform-api.openapi.yaml)** | Single source of truth API contract |
 | **[AGENT_ARCHITECTURE.md](./architecture/AGENT_ARCHITECTURE.md)** | Agent design, AI SDK patterns, Lona/Live Engine integration |
 | **[DATA_MODULE.md](./architecture/DATA_MODULE.md)** | Market data, news ingestion, contextual candles |

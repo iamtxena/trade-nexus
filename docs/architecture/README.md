@@ -26,6 +26,8 @@ If any document conflicts with implementation prototypes, treat these files as a
 | [API_CONTRACT_GOVERNANCE.md](./API_CONTRACT_GOVERNANCE.md) | How contracts are changed safely |
 | [GAP_ANALYSIS_ASIS_TOBE.md](./GAP_ANALYSIS_ASIS_TOBE.md) | As-is gaps and exact change proposals |
 | [DELIVERY_PLAN_AND_TEAM_TOPOLOGY.md](./DELIVERY_PLAN_AND_TEAM_TOPOLOGY.md) | Delegation model, repo plan, and ticket sectors |
+| [DATA_LIFECYCLE_AND_LONA_CONNECTOR_V2.md](./DATA_LIFECYCLE_AND_LONA_CONNECTOR_V2.md) | Large-file data lifecycle and Lona-compatible publish connector |
+| [GATE_TEAM_EXECUTION_PLAYBOOK.md](./GATE_TEAM_EXECUTION_PLAYBOOK.md) | Team/gate operating model and update templates |
 | [decisions/](./decisions/) | Architecture decision records (ADRs) for binding program choices |
 | [specs/platform-api.openapi.yaml](./specs/platform-api.openapi.yaml) | Canonical public API specification |
 

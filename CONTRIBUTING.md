@@ -70,6 +70,20 @@ Update API documentation for /predict endpoint
 - Run `uv run mypy src` for type checking
 - Follow PEP 8 conventions
 
+### Documentation Workflow
+
+Documentation updates are required for architecture, contract, and user workflow changes.
+
+1. Update relevant portal pages under `docs/portal/`.
+2. Regenerate API reference when contract changes:
+   - `npm --prefix docs/portal-site run api:build`
+3. Run docs validations locally:
+   - `python3 scripts/docs/check_frontmatter.py`
+   - `python3 scripts/docs/check_links.py`
+   - `python3 scripts/docs/check_stale_references.py`
+   - `npm --prefix docs/portal-site run build`
+4. Ensure `.github/workflows/docs-governance.yml` is green in PR.
+
 ## Pull Request Process
 
 1. **Create a feature branch** from `main`

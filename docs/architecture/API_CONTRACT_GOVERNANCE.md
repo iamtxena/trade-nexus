@@ -21,6 +21,17 @@ No public endpoint is considered valid unless represented in this file.
 5. Run contract tests.
 6. Merge only when spec, generated artifacts, and implementation are aligned.
 
+## Required Issue Templates
+
+Use structured templates for governance proposals:
+
+1. Architecture changes:
+   - `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/.github/ISSUE_TEMPLATE/architecture_change.yml`
+2. API contract changes:
+   - `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/.github/ISSUE_TEMPLATE/api_contract_change.yml`
+
+For breaking proposals, the issue must include an explicit architecture approval comment URL before merge.
+
 ## Versioning Rules
 
 1. URL versioning is mandatory (`/v1`, `/v2`, ...).

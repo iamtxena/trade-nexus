@@ -1,0 +1,76 @@
+name: API Contract Change
+description: Propose a Platform API contract change to OpenAPI and generated artifacts.
+title: "[API-CONTRACT] "
+labels: ["api-contract"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for OpenAPI contract updates. The canonical source is:
+        `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/specs/platform-api.openapi.yaml`
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What API contract change is proposed?
+      placeholder: Briefly describe endpoint/schema changes.
+    validations:
+      required: true
+  - type: dropdown
+    id: compatibility
+    attributes:
+      label: Compatibility Type
+      options:
+        - Additive (non-breaking)
+        - Breaking
+        - Documentation-only clarification
+    validations:
+      required: true
+  - type: textarea
+    id: endpoints
+    attributes:
+      label: Affected Endpoints / Operations
+      description: List OpenAPI paths and operationIds impacted.
+      placeholder: /v1/orders (createOrderV1), /v1/deployments (createDeploymentV1), ...
+    validations:
+      required: true
+  - type: textarea
+    id: schema_diff
+    attributes:
+      label: Schema Diff
+      description: Describe field additions/removals/type/enum changes.
+      placeholder: Added optional field X; changed enum Y...
+    validations:
+      required: true
+  - type: textarea
+    id: impact_and_migration
+    attributes:
+      label: Client Impact and Migration Plan
+      description: Who is impacted and how migration will be handled.
+      placeholder: SDK/client changes, rollout window, fallback strategy...
+    validations:
+      required: true
+  - type: input
+    id: architecture_approval_comment
+    attributes:
+      label: Architecture Approval Comment URL
+      description: Required for breaking changes; otherwise enter N/A.
+      placeholder: https://github.com/iamtxena/trade-nexus/issues/XX#issuecomment-YYYY
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation Commands and Evidence
+      description: Include lint, tests, mock, and SDK regeneration evidence.
+      placeholder: commands + links to CI runs/PRs
+    validations:
+      required: true
+  - type: input
+    id: linked_tracking_issue
+    attributes:
+      label: Linked Tracking Issue
+      description: Parent/child issue URL or number.
+      placeholder: https://github.com/iamtxena/trade-nexus/issues/24
+    validations:
+      required: true

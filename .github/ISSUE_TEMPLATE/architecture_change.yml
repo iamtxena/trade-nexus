@@ -1,0 +1,77 @@
+name: Architecture Change
+description: Propose a Trade Nexus architecture change requiring design review.
+title: "[ARCH] "
+labels: ["architecture"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for boundary, ownership, topology, or ADR-level architecture changes.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What architecture change is being proposed?
+      placeholder: Describe the proposed architecture change.
+    validations:
+      required: true
+  - type: dropdown
+    id: change_type
+    attributes:
+      label: Change Type
+      options:
+        - Boundary change
+        - Ownership / topology change
+        - ADR update
+        - Reliability / governance change
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: affected_artifacts
+    attributes:
+      label: Affected Architecture Artifacts
+      description: List docs/specs/ADRs/interfaces impacted by this change.
+      placeholder: docs/architecture/TARGET_ARCHITECTURE_V2.md, docs/architecture/INTERFACES.md, ...
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact Assessment
+      description: Explain team impact, dependency impact, and risks.
+      placeholder: Team A/B impact, dependency ordering impact, operational risk...
+    validations:
+      required: true
+  - type: textarea
+    id: rollout
+    attributes:
+      label: Rollout and Rollback Plan
+      description: How will this be delivered and reversed if needed?
+      placeholder: rollout steps, verification points, rollback trigger...
+    validations:
+      required: true
+  - type: input
+    id: linked_issue
+    attributes:
+      label: Linked Tracking Issue
+      description: Parent/child issue URL or number.
+      placeholder: https://github.com/iamtxena/trade-nexus/issues/76
+    validations:
+      required: true
+  - type: input
+    id: architecture_approval_comment
+    attributes:
+      label: Architecture Approval Comment URL
+      description: Required before merge for breaking proposals; otherwise enter N/A.
+      placeholder: https://github.com/iamtxena/trade-nexus/issues/XX#issuecomment-YYYY
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation Evidence
+      description: What tests/checks/docs prove this change is safe?
+      placeholder: CI runs, contract tests, review links...
+    validations:
+      required: true

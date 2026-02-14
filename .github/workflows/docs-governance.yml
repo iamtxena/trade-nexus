@@ -1,0 +1,45 @@
+name: docs-governance
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "docs/portal-site/**"
+      - "scripts/docs/**"
+      - "CONTRIBUTING.md"
+      - ".github/workflows/docs-governance.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - "docs/portal-site/**"
+      - "scripts/docs/**"
+      - "CONTRIBUTING.md"
+      - ".github/workflows/docs-governance.yml"
+
+jobs:
+  docs-governance:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install docs portal dependencies
+        run: npm --prefix docs/portal-site install
+
+      - name: Run docs governance checks (build + link + schema + stale refs)
+        run: npm --prefix docs/portal-site run ci

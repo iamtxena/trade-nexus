@@ -70,6 +70,23 @@ OC-01 confirms that OpenClaw uses the existing public surface and that all OpenC
 
 Conversation-specific API additions are handled separately in CONV-01 under additive `/v2` routes.
 
+## OC-02 Client Integration Reference
+
+Gate4 OC-02 introduces a concrete OpenClaw client integration module that consumes Platform API routes only:
+
+- `/backend/src/platform_api/clients/openclaw_client.py`
+
+Integration guarantees:
+
+1. Uses only documented `/v1/*` and `/v2/*` routes.
+2. Sets `channel=openclaw` for conversation session initialization.
+3. Preserves auth, tenant/user identity, request correlation, and idempotency headers.
+4. Does not include or require provider-direct HTTP calls.
+
+Contract verification:
+
+- `/backend/tests/contracts/test_openclaw_client_integration.py`
+
 ## Capability Matrix (Client-Lane View)
 
 | Capability | OpenClaw Allowed | Required Contract |

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 RiskPolicyMode = Literal["advisory", "enforced"]
 RiskActionOnBreach = Literal[
@@ -41,7 +42,18 @@ class RiskPolicyKillSwitch(BaseModel):
     enabled: bool
     triggered: bool = False
     triggeredAt: str | None = None
-    reason: str | None = None
+    reason: str | None = Field(default=None, min_length=1)
+
+    @field_validator("triggeredAt")
+    @classmethod
+    def _validate_triggered_at(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        try:
+            datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("triggeredAt must be an RFC3339 date-time string.") from exc
+        return value
 
 
 class RiskPolicy(BaseModel):
@@ -64,18 +76,23 @@ def validate_risk_policy_schema_document(schema: dict[str, Any]) -> None:
     if missing:
         raise RiskPolicyValidationError(f"Risk policy schema missing keys: {sorted(missing)}")
 
-    required_fields = set(schema.get("required", []))
+    required_list = schema.get("required", [])
+    if not isinstance(required_list, list):
+        raise RiskPolicyValidationError("Risk policy schema required field must be a list.")
+    required_fields = set(required_list)
     expected_fields = {"version", "mode", "limits", "killSwitch", "actionsOnBreach"}
     if not expected_fields.issubset(required_fields):
         raise RiskPolicyValidationError(
             "Risk policy schema must require version, mode, limits, killSwitch, and actionsOnBreach.",
         )
 
-    version_const = (
-        schema.get("properties", {})
-        .get("version", {})
-        .get("const")
-    )
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        raise RiskPolicyValidationError("Risk policy schema properties must be an object.")
+    version_property = properties.get("version")
+    if not isinstance(version_property, dict):
+        raise RiskPolicyValidationError("Risk policy schema properties.version must be an object.")
+    version_const = version_property.get("const")
     if not isinstance(version_const, str):
         raise RiskPolicyValidationError("Risk policy schema must define properties.version.const.")
     if not is_supported_policy_version(version_const):
@@ -109,7 +126,7 @@ def validate_risk_policy(policy: dict[str, Any]) -> RiskPolicy:
     expected_version = schema["properties"]["version"]["const"]
 
     try:
-        parsed = RiskPolicy.model_validate(policy)
+        parsed = RiskPolicy.model_validate(policy, strict=True)
     except ValidationError as exc:
         raise RiskPolicyValidationError(f"Invalid risk policy payload: {exc}") from exc
 

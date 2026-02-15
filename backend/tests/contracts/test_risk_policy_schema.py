@@ -77,10 +77,48 @@ def test_invalid_limits_are_rejected() -> None:
         validate_risk_policy(payload)
 
 
+def test_kill_switch_reason_requires_non_empty_string() -> None:
+    payload = _valid_policy()
+    kill_switch = payload["killSwitch"]
+    assert isinstance(kill_switch, dict)
+    kill_switch["reason"] = ""
+    with pytest.raises(RiskPolicyValidationError):
+        validate_risk_policy(payload)
+
+
+def test_kill_switch_triggered_at_requires_rfc3339_datetime() -> None:
+    payload = _valid_policy()
+    kill_switch = payload["killSwitch"]
+    assert isinstance(kill_switch, dict)
+    kill_switch["triggeredAt"] = "2026-99-99"
+    with pytest.raises(RiskPolicyValidationError):
+        validate_risk_policy(payload)
+
+
+def test_strict_types_reject_string_coercion() -> None:
+    payload = _valid_policy()
+    limits = payload["limits"]
+    assert isinstance(limits, dict)
+    limits["maxNotionalUsd"] = "250000"
+    kill_switch = payload["killSwitch"]
+    assert isinstance(kill_switch, dict)
+    kill_switch["enabled"] = "true"
+    with pytest.raises(RiskPolicyValidationError):
+        validate_risk_policy(payload)
+
+
 def test_schema_with_unknown_version_fails_contract_validation() -> None:
     schema = load_risk_policy_schema()
     mutated = copy.deepcopy(schema)
     mutated["properties"]["version"]["const"] = "risk-policy.v9"
+    with pytest.raises(RiskPolicyValidationError):
+        validate_risk_policy_schema_document(mutated)
+
+
+def test_schema_with_non_object_properties_fails_contract_validation() -> None:
+    schema = load_risk_policy_schema()
+    mutated = copy.deepcopy(schema)
+    mutated["properties"] = []
     with pytest.raises(RiskPolicyValidationError):
         validate_risk_policy_schema_document(mutated)
 

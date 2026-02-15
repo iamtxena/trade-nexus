@@ -176,3 +176,61 @@ def test_pretrade_allows_side_effect_when_policy_passes() -> None:
         assert adapter.place_order_calls == 1
 
     asyncio.run(_run())
+
+
+def test_pretrade_advisory_mode_does_not_block_side_effects() -> None:
+    async def _run() -> None:
+        service, store, adapter = await _create_service_and_store()
+        store.risk_policy["mode"] = "advisory"
+        store.risk_policy["killSwitch"] = {
+            "enabled": True,
+            "triggered": True,
+            "triggeredAt": "2026-02-15T00:00:00Z",
+            "reason": "advisory mode should not hard-block",
+        }
+        store.risk_policy["limits"]["maxNotionalUsd"] = 1
+        store.risk_policy["limits"]["maxPositionNotionalUsd"] = 1
+
+        response = await service.create_order(
+            request=CreateOrderRequest(
+                symbol="BTCUSDT",
+                side="buy",
+                type="limit",
+                quantity=1,
+                price=100_000,
+                deploymentId="dep-001",
+            ),
+            idempotency_key="idem-risk-order-004",
+            context=_context(),
+        )
+
+        assert response.order.id == "ord-risk-001"
+        assert adapter.place_order_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_pretrade_blocks_market_order_without_reference_price() -> None:
+    async def _run() -> None:
+        service, store, adapter = await _create_service_and_store()
+        store.portfolios = {}
+
+        try:
+            await service.create_order(
+                request=CreateOrderRequest(
+                    symbol="ETHUSDT",
+                    side="buy",
+                    type="market",
+                    quantity=0.5,
+                    deploymentId="dep-001",
+                ),
+                idempotency_key="idem-risk-order-005",
+                context=_context(),
+            )
+            raise AssertionError("Expected market order without reference price to be blocked.")
+        except PlatformAPIError as exc:
+            assert exc.status_code == 422
+            assert exc.code == "RISK_REFERENCE_PRICE_REQUIRED"
+        assert adapter.place_order_calls == 0
+
+    asyncio.run(_run())

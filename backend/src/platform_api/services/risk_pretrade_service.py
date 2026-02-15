@@ -23,6 +23,8 @@ class RiskPreTradeService:
         context: RequestContext,
     ) -> None:
         policy = self._validated_policy(context=context)
+        if policy.mode == "advisory":
+            return
         self._ensure_kill_switch_not_triggered(context=context)
 
         active_deployment_capital = sum(
@@ -56,9 +58,22 @@ class RiskPreTradeService:
         context: RequestContext,
     ) -> None:
         policy = self._validated_policy(context=context)
+        if policy.mode == "advisory":
+            return
         self._ensure_kill_switch_not_triggered(context=context)
 
-        order_notional = request.quantity * self._resolve_reference_price(request=request)
+        reference_price = self._resolve_reference_price(request=request)
+        if reference_price is None:
+            raise PlatformAPIError(
+                status_code=422,
+                code="RISK_REFERENCE_PRICE_REQUIRED",
+                message=(
+                    "Market order risk checks require a reference price; provide a limit price "
+                    "or ensure symbol context is available."
+                ),
+                request_id=context.request_id,
+            )
+        order_notional = request.quantity * reference_price
         if order_notional > policy.limits.maxPositionNotionalUsd:
             raise self._limit_breach(
                 context=context,
@@ -139,7 +154,7 @@ class RiskPreTradeService:
             request_id=context.request_id,
         )
 
-    def _resolve_reference_price(self, *, request: CreateOrderRequest) -> float:
+    def _resolve_reference_price(self, *, request: CreateOrderRequest) -> float | None:
         if request.price is not None:
             return request.price
 
@@ -148,4 +163,4 @@ class RiskPreTradeService:
             for position in portfolio.positions:
                 if position.symbol == request.symbol:
                     return position.current_price
-        return 0.0
+        return None

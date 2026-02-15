@@ -17,6 +17,7 @@ from src.platform_api.schemas_v2 import (
     CreateConversationTurnRequest,
 )
 from src.platform_api.state_store import (
+    ConversationNotificationRecord,
     ConversationSessionRecord,
     ConversationTurnRecord,
     InMemoryStateStore,
@@ -27,6 +28,7 @@ _MEMORY_VERSION = "conv-memory.v1"
 _MEMORY_MAX_RECENT_MESSAGES = 5
 _MEMORY_MAX_LINKED_ARTIFACTS = 25
 _MEMORY_MAX_SYMBOLS = 25
+_MAX_SUGGESTIONS_PER_TURN = 8
 
 
 class ConversationService:
@@ -44,6 +46,8 @@ class ConversationService:
         session_id = self._store.next_id("conversation_session")
         now = utc_now()
         metadata = dict(request.metadata)
+        metadata["notificationsOptIn"] = bool(metadata.get("notificationsOptIn", False))
+        metadata["notificationAuditCount"] = int(metadata.get("notificationAuditCount", 0))
         metadata["contextMemory"] = self._load_context_memory(context=context)
         record = ConversationSessionRecord(
             id=session_id,
@@ -94,17 +98,40 @@ class ConversationService:
             created_at=now,
             context=context,
         )
+        proactive_notifications = self._derive_proactive_notifications(
+            role=request.role,
+            message=request.message,
+            context_memory=context_memory,
+        )
+        proactive_suggestions = [notification["message"] for notification in proactive_notifications]
+        suggestions = self._append_unique(
+            self._derive_suggestions(role=request.role, message=request.message),
+            proactive_suggestions,
+            max_items=_MAX_SUGGESTIONS_PER_TURN,
+        )
         turn_metadata = dict(request.metadata)
         turn_metadata["contextMemorySnapshot"] = context_memory
+        turn_metadata["notificationsOptIn"] = self._notifications_opted_in(session=session)
+        turn_metadata["notifications"] = []
         turn = ConversationTurnRecord(
             id=self._store.next_id("conversation_turn"),
             session_id=session_id,
             role=request.role,
             message=request.message,
-            suggestions=self._derive_suggestions(role=request.role, message=request.message),
+            suggestions=suggestions,
             metadata=turn_metadata,
             created_at=now,
         )
+        if self._notifications_opted_in(session=session):
+            notification_ids = self._record_notifications(
+                session=session,
+                turn=turn,
+                context=context,
+                notifications=proactive_notifications,
+            )
+            turn.metadata["notifications"] = proactive_notifications
+            turn.metadata["notificationIds"] = notification_ids
+
         self._store.conversation_turns.setdefault(session_id, []).append(turn)
 
         session.updated_at = now
@@ -186,6 +213,10 @@ class ConversationService:
         if isinstance(existing, dict):
             return copy.deepcopy(existing)
         return self._default_context_memory()
+
+    @staticmethod
+    def _notifications_opted_in(*, session: ConversationSessionRecord) -> bool:
+        return bool(session.metadata.get("notificationsOptIn", False))
 
     def _update_context_memory(
         self,
@@ -315,3 +346,95 @@ class ConversationService:
         if "portfolio" in lowered:
             return "portfolio"
         return None
+
+    def _derive_proactive_notifications(
+        self,
+        *,
+        role: str,
+        message: str,
+        context_memory: dict[str, Any],
+    ) -> list[dict[str, str]]:
+        if role != "user":
+            return []
+
+        lowered = message.lower()
+        notifications: list[dict[str, str]] = []
+
+        kill_switch = self._store.risk_policy.get("killSwitch")
+        if isinstance(kill_switch, dict) and bool(kill_switch.get("triggered")):
+            notifications.append(
+                {
+                    "category": "risk",
+                    "severity": "critical",
+                    "message": "Kill-switch is active; execution side effects remain blocked until recovery.",
+                }
+            )
+
+        last_intent = context_memory.get("lastIntent")
+        if "deploy" in lowered or last_intent == "deploy":
+            notifications.append(
+                {
+                    "category": "execution",
+                    "severity": "info",
+                    "message": "Proactive check: confirm deployment mode, capital limits, and status before execution.",
+                }
+            )
+        if "order" in lowered or "buy" in lowered or "sell" in lowered or last_intent == "order":
+            notifications.append(
+                {
+                    "category": "risk",
+                    "severity": "warning",
+                    "message": "Proactive check: verify risk limits and include a stable idempotency key for order placement.",
+                }
+            )
+        if "drawdown" in lowered or "risk" in lowered or last_intent == "risk":
+            notifications.append(
+                {
+                    "category": "risk",
+                    "severity": "warning",
+                    "message": "Proactive check: review drawdown and daily loss thresholds before continuing.",
+                }
+            )
+
+        # Deduplicate notifications by exact message while preserving order.
+        unique: list[dict[str, str]] = []
+        seen_messages: set[str] = set()
+        for notification in notifications:
+            message_value = notification["message"]
+            if message_value in seen_messages:
+                continue
+            seen_messages.add(message_value)
+            unique.append(notification)
+        return unique
+
+    def _record_notifications(
+        self,
+        *,
+        session: ConversationSessionRecord,
+        turn: ConversationTurnRecord,
+        context: RequestContext,
+        notifications: list[dict[str, str]],
+    ) -> list[str]:
+        notification_ids: list[str] = []
+        for notification in notifications:
+            notification_id = self._store.next_id("conversation_notification")
+            record = ConversationNotificationRecord(
+                id=notification_id,
+                session_id=session.id,
+                turn_id=turn.id,
+                category=notification["category"],
+                severity=notification["severity"],
+                message=notification["message"],
+                request_id=context.request_id,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+                metadata={"channel": session.channel},
+                created_at=turn.created_at,
+            )
+            self._store.conversation_notifications[notification_id] = record
+            notification_ids.append(notification_id)
+
+        session.metadata["notificationAuditCount"] = int(session.metadata.get("notificationAuditCount", 0)) + len(
+            notification_ids
+        )
+        return notification_ids

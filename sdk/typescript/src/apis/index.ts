@@ -1,6 +1,7 @@
 /* tslint:disable */
 /* eslint-disable */
 export * from './BacktestsApi';
+export * from './ConversationsApi';
 export * from './DataApi';
 export * from './DatasetsApi';
 export * from './DeploymentsApi';

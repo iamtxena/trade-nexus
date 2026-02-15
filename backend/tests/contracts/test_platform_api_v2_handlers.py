@@ -70,6 +70,50 @@ def test_research_v2_route_includes_knowledge_and_context() -> None:
     assert payload["requestId"] == HEADERS["X-Request-Id"]
 
 
+def test_conversation_v2_routes() -> None:
+    client = _client()
+
+    create_session = client.post(
+        "/v2/conversations/sessions",
+        headers=HEADERS,
+        json={"channel": "openclaw", "topic": "risk-aware deployment"},
+    )
+    assert create_session.status_code == 201
+    session_payload = create_session.json()["session"]
+    assert session_payload["channel"] == "openclaw"
+    assert session_payload["status"] == "active"
+    session_id = session_payload["id"]
+
+    get_session = client.get(f"/v2/conversations/sessions/{session_id}", headers=HEADERS)
+    assert get_session.status_code == 200
+    assert get_session.json()["session"]["id"] == session_id
+
+    create_turn = client.post(
+        f"/v2/conversations/sessions/{session_id}/turns",
+        headers=HEADERS,
+        json={"role": "user", "message": "deploy strategy and place order"},
+    )
+    assert create_turn.status_code == 201
+    turn_payload = create_turn.json()["turn"]
+    assert turn_payload["sessionId"] == session_id
+    assert len(turn_payload["suggestions"]) >= 1
+
+    missing = client.post(
+        "/v2/conversations/sessions/conv-missing/turns",
+        headers=HEADERS,
+        json={"role": "user", "message": "hello"},
+    )
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "CONVERSATION_SESSION_NOT_FOUND"
+
+    null_topic = client.post(
+        "/v2/conversations/sessions",
+        headers=HEADERS,
+        json={"channel": "web", "topic": None},
+    )
+    assert null_topic.status_code == 422
+
+
 def test_backtest_feedback_is_ingested_into_kb() -> None:
     client = _client()
 

@@ -12,12 +12,17 @@ from src.platform_api.schemas_v1 import MarketScanRequest, RequestContext
 from src.platform_api.schemas_v2 import (
     BacktestDataExportRequest,
     BacktestDataExportResponse,
+    ConversationSessionResponse,
+    ConversationTurnResponse,
+    CreateConversationSessionRequest,
+    CreateConversationTurnRequest,
     KnowledgePatternListResponse,
     KnowledgeRegimeResponse,
     KnowledgeSearchRequest,
     KnowledgeSearchResponse,
     MarketScanV2Response,
 )
+from src.platform_api.services.conversation_service import ConversationService
 from src.platform_api.services.v2_services import DataV2Service, KnowledgeV2Service, ResearchV2Service
 
 router = APIRouter(prefix="/v2")
@@ -29,6 +34,7 @@ _research_service = ResearchV2Service(
     query_service=router_v1_module._knowledge_query_service,
     data_adapter=router_v1_module._data_knowledge_adapter,
 )
+_conversation_service = ConversationService(store=router_v1_module._store)
 
 
 async def _request_context(
@@ -105,3 +111,42 @@ async def post_market_scan_v2(
     context: ContextDep,
 ) -> MarketScanV2Response:
     return await _research_service.market_scan(request=request, context=context)
+
+
+@router.post(
+    "/conversations/sessions",
+    response_model=ConversationSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Conversations"],
+)
+async def create_conversation_session_v2(
+    request: CreateConversationSessionRequest,
+    context: ContextDep,
+) -> ConversationSessionResponse:
+    return await _conversation_service.create_session(request=request, context=context)
+
+
+@router.get(
+    "/conversations/sessions/{sessionId}",
+    response_model=ConversationSessionResponse,
+    tags=["Conversations"],
+)
+async def get_conversation_session_v2(
+    sessionId: str,
+    context: ContextDep,
+) -> ConversationSessionResponse:
+    return await _conversation_service.get_session(session_id=sessionId, context=context)
+
+
+@router.post(
+    "/conversations/sessions/{sessionId}/turns",
+    response_model=ConversationTurnResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Conversations"],
+)
+async def create_conversation_turn_v2(
+    sessionId: str,
+    request: CreateConversationTurnRequest,
+    context: ContextDep,
+) -> ConversationTurnResponse:
+    return await _conversation_service.create_turn(session_id=sessionId, request=request, context=context)

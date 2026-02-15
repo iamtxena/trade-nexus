@@ -36,6 +36,7 @@ Public endpoints exposed to clients (CLI, web, OpenClaw, and other agents):
 - health
 - research
 - knowledge (v2)
+- conversations (v2)
 - strategies
 - backtests
 - deployments
@@ -65,6 +66,22 @@ Required client-lane rules:
 3. OpenClaw does not call provider APIs directly (Lona, execution engines, data vendors).
 4. Provider calls remain isolated inside platform adapters.
 5. OpenClaw does not introduce dedicated `/v1/openclaw/*` endpoints.
+
+### Conversation Contract (CONV-01)
+
+Conversation behavior is modeled as additive `/v2` API contract, not ad-hoc client-only semantics.
+
+Conversation endpoints:
+
+- `POST /v2/conversations/sessions`
+- `GET /v2/conversations/sessions/{sessionId}`
+- `POST /v2/conversations/sessions/{sessionId}/turns`
+
+Conversation channel is explicit and normalized by schema enum:
+
+- `cli`
+- `web`
+- `openclaw`
 
 ## 2) Internal Adapter Contracts
 

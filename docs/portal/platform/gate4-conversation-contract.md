@@ -5,7 +5,7 @@ owners:
   - Team E
   - Team B
   - Team G
-updated: 2026-02-14
+updated: 2026-02-15
 ---
 
 # Gate4 Conversation Contract
@@ -47,6 +47,47 @@ Define one conversation contract shared by CLI, Web, and OpenClaw, with additive
 3. Opted-in sessions receive structured notification payloads in turn metadata.
 4. Every emitted notification writes an audit record with session/turn identity and severity/category metadata.
 5. Opted-out sessions still receive suggestions but no notification emission.
+
+## Sequence: Multi-Turn Contract Flow
+
+```mermaid
+sequenceDiagram
+    participant C as "Client (CLI/Web/OpenClaw)"
+    participant API as "Platform API /v2/conversations"
+    participant SVC as "ConversationService"
+    participant MEM as "Context Memory"
+    participant AUD as "Notification Audit"
+
+    C->>API: POST /sessions (channel, topic, metadata)
+    API->>SVC: create_session()
+    SVC->>MEM: initialize/load per-user memory
+    SVC-->>C: session(id, metadata.contextMemory)
+
+    C->>API: POST /sessions/{id}/turns (message)
+    API->>SVC: create_turn()
+    SVC->>MEM: update memory (intent, artifacts, symbols, retention)
+    SVC->>SVC: derive suggestions + proactive notifications
+    alt notificationsOptIn=true
+        SVC->>AUD: persist notification records
+    end
+    SVC-->>C: turn(suggestions, metadata.contextMemorySnapshot, metadata.notifications)
+```
+
+## Failure and Fallback Behavior
+
+| Condition | Expected Response | Client Handling |
+| --- | --- | --- |
+| Unknown session ID | `404 CONVERSATION_SESSION_NOT_FOUND` | Surface error with `requestId`; do not synthesize a replacement session |
+| Invalid turn payload | `422` validation error | Prompt user to correct payload; keep existing session state |
+| Notification opt-out | `notifications=[]` and no audit writes | Continue with suggestions-only UX |
+| Internal error | canonical `ErrorResponse` with `requestId` | Preserve correlation ID and retry through same Platform API route only |
+
+## Client Compatibility Notes
+
+1. OpenClaw must create sessions with `channel=openclaw`.
+2. CLI/Web/OpenClaw all consume identical `/v2/conversations/*` schemas.
+3. Clients should treat `contextMemory` and `contextMemorySnapshot` as additive metadata fields.
+4. Clients should not assume notification presence; respect opt-in behavior.
 
 ## Boundary Alignment
 

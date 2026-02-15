@@ -4,7 +4,7 @@ summary: Contract-defined OpenClaw client-lane boundaries and client integration
 owners:
   - Team E
   - Team G
-updated: 2026-02-14
+updated: 2026-02-15
 ---
 
 # Gate4 OpenClaw Client Lane
@@ -27,6 +27,29 @@ Define OpenClaw as a first-class client lane without changing provider boundarie
 - OpenClaw skill -> `trading-cli` -> Platform API
 
 Both paths are valid if they preserve auth, request correlation, and idempotency semantics defined in OpenAPI.
+
+## Sequence: OpenClaw Request Path
+
+```mermaid
+sequenceDiagram
+    participant OC as "OpenClaw Skill"
+    participant CLI as "trading-cli (optional)"
+    participant API as "Platform API"
+    participant ADP as "Platform Adapters"
+    participant PRV as "Providers"
+
+    alt SDK/API-first lane
+        OC->>API: Call /v1 and /v2 contracts
+    else CLI-mediated lane
+        OC->>CLI: Run CLI command
+        CLI->>API: Call /v1 and /v2 contracts
+    end
+    API->>ADP: Internal adapter call
+    ADP->>PRV: Provider API
+    PRV-->>ADP: Provider response
+    ADP-->>API: Normalized response
+    API-->>OC: Contract response + requestId
+```
 
 ## OC-02 Client Integration
 
@@ -61,6 +84,22 @@ Reference test:
 - OpenClaw -> live-engine direct calls
 - OpenClaw -> data provider direct calls
 - Introducing undocumented `/v1/openclaw/*` endpoints
+
+## Failure and Fallback Behavior
+
+| Condition | Expected Behavior | Required Guardrail |
+| --- | --- | --- |
+| Platform API returns contract error | Return canonical error to OpenClaw | Preserve `requestId` for triage |
+| Missing auth/idempotency headers | Reject request per API contract | Do not bypass to provider-direct calls |
+| CLI wrapper failure | Retry via Platform API path only | Keep boundary; no provider fallback |
+| Provider incident behind adapter | Platform API reports normalized error | OpenClaw remains client-only |
+
+## Client Compatibility Notes
+
+1. OpenClaw integrations can be implemented via SDK/API-first or CLI-mediated patterns.
+2. Both patterns must preserve `Authorization`/`X-API-Key`, tenant/user headers, and request correlation.
+3. Conversation bootstrapping must set `channel=openclaw`.
+4. Side-effecting writes must include idempotency keys where OpenAPI requires them.
 
 ## Traceability
 

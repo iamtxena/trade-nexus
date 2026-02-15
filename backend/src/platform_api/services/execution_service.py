@@ -30,6 +30,7 @@ from src.platform_api.schemas_v1 import (
 )
 from src.platform_api.services.execution_lifecycle_mapping import apply_deployment_transition, apply_order_transition
 from src.platform_api.services.reconciliation_service import ReconciliationService
+from src.platform_api.services.risk_pretrade_service import RiskPreTradeService
 from src.platform_api.state_store import DeploymentRecord, InMemoryStateStore, OrderRecord, utc_now
 
 ReconciliationScope = Literal["deployments", "orders"]
@@ -57,6 +58,7 @@ class ExecutionService:
             "deployments": 0.0,
             "orders": 0.0,
         }
+        self._risk_pretrade_service = RiskPreTradeService(store=store)
 
     async def list_deployments(
         self,
@@ -104,6 +106,7 @@ class ExecutionService:
         if cached is not None:
             return DeploymentResponse(requestId=context.request_id, deployment=Deployment(**cached))
 
+        self._risk_pretrade_service.ensure_deployment_allowed(request=request, context=context)
         provider_result = await self._execution_adapter.create_deployment(
             strategy_id=request.strategyId,
             mode=request.mode,
@@ -269,6 +272,7 @@ class ExecutionService:
         if cached is not None:
             return OrderResponse(requestId=context.request_id, order=Order(**cached))
 
+        self._risk_pretrade_service.ensure_order_allowed(request=request, context=context)
         provider_result = await self._execution_adapter.place_order(
             symbol=request.symbol,
             side=request.side,

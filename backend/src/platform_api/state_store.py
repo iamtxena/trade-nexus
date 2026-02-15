@@ -279,6 +279,26 @@ class InMemoryStateStore:
         self.drift_events: dict[str, DriftEventRecord] = {}
         self.conversation_sessions: dict[str, ConversationSessionRecord] = {}
         self.conversation_turns: dict[str, list[ConversationTurnRecord]] = {}
+        self.risk_policy: dict[str, Any] = {
+            "version": "risk-policy.v1",
+            "mode": "enforced",
+            "limits": {
+                "maxNotionalUsd": 1_000_000,
+                "maxPositionNotionalUsd": 250_000,
+                "maxDrawdownPct": 20.0,
+                "maxDailyLossUsd": 100_000,
+            },
+            "killSwitch": {
+                "enabled": True,
+                "triggered": False,
+            },
+            "actionsOnBreach": [
+                "reject_order",
+                "cancel_open_orders",
+                "halt_deployments",
+                "notify_ops",
+            ],
+        }
 
         self._id_counters: dict[str, int] = {
             "strategy": 2,

@@ -341,14 +341,25 @@ Version and validation rules:
 8. Runtime drawdown breaches (`latestPnl` vs deployment capital) must trigger kill-switch and halt active deployments before further side effects.
 9. Every risk decision path (`approved` and `blocked`) must persist an audit record with request identity and outcome metadata.
 
-## 7) Compatibility Rules
+## 7) Execution Command Boundary (AG-EXE-01)
+
+Execution side effects are mediated by an internal command layer that delegates only to `ExecutionAdapter`.
+
+Required rules:
+
+1. Side-effecting execution paths (`create_deployment`, `stop_deployment`, `place_order`, `cancel_order`) execute through command objects.
+2. The command layer is the only component that can call side-effecting adapter operations.
+3. Read-only status/snapshot calls can use adapter read methods directly.
+4. Risk gating remains mandatory before command execution for side-effecting actions.
+
+## 8) Compatibility Rules
 
 1. Public API changes follow semantic versioning and `/vN` URLs.
 2. Internal adapter interfaces can evolve, but each change must be released with adapter tests.
 3. Existing fields are never repurposed with different meaning.
 4. Deprecated fields must have a removal date.
 
-## 8) Team Independence Checklist
+## 9) Team Independence Checklist
 
 A workstream is considered independent when:
 
@@ -357,7 +368,7 @@ A workstream is considered independent when:
 3. It passes contract tests against mock responses.
 4. It does not require undocumented endpoints.
 
-## 9) Migration Notes from Prototype Interfaces
+## 10) Migration Notes from Prototype Interfaces
 
 Prototype routes that do not match OpenAPI should be treated as `legacy` and excluded from new integrations.
 

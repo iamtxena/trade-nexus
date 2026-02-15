@@ -29,6 +29,13 @@ from src.platform_api.schemas_v1 import (
     RequestContext,
 )
 from src.platform_api.services.execution_lifecycle_mapping import apply_deployment_transition, apply_order_transition
+from src.platform_api.services.execution_command_service import (
+    CancelOrderCommand,
+    CreateDeploymentCommand,
+    ExecutionCommandService,
+    PlaceOrderCommand,
+    StopDeploymentCommand,
+)
 from src.platform_api.services.risk_killswitch_service import RiskKillSwitchService
 from src.platform_api.services.reconciliation_service import ReconciliationService
 from src.platform_api.services.risk_pretrade_service import RiskPreTradeService
@@ -46,12 +53,16 @@ class ExecutionService:
         *,
         store: InMemoryStateStore,
         execution_adapter: ExecutionAdapter,
+        execution_command_service: ExecutionCommandService | None = None,
         reconciliation_service: ReconciliationService | None = None,
         knowledge_ingestion_pipeline: KnowledgeIngestionPipeline | None = None,
         reconciliation_min_interval_seconds: float = 5.0,
     ) -> None:
         self._store = store
         self._execution_adapter = execution_adapter
+        self._execution_command_service = execution_command_service or ExecutionCommandService(
+            execution_adapter=execution_adapter
+        )
         self._reconciliation_service = reconciliation_service
         self._knowledge_ingestion_pipeline = knowledge_ingestion_pipeline
         self._reconciliation_min_interval_seconds = max(0.0, reconciliation_min_interval_seconds)
@@ -109,13 +120,15 @@ class ExecutionService:
             return DeploymentResponse(requestId=context.request_id, deployment=Deployment(**cached))
 
         self._risk_pretrade_service.ensure_deployment_allowed(request=request, context=context)
-        provider_result = await self._execution_adapter.create_deployment(
-            strategy_id=request.strategyId,
-            mode=request.mode,
-            capital=request.capital,
-            tenant_id=context.tenant_id,
-            user_id=context.user_id,
-            idempotency_key=idempotency_key,
+        provider_result = await self._execution_command_service.create_deployment(
+            command=CreateDeploymentCommand(
+                strategy_id=request.strategyId,
+                mode=request.mode,
+                capital=request.capital,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+                idempotency_key=idempotency_key,
+            )
         )
 
         deployment_id = str(provider_result["deploymentId"])
@@ -174,14 +187,16 @@ class ExecutionService:
                 context=context,
             )
             if kill_switch_triggered and record.status not in {"stopping", "stopped", "failed"}:
-                stop_result = await self._execution_adapter.stop_deployment(
-                    provider_deployment_id=record.provider_ref_id,
-                    reason=(
-                        self._risk_killswitch_service.kill_switch_reason()
-                        or "Risk kill-switch drawdown breach."
-                    ),
-                    tenant_id=context.tenant_id,
-                    user_id=context.user_id,
+                stop_result = await self._execution_command_service.stop_deployment(
+                    command=StopDeploymentCommand(
+                        provider_deployment_id=record.provider_ref_id,
+                        reason=(
+                            self._risk_killswitch_service.kill_switch_reason()
+                            or "Risk kill-switch drawdown breach."
+                        ),
+                        tenant_id=context.tenant_id,
+                        user_id=context.user_id,
+                    )
                 )
                 record.status = apply_deployment_transition(
                     record.status,
@@ -218,11 +233,13 @@ class ExecutionService:
                 request_id=context.request_id,
             )
 
-        stop_result = await self._execution_adapter.stop_deployment(
-            provider_deployment_id=provider_ref,
-            reason=reason,
-            tenant_id=context.tenant_id,
-            user_id=context.user_id,
+        stop_result = await self._execution_command_service.stop_deployment(
+            command=StopDeploymentCommand(
+                provider_deployment_id=provider_ref,
+                reason=reason,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            )
         )
 
         previous_status = record.status
@@ -295,16 +312,18 @@ class ExecutionService:
             return OrderResponse(requestId=context.request_id, order=Order(**cached))
 
         self._risk_pretrade_service.ensure_order_allowed(request=request, context=context)
-        provider_result = await self._execution_adapter.place_order(
-            symbol=request.symbol,
-            side=request.side,
-            order_type=request.type,
-            quantity=request.quantity,
-            price=request.price,
-            deployment_id=request.deploymentId,
-            tenant_id=context.tenant_id,
-            user_id=context.user_id,
-            idempotency_key=idempotency_key,
+        provider_result = await self._execution_command_service.place_order(
+            command=PlaceOrderCommand(
+                symbol=request.symbol,
+                side=request.side,
+                order_type=request.type,
+                quantity=request.quantity,
+                price=request.price,
+                deployment_id=request.deploymentId,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+                idempotency_key=idempotency_key,
+            )
         )
 
         order_id = str(provider_result["orderId"])
@@ -373,10 +392,12 @@ class ExecutionService:
                 request_id=context.request_id,
             )
 
-        result = await self._execution_adapter.cancel_order(
-            provider_order_id=provider_ref,
-            tenant_id=context.tenant_id,
-            user_id=context.user_id,
+        result = await self._execution_command_service.cancel_order(
+            command=CancelOrderCommand(
+                provider_order_id=provider_ref,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            )
         )
         if result.get("status") == "failed":
             raise PlatformAPIError(

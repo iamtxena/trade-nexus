@@ -351,6 +351,8 @@ Required rules:
 2. The command layer is the only component that can call side-effecting adapter operations.
 3. Read-only status/snapshot calls can use adapter read methods directly.
 4. Risk gating remains mandatory before command execution for side-effecting actions.
+5. Command-layer idempotency is mandatory for deployment creation and order placement; duplicate keys replay prior response.
+6. Reusing an idempotency key with different command payload must fail with conflict (`IDEMPOTENCY_KEY_CONFLICT`).
 
 ## 8) Compatibility Rules
 

@@ -61,7 +61,8 @@ class ExecutionService:
         self._store = store
         self._execution_adapter = execution_adapter
         self._execution_command_service = execution_command_service or ExecutionCommandService(
-            execution_adapter=execution_adapter
+            execution_adapter=execution_adapter,
+            store=store,
         )
         self._reconciliation_service = reconciliation_service
         self._knowledge_ingestion_pipeline = knowledge_ingestion_pipeline
@@ -128,6 +129,7 @@ class ExecutionService:
                 tenant_id=context.tenant_id,
                 user_id=context.user_id,
                 idempotency_key=idempotency_key,
+                request_id=context.request_id,
             )
         )
 
@@ -323,6 +325,7 @@ class ExecutionService:
                 tenant_id=context.tenant_id,
                 user_id=context.user_id,
                 idempotency_key=idempotency_key,
+                request_id=context.request_id,
             )
         )
 

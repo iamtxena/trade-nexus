@@ -48,6 +48,7 @@ Execution side-effect operations are routed through internal command handlers be
 2. Order place/cancel commands are emitted via command layer abstractions.
 3. Command layer delegates side effects to `ExecutionAdapter`; provider APIs remain adapter-only.
 4. Read paths (list/get) remain non-command adapter reads.
+5. Deployment create and order place commands enforce idempotency replay semantics; key/payload conflicts fail deterministically.
 
 ## Traceability
 
@@ -56,4 +57,5 @@ Execution side-effect operations are routed through internal command handlers be
 - Execution command runtime: `/backend/src/platform_api/services/execution_command_service.py`
 - Contract tests: `/backend/tests/contracts/test_orchestrator_state_machine.py`
 - Contract tests: `/backend/tests/contracts/test_execution_command_layer.py`
+- Contract tests: `/backend/tests/contracts/test_execution_command_idempotency.py`
 - Related epics/issues: `#77`, `#138`, `#106`

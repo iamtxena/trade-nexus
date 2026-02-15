@@ -325,6 +325,9 @@ Transition rules:
 3. `executing` can move to `awaiting_tool`, `awaiting_user_confirmation`, `completed`, `failed`, or `cancelled`.
 4. `awaiting_tool` and `awaiting_user_confirmation` can return only to `executing`, or end in `failed`/`cancelled`.
 5. Terminal states are immutable: `completed`, `failed`, and `cancelled` cannot transition to any different state.
+6. Queue scheduling is deterministic: lower numeric priority executes first; same priority preserves FIFO order.
+7. Cancelling a queued item removes it from execution eligibility and keeps state immutable at `cancelled`.
+8. Cancelling an executing or awaiting item transitions directly to `cancelled` with explicit cancellation reason.
 
 ## 6) Risk Policy Schema Contract (AG-RISK-01)
 

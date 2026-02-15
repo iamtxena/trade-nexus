@@ -1,6 +1,6 @@
 ---
 title: Gate4 Orchestrator Controls
-summary: Deterministic orchestrator state machine and execution command boundary semantics.
+summary: Deterministic orchestrator state machine, queue/cancellation controls, and execution command boundary semantics.
 owners:
   - Team B
   - Team F
@@ -12,7 +12,7 @@ updated: 2026-02-14
 
 ## Objective
 
-Define a deterministic orchestrator lifecycle and execution command boundary so runtime behavior can be tested, audited, and safely hardened in follow-up issues.
+Define a deterministic orchestrator lifecycle, queue/cancellation controls, and execution command boundary so runtime behavior can be tested, audited, and safely hardened.
 
 ## State Contract
 
@@ -34,10 +34,20 @@ States:
 3. Terminal states are immutable: once `completed`, `failed`, or `cancelled`, no further transition is accepted.
 4. Invalid transitions must fail deterministically with explicit errors.
 
+## Queue and Cancellation Controls (AG-ORCH-02)
+
+Queue/cancellation runtime semantics are active:
+
+1. Work items enter queue from `received -> queued`.
+2. Queue scheduling is deterministic: lower numeric priority executes first; same priority is FIFO.
+3. `dequeue` transitions `queued -> executing`.
+4. Cancelling queued work prevents execution and records cancellation reason.
+5. Cancelling executing/awaiting work transitions directly to `cancelled`.
+6. Terminal states remain immutable under cancellation attempts.
+
 ## Gate4 Scope Boundary
 
-- This contract defines transitions only.
-- Queue/cancellation runtime processing lands in AG-ORCH-02 (`#47`).
+- AG-ORCH-01 transition contract and AG-ORCH-02 queue/cancellation controls are active.
 - Retry and failure budget policy lands in AG-ORCH-03 (`#48`).
 
 ## Execution Command Boundary (AG-EXE-01)
@@ -54,8 +64,10 @@ Execution side-effect operations are routed through internal command handlers be
 
 - Architecture interface contract: `/docs/architecture/INTERFACES.md`
 - Runtime implementation: `/backend/src/platform_api/services/orchestrator_state_machine.py`
+- Queue/cancellation runtime: `/backend/src/platform_api/services/orchestrator_queue_service.py`
 - Execution command runtime: `/backend/src/platform_api/services/execution_command_service.py`
 - Contract tests: `/backend/tests/contracts/test_orchestrator_state_machine.py`
+- Contract tests: `/backend/tests/contracts/test_orchestrator_queue_cancellation.py`
 - Contract tests: `/backend/tests/contracts/test_execution_command_layer.py`
 - Contract tests: `/backend/tests/contracts/test_execution_command_idempotency.py`
 - Related epics/issues: `#77`, `#138`, `#106`

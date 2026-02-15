@@ -334,6 +334,9 @@ Transition rules:
 6. Queue scheduling is deterministic: lower numeric priority executes first; same priority preserves FIFO order.
 7. Cancelling a queued item removes it from execution eligibility and keeps state immutable at `cancelled`.
 8. Cancelling an executing or awaiting item transitions directly to `cancelled` with explicit cancellation reason.
+9. Retry policy must be deterministic and budgeted by `max_attempts` and `max_failures`.
+10. Retry-eligible failures transition to retry-wait semantics (`awaiting_tool`) with bounded backoff metadata.
+11. Budget exhaustion transitions to terminal `failed` with explicit exhaustion reason.
 
 ## 6) Risk Policy Schema Contract (AG-RISK-01)
 

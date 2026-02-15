@@ -339,6 +339,8 @@ class InMemoryStateStore:
         self._idempotency: dict[str, dict[str, tuple[str, dict[str, Any]]]] = {
             "deployments": {},
             "orders": {},
+            "execution_commands_deployments": {},
+            "execution_commands_orders": {},
         }
 
     def next_id(self, scope: str) -> str:

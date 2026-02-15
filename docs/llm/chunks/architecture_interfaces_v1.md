@@ -68,6 +68,7 @@ Required client-lane rules:
 5. OpenClaw does not introduce dedicated `/v1/openclaw/*` endpoints.
 6. OpenClaw integration clients must target only canonical `/v1/*` and `/v2/*` Platform API routes.
 7. OpenClaw conversation sessions must be created with explicit `channel=openclaw`.
+8. OpenClaw flow validation covers research -> backtest -> deployment -> order/report through Platform API only.
 
 ### Conversation Contract (CONV-01)
 

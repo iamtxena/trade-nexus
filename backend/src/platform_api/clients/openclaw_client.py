@@ -127,6 +127,14 @@ class OpenClawClient:
         response.raise_for_status()
         return response.json()
 
+    async def get_backtest(self, *, backtest_id: str) -> dict[str, object]:
+        response = await self._client.get(
+            f"/v1/backtests/{backtest_id}",
+            headers=self._headers(),
+        )
+        response.raise_for_status()
+        return response.json()
+
     async def create_deployment(
         self,
         *,
@@ -139,6 +147,14 @@ class OpenClawClient:
             "/v1/deployments",
             json={"strategyId": strategy_id, "mode": mode, "capital": capital},
             headers=self._headers(idempotency_key=idempotency_key),
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def get_deployment(self, *, deployment_id: str) -> dict[str, object]:
+        response = await self._client.get(
+            f"/v1/deployments/{deployment_id}",
+            headers=self._headers(),
         )
         response.raise_for_status()
         return response.json()
@@ -168,6 +184,30 @@ class OpenClawClient:
             "/v1/orders",
             json=payload,
             headers=self._headers(idempotency_key=idempotency_key),
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def get_order(self, *, order_id: str) -> dict[str, object]:
+        response = await self._client.get(
+            f"/v1/orders/{order_id}",
+            headers=self._headers(),
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def list_portfolios(self) -> dict[str, object]:
+        response = await self._client.get(
+            "/v1/portfolios",
+            headers=self._headers(),
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def get_portfolio(self, *, portfolio_id: str) -> dict[str, object]:
+        response = await self._client.get(
+            f"/v1/portfolios/{portfolio_id}",
+            headers=self._headers(),
         )
         response.raise_for_status()
         return response.json()

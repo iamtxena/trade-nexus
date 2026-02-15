@@ -86,6 +86,7 @@ Integration guarantees:
 Contract verification:
 
 - `/backend/tests/contracts/test_openclaw_client_integration.py`
+- `/backend/tests/contracts/test_openclaw_e2e_flow.py`
 
 ## Capability Matrix (Client-Lane View)
 

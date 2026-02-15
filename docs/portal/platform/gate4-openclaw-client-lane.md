@@ -42,6 +42,19 @@ Behavior constraints:
 4. Includes `Idempotency-Key` for side-effecting operations that require it.
 5. Performs no provider-direct calls.
 
+## OC-03 End-to-End Flow Verification
+
+OpenClaw flow tests validate the client path across core lifecycle operations:
+
+1. Conversation session/turn bootstrap (`/v2/conversations/*`).
+2. Research and strategy/backtest path (`/v1/research/*`, `/v1/strategies/*`, `/v1/backtests/*`).
+3. Deployment/order execution path (`/v1/deployments/*`, `/v1/orders/*`).
+4. Reporting path (`/v1/portfolios/*`).
+
+Reference test:
+
+- `/backend/tests/contracts/test_openclaw_e2e_flow.py`
+
 ## Explicitly Forbidden
 
 - OpenClaw -> Lona API direct calls
@@ -55,5 +68,6 @@ Behavior constraints:
 - Interface boundary: `/docs/architecture/INTERFACES.md`
 - Public API source: `/docs/architecture/specs/platform-api.openapi.yaml`
 - OC-02 contract tests: `/backend/tests/contracts/test_openclaw_client_integration.py`
+- OC-03 e2e tests: `/backend/tests/contracts/test_openclaw_e2e_flow.py`
 - Parent epics: `#80`, `#106`, `#81`
 - Gate4 docs issue: `#137`

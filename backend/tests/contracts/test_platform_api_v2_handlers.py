@@ -87,6 +87,7 @@ def test_conversation_v2_routes() -> None:
     get_session = client.get(f"/v2/conversations/sessions/{session_id}", headers=HEADERS)
     assert get_session.status_code == 200
     assert get_session.json()["session"]["id"] == session_id
+    assert "contextMemory" in get_session.json()["session"]["metadata"]
 
     create_turn = client.post(
         f"/v2/conversations/sessions/{session_id}/turns",
@@ -97,6 +98,7 @@ def test_conversation_v2_routes() -> None:
     turn_payload = create_turn.json()["turn"]
     assert turn_payload["sessionId"] == session_id
     assert len(turn_payload["suggestions"]) >= 1
+    assert "contextMemorySnapshot" in turn_payload["metadata"]
 
     missing = client.post(
         "/v2/conversations/sessions/conv-missing/turns",

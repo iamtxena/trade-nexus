@@ -298,6 +298,7 @@ class InMemoryStateStore:
         self.risk_audit_trail: dict[str, RiskAuditRecord] = {}
         self.conversation_sessions: dict[str, ConversationSessionRecord] = {}
         self.conversation_turns: dict[str, list[ConversationTurnRecord]] = {}
+        self.conversation_user_memory: dict[str, dict[str, Any]] = {}
         self.risk_policy: dict[str, Any] = {
             "version": "risk-policy.v1",
             "mode": "enforced",

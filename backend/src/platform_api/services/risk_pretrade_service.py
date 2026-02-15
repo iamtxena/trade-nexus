@@ -97,7 +97,10 @@ class RiskPreTradeService:
             for position in portfolio.positions:
                 estimated_portfolio_notional += abs(position.quantity * position.current_price)
 
-        projected_notional = estimated_portfolio_notional + order_notional
+        if request.side == "sell":
+            projected_notional = max(0.0, estimated_portfolio_notional - order_notional)
+        else:
+            projected_notional = estimated_portfolio_notional + order_notional
         if projected_notional > policy.limits.maxNotionalUsd:
             raise self._limit_breach(
                 context=context,

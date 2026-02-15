@@ -234,3 +234,28 @@ def test_pretrade_blocks_market_order_without_reference_price() -> None:
         assert adapter.place_order_calls == 0
 
     asyncio.run(_run())
+
+
+def test_pretrade_sell_order_reduces_projected_notional() -> None:
+    async def _run() -> None:
+        service, store, adapter = await _create_service_and_store()
+        # Existing seeded portfolio carries notional around 19k; sell should reduce exposure.
+        store.risk_policy["limits"]["maxNotionalUsd"] = 20_000
+        store.risk_policy["limits"]["maxPositionNotionalUsd"] = 20_000
+
+        response = await service.create_order(
+            request=CreateOrderRequest(
+                symbol="BTCUSDT",
+                side="sell",
+                type="limit",
+                quantity=0.1,
+                price=50_000,
+                deploymentId="dep-001",
+            ),
+            idempotency_key="idem-risk-order-006",
+            context=_context(),
+        )
+        assert response.order.side == "sell"
+        assert adapter.place_order_calls == 1
+
+    asyncio.run(_run())

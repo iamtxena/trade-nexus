@@ -1,6 +1,6 @@
 ---
 title: Gate4 OpenClaw Client Lane
-summary: Contract-defined OpenClaw client-lane boundaries and integration constraints for Gate4 OC-01.
+summary: Contract-defined OpenClaw client-lane boundaries and client integration constraints for Gate4 OC-01 and OC-02.
 owners:
   - Team E
   - Team G
@@ -28,6 +28,20 @@ Define OpenClaw as a first-class client lane without changing provider boundarie
 
 Both paths are valid if they preserve auth, request correlation, and idempotency semantics defined in OpenAPI.
 
+## OC-02 Client Integration
+
+Reference OpenClaw client integration is implemented in:
+
+- `/backend/src/platform_api/clients/openclaw_client.py`
+
+Behavior constraints:
+
+1. Calls only canonical Platform API endpoints (`/v1/*`, `/v2/*`).
+2. Initializes conversation sessions with `channel=openclaw`.
+3. Preserves `Authorization`, `X-API-Key`, `X-Request-Id`, `X-Tenant-Id`, `X-User-Id`.
+4. Includes `Idempotency-Key` for side-effecting operations that require it.
+5. Performs no provider-direct calls.
+
 ## Explicitly Forbidden
 
 - OpenClaw -> Lona API direct calls
@@ -40,5 +54,6 @@ Both paths are valid if they preserve auth, request correlation, and idempotency
 - Architecture contract: `/docs/architecture/OPENCLAW_INTEGRATION.md`
 - Interface boundary: `/docs/architecture/INTERFACES.md`
 - Public API source: `/docs/architecture/specs/platform-api.openapi.yaml`
+- OC-02 contract tests: `/backend/tests/contracts/test_openclaw_client_integration.py`
 - Parent epics: `#80`, `#106`, `#81`
 - Gate4 docs issue: `#137`

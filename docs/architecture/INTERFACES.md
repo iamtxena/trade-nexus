@@ -60,6 +60,8 @@ Required client-lane rules:
 3. OpenClaw does not call provider APIs directly (Lona, execution engines, data vendors).
 4. Provider calls remain isolated inside platform adapters.
 5. OpenClaw does not introduce dedicated `/v1/openclaw/*` endpoints.
+6. OpenClaw integration clients must target only canonical `/v1/*` and `/v2/*` Platform API routes.
+7. OpenClaw conversation sessions must be created with explicit `channel=openclaw`.
 
 ### Conversation Contract (CONV-01)
 

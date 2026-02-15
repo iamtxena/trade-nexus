@@ -77,6 +77,13 @@ Conversation channel is explicit and normalized by schema enum:
 - `web`
 - `openclaw`
 
+Context memory rules (CONV-02):
+
+1. Conversation context memory is maintained per `tenant_id:user_id` and synchronized into session metadata.
+2. Multi-turn memory tracks recent messages, inferred intent, linked artifacts (strategy/deployment/order/portfolio/backtest/dataset), and symbols.
+3. Retention is explicit and bounded by memory policy (`maxRecentMessages`).
+4. Turn responses carry a `contextMemorySnapshot` in metadata for deterministic client behavior.
+
 ## 2) Internal Adapter Contracts
 
 These interfaces are implementation contracts inside the platform.

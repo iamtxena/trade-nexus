@@ -53,10 +53,18 @@ Runtime drawdown checks are enforced during deployment status refresh:
 3. Active deployments are sent to adapter stop flow immediately after breach detection.
 4. Once triggered, pre-trade side-effecting commands remain blocked.
 
+## Active Risk Audit Trail (AG-RISK-04)
+
+Risk decisions now persist to runtime audit storage for both allow and block outcomes:
+
+1. Pre-trade deployment and order checks record `approved`/`blocked` decisions.
+2. Runtime drawdown checks record approval decisions and breach-triggered blocks.
+3. Records include request identity (`request_id`, `tenant_id`, `user_id`), policy version/mode, and outcome code.
+4. Invalid policy/version paths fail closed and emit blocked audit records.
+
 ## Gate4 Scope Boundary
 
-- AG-RISK-01 schema + validator, AG-RISK-02 pre-trade enforcement, and AG-RISK-03 drawdown kill-switch handling are active.
-- Risk audit trail is in AG-RISK-04 (`#57`).
+- AG-RISK-01 schema + validator, AG-RISK-02 pre-trade enforcement, AG-RISK-03 drawdown kill-switch handling, and AG-RISK-04 risk audit trail are active.
 
 ## Traceability
 
@@ -64,9 +72,11 @@ Runtime drawdown checks are enforced during deployment status refresh:
 - Runtime validator: `/backend/src/platform_api/services/risk_policy.py`
 - Pre-trade gate runtime: `/backend/src/platform_api/services/risk_pretrade_service.py`
 - Drawdown kill-switch runtime: `/backend/src/platform_api/services/risk_killswitch_service.py`
+- Risk audit runtime: `/backend/src/platform_api/services/risk_audit_service.py`
 - Contract tests:
   - `/backend/tests/contracts/test_risk_policy_schema.py`
   - `/backend/tests/contracts/test_risk_pretrade_checks.py`
   - `/backend/tests/contracts/test_risk_killswitch_drawdown.py`
+  - `/backend/tests/contracts/test_risk_audit_trail.py`
 - Interface definition: `/docs/architecture/INTERFACES.md`
 - Related epics/issues: `#77`, `#138`, `#106`

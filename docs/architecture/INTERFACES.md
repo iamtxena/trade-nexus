@@ -333,6 +333,7 @@ Version and validation rules:
 6. Invalid schema structure or unsupported version must fail validation.
 7. Pre-trade execution side effects (`create_deployment`, `create_order`) must pass risk checks before adapter calls.
 8. Runtime drawdown breaches (`latestPnl` vs deployment capital) must trigger kill-switch and halt active deployments before further side effects.
+9. Every risk decision path (`approved` and `blocked`) must persist an audit record with request identity and outcome metadata.
 
 ## 7) Compatibility Rules
 

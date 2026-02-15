@@ -29,6 +29,7 @@ from src.platform_api.schemas_v1 import (
     RequestContext,
 )
 from src.platform_api.services.execution_lifecycle_mapping import apply_deployment_transition, apply_order_transition
+from src.platform_api.services.risk_killswitch_service import RiskKillSwitchService
 from src.platform_api.services.reconciliation_service import ReconciliationService
 from src.platform_api.services.risk_pretrade_service import RiskPreTradeService
 from src.platform_api.state_store import DeploymentRecord, InMemoryStateStore, OrderRecord, utc_now
@@ -59,6 +60,7 @@ class ExecutionService:
             "orders": 0.0,
         }
         self._risk_pretrade_service = RiskPreTradeService(store=store)
+        self._risk_killswitch_service = RiskKillSwitchService(store=store)
 
     async def list_deployments(
         self,
@@ -165,6 +167,26 @@ class ExecutionService:
             latest_pnl = provider_state.get("latestPnl")
             if isinstance(latest_pnl, (int, float)):
                 record.latest_pnl = float(latest_pnl)
+            kill_switch_triggered = self._risk_killswitch_service.evaluate_drawdown_breach(
+                deployment_id=record.id,
+                capital=record.capital,
+                latest_pnl=record.latest_pnl,
+                context=context,
+            )
+            if kill_switch_triggered and record.status not in {"stopping", "stopped", "failed"}:
+                stop_result = await self._execution_adapter.stop_deployment(
+                    provider_deployment_id=record.provider_ref_id,
+                    reason=(
+                        self._risk_killswitch_service.kill_switch_reason()
+                        or "Risk kill-switch drawdown breach."
+                    ),
+                    tenant_id=context.tenant_id,
+                    user_id=context.user_id,
+                )
+                record.status = apply_deployment_transition(
+                    record.status,
+                    str(stop_result.get("status", "stopping")),
+                )
             if record.status != previous_status:
                 record.updated_at = utc_now()
                 if self._knowledge_ingestion_pipeline is not None:

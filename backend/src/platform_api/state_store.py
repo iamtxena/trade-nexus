@@ -185,6 +185,21 @@ class ConversationTurnRecord:
     created_at: str = field(default_factory=utc_now)
 
 
+@dataclass
+class ConversationNotificationRecord:
+    id: str
+    session_id: str
+    turn_id: str
+    category: str
+    severity: str
+    message: str
+    request_id: str
+    tenant_id: str
+    user_id: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: str = field(default_factory=utc_now)
+
+
 class InMemoryStateStore:
     """Simple in-process persistence for Gate2 thin-slice behavior."""
 
@@ -299,6 +314,7 @@ class InMemoryStateStore:
         self.conversation_sessions: dict[str, ConversationSessionRecord] = {}
         self.conversation_turns: dict[str, list[ConversationTurnRecord]] = {}
         self.conversation_user_memory: dict[str, dict[str, Any]] = {}
+        self.conversation_notifications: dict[str, ConversationNotificationRecord] = {}
         self.risk_policy: dict[str, Any] = {
             "version": "risk-policy.v1",
             "mode": "enforced",
@@ -336,6 +352,7 @@ class InMemoryStateStore:
             "risk_audit": 1,
             "conversation_session": 1,
             "conversation_turn": 1,
+            "conversation_notification": 1,
         }
         self._idempotency: dict[str, dict[str, tuple[str, dict[str, Any]]]] = {
             "deployments": {},
@@ -377,6 +394,8 @@ class InMemoryStateStore:
             return f"conv-{idx:04d}"
         if scope == "conversation_turn":
             return f"turn-{idx:04d}"
+        if scope == "conversation_notification":
+            return f"note-{idx:04d}"
         return f"{scope}-{idx:03d}"
 
     @staticmethod

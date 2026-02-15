@@ -40,6 +40,14 @@ Define one conversation contract shared by CLI, Web, and OpenClaw, with additive
 4. Turn metadata includes `contextMemorySnapshot` so clients can render deterministic multi-turn context.
 5. Memory is isolated by user identity and does not leak across users.
 
+## Proactive Suggestions and Notifications (CONV-03)
+
+1. Turn processing emits proactive suggestions based on message intent and context-memory state.
+2. Notification delivery is controlled by session-level opt-in (`metadata.notificationsOptIn`).
+3. Opted-in sessions receive structured notification payloads in turn metadata.
+4. Every emitted notification writes an audit record with session/turn identity and severity/category metadata.
+5. Opted-out sessions still receive suggestions but no notification emission.
+
 ## Boundary Alignment
 
 - Conversation is a public contract concern, not a provider integration.

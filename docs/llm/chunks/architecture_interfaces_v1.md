@@ -90,6 +90,13 @@ Context memory rules (CONV-02):
 3. Retention is explicit and bounded by memory policy (`maxRecentMessages`).
 4. Turn responses carry a `contextMemorySnapshot` in metadata for deterministic client behavior.
 
+Proactive pipeline rules (CONV-03):
+
+1. Proactive suggestions are derived from turn intent and context memory signals.
+2. Proactive notifications require explicit session opt-in (`notificationsOptIn`).
+3. Emitted notifications are auditable with persisted records (session, turn, severity, category, request identity).
+4. Opt-out sessions continue receiving non-invasive suggestions without notification delivery.
+
 ## 2) Internal Adapter Contracts
 
 These interfaces are implementation contracts inside the platform.

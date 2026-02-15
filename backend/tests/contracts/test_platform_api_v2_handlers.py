@@ -76,7 +76,11 @@ def test_conversation_v2_routes() -> None:
     create_session = client.post(
         "/v2/conversations/sessions",
         headers=HEADERS,
-        json={"channel": "openclaw", "topic": "risk-aware deployment"},
+        json={
+            "channel": "openclaw",
+            "topic": "risk-aware deployment",
+            "metadata": {"notificationsOptIn": True},
+        },
     )
     assert create_session.status_code == 201
     session_payload = create_session.json()["session"]
@@ -99,6 +103,7 @@ def test_conversation_v2_routes() -> None:
     assert turn_payload["sessionId"] == session_id
     assert len(turn_payload["suggestions"]) >= 1
     assert "contextMemorySnapshot" in turn_payload["metadata"]
+    assert len(turn_payload["metadata"]["notifications"]) >= 1
 
     missing = client.post(
         "/v2/conversations/sessions/conv-missing/turns",

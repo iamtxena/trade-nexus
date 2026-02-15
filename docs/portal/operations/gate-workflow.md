@@ -33,6 +33,6 @@ Gate update:
 
 ## Parent Tracking
 
-- Parent `#106` is not closed by Docs Team.
-- Child issues are closed when their PR is merged and CI is green.
-- After `#108` merge, handoff to Review Team on `#109`.
+1. Parent epics are updated on every PR state transition (`STARTED`, `IN_REVIEW`, `MERGED`, `BLOCKED`).
+2. Child issues are closed only when linked PR is merged and required gates are green.
+3. Gate5 deployment/reliability tracking references `/docs/portal/operations/gate5-deployment-profile.md`.

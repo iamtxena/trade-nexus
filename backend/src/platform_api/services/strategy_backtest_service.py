@@ -40,16 +40,43 @@ class StrategyBacktestService:
         self._knowledge_ingestion_pipeline = knowledge_ingestion_pipeline
 
     async def market_scan(self, *, request: MarketScanRequest, context: RequestContext) -> MarketScanResponse:
+        symbol_snapshot: list[str] = []
+        fallback_note: str | None = None
+        try:
+            provider_symbols = await self._lona_adapter.list_symbols(
+                is_global=False,
+                limit=max(1, len(request.assetClasses)),
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+            )
+            symbol_snapshot = [
+                str(entry.get("name", "")).upper()
+                for entry in provider_symbols
+                if isinstance(entry, dict) and entry.get("name")
+            ]
+            if len(symbol_snapshot) == 0:
+                fallback_note = "Lona symbol snapshot was empty; using deterministic fallback symbols."
+        except AdapterError as exc:
+            fallback_note = f"Lona symbol snapshot unavailable ({exc.code}); using deterministic fallback symbols."
+
         ideas = [
             MarketScanIdea(
                 name=f"{asset.upper()} Momentum Scout",
                 assetClass=asset,
                 description=f"{asset.upper()} trend and volatility baseline scan.",
-                rationale="Thin-slice research baseline signal from platform heuristics.",
+                rationale=(
+                    "Thin-slice research baseline signal from platform heuristics. "
+                    f"Symbol anchor: {(symbol_snapshot[idx % len(symbol_snapshot)] if symbol_snapshot else f'{asset.upper()}USDT')}."
+                    + (f" {fallback_note}" if fallback_note else "")
+                ),
             )
-            for asset in request.assetClasses
+            for idx, asset in enumerate(request.assetClasses)
         ]
         regime = "Risk-on momentum with elevated volatility clusters."
+        if symbol_snapshot:
+            regime = f"{regime} Lona symbol snapshot: {', '.join(symbol_snapshot[:3])}."
+        elif fallback_note:
+            regime = f"{regime} {fallback_note}"
         return MarketScanResponse(requestId=context.request_id, regimeSummary=regime, strategyIdeas=ideas)
 
     async def list_strategies(

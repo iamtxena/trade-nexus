@@ -280,9 +280,23 @@ export interface DataKnowledgeAdapter {
   }): Promise<{
     regimeSummary: string;
     signals: Array<{ name: string; value: string }>;
+    mlSignals?: {
+      prediction?: { direction?: 'bullish' | 'bearish' | 'neutral'; confidence?: number; timeframe?: string };
+      sentiment?: { score?: number; confidence?: number };
+      volatility?: { predictedPct?: number; confidence?: number };
+      anomaly?: { isAnomaly?: boolean; score?: number };
+    };
+    generatedAt?: string;
   }>;
 }
 ```
+
+Market-context freshness and cache rules:
+
+1. Platform may cache `getMarketContext` responses per `(tenantId,userId,assetClasses)` key.
+2. Cache TTL must be explicit and deterministic (`PLATFORM_MARKET_CONTEXT_CACHE_TTL_SECONDS`).
+3. Cache keys are order-insensitive for `assetClasses`.
+4. Stale or missing model fields must not fail the request path; runtime must apply deterministic fallback.
 
 ## 3) Identity Contract
 

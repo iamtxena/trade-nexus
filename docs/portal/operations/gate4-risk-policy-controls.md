@@ -62,9 +62,38 @@ Risk decisions now persist to runtime audit storage for both allow and block out
 3. Records include request identity (`request_id`, `tenant_id`, `user_id`), policy version/mode, and outcome code.
 4. Invalid policy/version paths fail closed and emit blocked audit records.
 
+## Risk Control Point Matrix
+
+| Control Point | Behavior | Side-Effect Policy |
+| --- | --- | --- |
+| Deployment pre-trade check | Validate notional bounds + kill-switch state | Block on breach (`422/423`) before adapter call |
+| Order pre-trade check | Validate symbol/portfolio notional, daily loss, reference price | Block on breach (`422/423`) before adapter call |
+| Runtime drawdown monitor | Evaluate `latestPnl` vs drawdown limit | Trigger kill-switch and halt deployment path |
+| Policy validation | Enforce schema/version compatibility | Fail closed on invalid policy (`500`) |
+
+## Risk Decision and Audit Evidence Model
+
+Audit entries capture deterministic decision metadata:
+
+| Field | Description |
+| --- | --- |
+| `decision` | `approved` or `blocked` |
+| `check_type` | Risk control category (`pretrade_deployment`, `pretrade_order`, `runtime_drawdown`) |
+| `request_id` / `tenant_id` / `user_id` | Identity and correlation |
+| `policy_version` / `policy_mode` | Evaluated policy context |
+| `outcome_code` | Deterministic failure/signal code (`RISK_LIMIT_BREACH`, `RISK_KILL_SWITCH_ACTIVE`, etc.) |
+| `reason` | Human-readable rationale |
+| `metadata` | Structured context (notional, drawdown, symbol, deployment references) |
+
 ## Gate4 Scope Boundary
 
 - AG-RISK-01 schema + validator, AG-RISK-02 pre-trade enforcement, AG-RISK-03 drawdown kill-switch handling, and AG-RISK-04 risk audit trail are active.
+
+## Migration Notes
+
+1. All new side-effecting execution paths must call risk gates before command dispatch.
+2. Runtime additions should extend risk audit coverage rather than introducing non-audited checks.
+3. Policy schema changes must be versioned and validated before rollout.
 
 ## Traceability
 

@@ -12,7 +12,7 @@ updated: 2026-02-14
 
 ## Objective
 
-Define a deterministic orchestrator lifecycle, queue/cancellation controls, and execution command boundary so runtime behavior can be tested, audited, and safely hardened.
+Define a deterministic orchestrator lifecycle, queue/cancellation controls, retry/failure-budget policy, and execution command boundary so runtime behavior can be tested, audited, and safely hardened.
 
 ## State Contract
 
@@ -45,10 +45,19 @@ Queue/cancellation runtime semantics are active:
 5. Cancelling executing/awaiting work transitions directly to `cancelled`.
 6. Terminal states remain immutable under cancellation attempts.
 
+## Retry and Failure Budget Policy (AG-ORCH-03)
+
+Retry runtime semantics are deterministic and bounded:
+
+1. Retry decisions are constrained by explicit `max_attempts` and `max_failures`.
+2. Retry-eligible failures emit bounded exponential backoff delay metadata.
+3. Retry path remains non-terminal and maps to retry-wait execution state (`awaiting_tool`).
+4. Attempt/failure budget exhaustion emits terminal `failed` decision with deterministic reason codes.
+5. Terminal retry states are immutable for further attempt scheduling.
+
 ## Gate4 Scope Boundary
 
-- AG-ORCH-01 transition contract and AG-ORCH-02 queue/cancellation controls are active.
-- Retry and failure budget policy lands in AG-ORCH-03 (`#48`).
+- AG-ORCH-01 transition contract, AG-ORCH-02 queue/cancellation controls, and AG-ORCH-03 retry/failure budget policy are active.
 
 ## Execution Command Boundary (AG-EXE-01)
 
@@ -65,9 +74,11 @@ Execution side-effect operations are routed through internal command handlers be
 - Architecture interface contract: `/docs/architecture/INTERFACES.md`
 - Runtime implementation: `/backend/src/platform_api/services/orchestrator_state_machine.py`
 - Queue/cancellation runtime: `/backend/src/platform_api/services/orchestrator_queue_service.py`
+- Retry policy runtime: `/backend/src/platform_api/services/orchestrator_retry_policy.py`
 - Execution command runtime: `/backend/src/platform_api/services/execution_command_service.py`
 - Contract tests: `/backend/tests/contracts/test_orchestrator_state_machine.py`
 - Contract tests: `/backend/tests/contracts/test_orchestrator_queue_cancellation.py`
+- Contract tests: `/backend/tests/contracts/test_orchestrator_retry_policy.py`
 - Contract tests: `/backend/tests/contracts/test_execution_command_layer.py`
 - Contract tests: `/backend/tests/contracts/test_execution_command_idempotency.py`
 - Related epics/issues: `#77`, `#138`, `#106`

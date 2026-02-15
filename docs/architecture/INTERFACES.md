@@ -288,14 +288,35 @@ Affected resources:
 - deployments
 - research jobs (if promoted to async)
 
-## 5) Compatibility Rules
+## 5) Orchestrator State Contract (AG-ORCH-01)
+
+Orchestrator runtime state is deterministic and machine-readable with the following states:
+
+- `received`
+- `queued`
+- `executing`
+- `awaiting_tool`
+- `awaiting_user_confirmation`
+- `completed`
+- `failed`
+- `cancelled`
+
+Transition rules:
+
+1. `received` can advance to `queued`, `failed`, or `cancelled`.
+2. `queued` can advance to `executing`, `failed`, or `cancelled`.
+3. `executing` can move to `awaiting_tool`, `awaiting_user_confirmation`, `completed`, `failed`, or `cancelled`.
+4. `awaiting_tool` and `awaiting_user_confirmation` can return only to `executing`, or end in `failed`/`cancelled`.
+5. Terminal states are immutable: `completed`, `failed`, and `cancelled` cannot transition to any different state.
+
+## 6) Compatibility Rules
 
 1. Public API changes follow semantic versioning and `/vN` URLs.
 2. Internal adapter interfaces can evolve, but each change must be released with adapter tests.
 3. Existing fields are never repurposed with different meaning.
 4. Deprecated fields must have a removal date.
 
-## 6) Team Independence Checklist
+## 7) Team Independence Checklist
 
 A workstream is considered independent when:
 
@@ -304,7 +325,7 @@ A workstream is considered independent when:
 3. It passes contract tests against mock responses.
 4. It does not require undocumented endpoints.
 
-## 7) Migration Notes from Prototype Interfaces
+## 8) Migration Notes from Prototype Interfaces
 
 Prototype routes that do not match OpenAPI should be treated as `legacy` and excluded from new integrations.
 

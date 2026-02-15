@@ -174,5 +174,157 @@
     "workflows": [
       "research_enrichment"
     ]
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate4_conversation_contract_v1.md",
+    "chunk_hash": "d26c605e4216b9ff635d9b062cdd847bfa5452b636abd553a389195702094d0e",
+    "concepts": [
+      "conversation_contract",
+      "context_memory",
+      "proactive_notifications",
+      "channel_enum"
+    ],
+    "endpoints": [
+      "/v2/conversations/sessions",
+      "/v2/conversations/sessions/{sessionId}",
+      "/v2/conversations/sessions/{sessionId}/turns"
+    ],
+    "id": "portal_gate4_conversation_contract_v1",
+    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/80",
+    "owners": [
+      "Team E",
+      "Team B",
+      "Team G"
+    ],
+    "source": "docs/portal/platform/gate4-conversation-contract.md",
+    "source_hash": "b96f221e761a544079dbf7c7a024193b639ff5150325bad41fd2f92fbd46e86b",
+    "title": "Gate4 Conversation Contract",
+    "topic": "platform",
+    "workflows": [
+      "multiturn_conversation",
+      "proactive_suggestion_pipeline"
+    ]
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate4_incident_runbooks_v1.md",
+    "chunk_hash": "b9feb3275063c5cc8ad844e9971425d32a37586c13be5022bb047053a5fa417d",
+    "concepts": [
+      "incident_triage",
+      "kill_switch_recovery",
+      "audit_evidence",
+      "oncall_handoff"
+    ],
+    "endpoints": [
+      "/v2/conversations/sessions",
+      "/v2/conversations/sessions/{sessionId}/turns",
+      "/v1/deployments",
+      "/v1/orders"
+    ],
+    "id": "portal_gate4_incident_runbooks_v1",
+    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81",
+    "owners": [
+      "Team F",
+      "Team G",
+      "Team E",
+      "Team B"
+    ],
+    "source": "docs/portal/operations/gate4-incident-runbooks.md",
+    "source_hash": "dfc1f3c96efaf7fd545f68597c3036a02963146d7ca32b43894b08bda735b5aa",
+    "title": "Gate4 Incident Runbooks",
+    "topic": "operations",
+    "workflows": [
+      "incident_response",
+      "gate4_docs_review"
+    ]
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate4_openclaw_client_lane_v1.md",
+    "chunk_hash": "1f590a280d7c427e347d5460993e1f3297f143f6b42522dec8c71778feea68d1",
+    "concepts": [
+      "openclaw_lane",
+      "client_boundary",
+      "platform_api_only",
+      "adapter_boundary"
+    ],
+    "endpoints": [
+      "/v2/conversations/sessions",
+      "/v2/conversations/sessions/{sessionId}/turns",
+      "/v1/deployments",
+      "/v1/orders"
+    ],
+    "id": "portal_gate4_openclaw_client_lane_v1",
+    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/80",
+    "owners": [
+      "Team E",
+      "Team G"
+    ],
+    "source": "docs/portal/platform/gate4-openclaw-client-lane.md",
+    "source_hash": "7b1a30713ce6d1465b87371f2952c84f478a046c23920bdb1601e937c5546808",
+    "title": "Gate4 OpenClaw Client Lane",
+    "topic": "platform",
+    "workflows": [
+      "openclaw_sdk_lane",
+      "openclaw_cli_lane",
+      "client_boundary_enforcement"
+    ]
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate4_orchestrator_controls_v1.md",
+    "chunk_hash": "ee86a2360c8a4611df359ffaf29d27d9bd8e961d9927e07588bfe323084f5660",
+    "concepts": [
+      "orchestrator_state_machine",
+      "queue_cancellation",
+      "retry_budget",
+      "execution_command_layer"
+    ],
+    "endpoints": [
+      "/v1/deployments",
+      "/v1/orders"
+    ],
+    "id": "portal_gate4_orchestrator_controls_v1",
+    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/77",
+    "owners": [
+      "Team B",
+      "Team F",
+      "Team G"
+    ],
+    "source": "docs/portal/operations/gate4-orchestrator-controls.md",
+    "source_hash": "5b25d16f4f550757648b020a095592ef2fc44c21cfb1255f7815d0062e5ae841",
+    "title": "Gate4 Orchestrator Controls",
+    "topic": "operations",
+    "workflows": [
+      "orchestrator_state_transitions",
+      "runtime_retry_control"
+    ]
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate4_risk_policy_controls_v1.md",
+    "chunk_hash": "84db0ab2cf37d1d23e0646ef2dc04c0ca06cc2d92f38a36ce14e8929032d806e",
+    "concepts": [
+      "risk_policy_schema",
+      "pretrade_checks",
+      "drawdown_killswitch",
+      "risk_audit_trail"
+    ],
+    "endpoints": [
+      "/v1/deployments",
+      "/v1/orders",
+      "/v1/deployments/{deploymentId}/actions/stop"
+    ],
+    "id": "portal_gate4_risk_policy_controls_v1",
+    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/77",
+    "owners": [
+      "Team B",
+      "Team F",
+      "Team G"
+    ],
+    "source": "docs/portal/operations/gate4-risk-policy-controls.md",
+    "source_hash": "c011a25bfd10805e08aada6dfbfc519810dc38aab4c567070d45c73507206833",
+    "title": "Gate4 Risk Policy Controls",
+    "topic": "operations",
+    "workflows": [
+      "risk_gate_enforcement",
+      "drawdown_containment"
+    ]
   }
 ]

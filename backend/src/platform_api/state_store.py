@@ -145,6 +145,24 @@ class DriftEventRecord:
 
 
 @dataclass
+class RiskAuditRecord:
+    id: str
+    decision: str
+    check_type: str
+    resource_type: str
+    resource_id: str | None
+    request_id: str
+    tenant_id: str
+    user_id: str
+    policy_version: str | None = None
+    policy_mode: str | None = None
+    outcome_code: str | None = None
+    reason: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: str = field(default_factory=utc_now)
+
+
+@dataclass
 class ConversationSessionRecord:
     id: str
     channel: str
@@ -277,6 +295,7 @@ class InMemoryStateStore:
         self.knowledge_ingestion_events: set[str] = set()
         self.data_exports: dict[str, DataExportRecord] = {}
         self.drift_events: dict[str, DriftEventRecord] = {}
+        self.risk_audit_trail: dict[str, RiskAuditRecord] = {}
         self.conversation_sessions: dict[str, ConversationSessionRecord] = {}
         self.conversation_turns: dict[str, list[ConversationTurnRecord]] = {}
         self.risk_policy: dict[str, Any] = {
@@ -313,6 +332,7 @@ class InMemoryStateStore:
             "knowledge_corr": 1,
             "export": 1,
             "drift": 1,
+            "risk_audit": 1,
             "conversation_session": 1,
             "conversation_turn": 1,
         }
@@ -348,6 +368,8 @@ class InMemoryStateStore:
             return f"exp-{idx:04d}"
         if scope == "drift":
             return f"drift-{idx:04d}"
+        if scope == "risk_audit":
+            return f"risk-audit-{idx:04d}"
         if scope == "conversation_session":
             return f"conv-{idx:04d}"
         if scope == "conversation_turn":

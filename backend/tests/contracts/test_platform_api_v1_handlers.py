@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+
 from fastapi.testclient import TestClient
 
 from src.main import app
@@ -227,6 +229,92 @@ def test_execution_routes_and_idempotency() -> None:
     cancel_order = client.delete(f"/v1/orders/{order_id}", headers=HEADERS)
     assert cancel_order.status_code == 200
     assert cancel_order.json()["order"]["status"] == "cancelled"
+
+
+def test_create_deployment_returns_risk_limit_breach_error() -> None:
+    client = _client()
+    response = client.post(
+        "/v1/deployments",
+        headers={**HEADERS, "Idempotency-Key": "idem-risk-deploy-422-001"},
+        json={
+            "strategyId": "strat-001",
+            "mode": "paper",
+            "capital": 1_000_001,
+        },
+    )
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["requestId"] == HEADERS["X-Request-Id"]
+    assert payload["error"]["code"] == "RISK_LIMIT_BREACH"
+
+
+def test_create_deployment_returns_kill_switch_active_error() -> None:
+    client = _client()
+    original_policy = copy.deepcopy(router_v1._store.risk_policy)
+    try:
+        router_v1._store.risk_policy["killSwitch"]["triggered"] = True
+        response = client.post(
+            "/v1/deployments",
+            headers={**HEADERS, "Idempotency-Key": "idem-risk-deploy-423-001"},
+            json={
+                "strategyId": "strat-001",
+                "mode": "paper",
+                "capital": 20_000,
+            },
+        )
+    finally:
+        router_v1._store.risk_policy = original_policy
+
+    assert response.status_code == 423
+    payload = response.json()
+    assert payload["requestId"] == HEADERS["X-Request-Id"]
+    assert payload["error"]["code"] == "RISK_KILL_SWITCH_ACTIVE"
+
+
+def test_create_order_returns_risk_limit_breach_error() -> None:
+    client = _client()
+    response = client.post(
+        "/v1/orders",
+        headers={**HEADERS, "Idempotency-Key": "idem-risk-order-422-001"},
+        json={
+            "symbol": "BTCUSDT",
+            "side": "buy",
+            "type": "limit",
+            "quantity": 20.0,
+            "price": 100_000.0,
+            "deploymentId": "dep-001",
+        },
+    )
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["requestId"] == HEADERS["X-Request-Id"]
+    assert payload["error"]["code"] == "RISK_LIMIT_BREACH"
+
+
+def test_create_order_returns_kill_switch_active_error() -> None:
+    client = _client()
+    original_policy = copy.deepcopy(router_v1._store.risk_policy)
+    try:
+        router_v1._store.risk_policy["killSwitch"]["triggered"] = True
+        response = client.post(
+            "/v1/orders",
+            headers={**HEADERS, "Idempotency-Key": "idem-risk-order-423-001"},
+            json={
+                "symbol": "BTCUSDT",
+                "side": "buy",
+                "type": "limit",
+                "quantity": 0.1,
+                "price": 64_500,
+                "deploymentId": "dep-001",
+            },
+        )
+    finally:
+        router_v1._store.risk_policy = original_policy
+
+    assert response.status_code == 423
+    payload = response.json()
+    assert payload["requestId"] == HEADERS["X-Request-Id"]
+    assert payload["error"]["code"] == "RISK_KILL_SWITCH_ACTIVE"
 
 
 def test_dataset_routes_and_dataset_ref_backtests() -> None:

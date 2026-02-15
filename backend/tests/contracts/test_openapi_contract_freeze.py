@@ -87,6 +87,6 @@ def test_all_operations_define_unique_operation_ids() -> None:
 
 def test_error_component_responses_reference_error_envelope() -> None:
     spec = _spec_text()
-    for error_name in ("Error400", "Error401", "Error404", "Error409", "Error429"):
+    for error_name in ("Error400", "Error401", "Error404", "Error409", "Error422", "Error423", "Error429"):
         pattern = rf"{error_name}:\n(?:[ \t].*\n)*?[ \t]+\$ref: '#/components/schemas/ErrorResponse'"
         assert re.search(pattern, spec), f"{error_name} must reference ErrorResponse."

@@ -409,6 +409,10 @@ paths:
           $ref: '#/components/responses/Error400'
         '401':
           $ref: '#/components/responses/Error401'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '423':
+          $ref: '#/components/responses/Error423'
         '409':
           $ref: '#/components/responses/Error409'
 
@@ -634,6 +638,10 @@ paths:
           $ref: '#/components/responses/Error400'
         '401':
           $ref: '#/components/responses/Error401'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '423':
+          $ref: '#/components/responses/Error423'
         '409':
           $ref: '#/components/responses/Error409'
 
@@ -1365,6 +1373,18 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     Error409:
       description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Error422:
+      description: Unprocessable entity
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Error423:
+      description: Locked
       content:
         application/json:
           schema:

@@ -59,6 +59,26 @@ def test_error_envelope_is_defined() -> None:
     assert "error:" in spec
 
 
+def test_risk_rejection_responses_are_declared_for_write_routes() -> None:
+    spec = _spec_text()
+    error422_ref = "$ref: '#/components/responses/Error422'"
+    error423_ref = "$ref: '#/components/responses/Error423'"
+
+    deployment_post_block = spec.split("operationId: createDeploymentV1", maxsplit=1)[1].split(
+        "  /v1/deployments/{deploymentId}:",
+        maxsplit=1,
+    )[0]
+    order_post_block = spec.split("operationId: createOrderV1", maxsplit=1)[1].split(
+        "  /v1/orders/{orderId}:",
+        maxsplit=1,
+    )[0]
+
+    assert error422_ref in deployment_post_block
+    assert error423_ref in deployment_post_block
+    assert error422_ref in order_post_block
+    assert error423_ref in order_post_block
+
+
 def test_public_tags_are_declared() -> None:
     spec = _spec_text()
     for tag in (

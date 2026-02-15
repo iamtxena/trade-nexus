@@ -23,6 +23,9 @@ def test_openapi_v2_routes_are_registered() -> None:
         ("POST", "/v2/data/exports/backtest"),
         ("GET", "/v2/data/exports/{exportId}"),
         ("POST", "/v2/research/market-scan"),
+        ("POST", "/v2/conversations/sessions"),
+        ("GET", "/v2/conversations/sessions/{sessionId}"),
+        ("POST", "/v2/conversations/sessions/{sessionId}/turns"),
     }
     found: set[tuple[str, str]] = set()
     for route in app.routes:
@@ -66,4 +69,22 @@ def test_openapi_v2_runtime_status_codes() -> None:
             json={"assetClasses": ["crypto"], "capital": 25000},
         ).status_code
         == 200
+    )
+
+    create_session = client.post(
+        "/v2/conversations/sessions",
+        headers=HEADERS,
+        json={"channel": "openclaw", "topic": "swing-trading"},
+    )
+    assert create_session.status_code == 201
+    session_id = create_session.json()["session"]["id"]
+
+    assert client.get(f"/v2/conversations/sessions/{session_id}", headers=HEADERS).status_code == 200
+    assert (
+        client.post(
+            f"/v2/conversations/sessions/{session_id}/turns",
+            headers=HEADERS,
+            json={"role": "user", "message": "deploy my strategy after backtest"},
+        ).status_code
+        == 201
     )

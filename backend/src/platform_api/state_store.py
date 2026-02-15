@@ -144,6 +144,29 @@ class DriftEventRecord:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class ConversationSessionRecord:
+    id: str
+    channel: str
+    status: str = "active"
+    topic: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: str = field(default_factory=utc_now)
+    updated_at: str = field(default_factory=utc_now)
+    last_turn_at: str | None = None
+
+
+@dataclass
+class ConversationTurnRecord:
+    id: str
+    session_id: str
+    role: str
+    message: str
+    suggestions: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: str = field(default_factory=utc_now)
+
+
 class InMemoryStateStore:
     """Simple in-process persistence for Gate2 thin-slice behavior."""
 
@@ -254,6 +277,8 @@ class InMemoryStateStore:
         self.knowledge_ingestion_events: set[str] = set()
         self.data_exports: dict[str, DataExportRecord] = {}
         self.drift_events: dict[str, DriftEventRecord] = {}
+        self.conversation_sessions: dict[str, ConversationSessionRecord] = {}
+        self.conversation_turns: dict[str, list[ConversationTurnRecord]] = {}
 
         self._id_counters: dict[str, int] = {
             "strategy": 2,
@@ -268,6 +293,8 @@ class InMemoryStateStore:
             "knowledge_corr": 1,
             "export": 1,
             "drift": 1,
+            "conversation_session": 1,
+            "conversation_turn": 1,
         }
         self._idempotency: dict[str, dict[str, tuple[str, dict[str, Any]]]] = {
             "deployments": {},
@@ -301,6 +328,10 @@ class InMemoryStateStore:
             return f"exp-{idx:04d}"
         if scope == "drift":
             return f"drift-{idx:04d}"
+        if scope == "conversation_session":
+            return f"conv-{idx:04d}"
+        if scope == "conversation_turn":
+            return f"turn-{idx:04d}"
         return f"{scope}-{idx:03d}"
 
     @staticmethod

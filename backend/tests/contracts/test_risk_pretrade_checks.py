@@ -259,3 +259,32 @@ def test_pretrade_sell_order_reduces_projected_notional() -> None:
         assert adapter.place_order_calls == 1
 
     asyncio.run(_run())
+
+
+def test_pretrade_blocks_buy_when_projected_symbol_position_exceeds_limit() -> None:
+    async def _run() -> None:
+        service, store, adapter = await _create_service_and_store()
+        store.risk_policy["limits"]["maxPositionNotionalUsd"] = 20_000
+        store.risk_policy["limits"]["maxNotionalUsd"] = 1_000_000
+
+        # Seeded BTC position is about 19,440 notional; buy of 1,000 should breach 20,000 cap.
+        try:
+            await service.create_order(
+                request=CreateOrderRequest(
+                    symbol="BTCUSDT",
+                    side="buy",
+                    type="limit",
+                    quantity=0.02,
+                    price=50_000,
+                    deploymentId="dep-001",
+                ),
+                idempotency_key="idem-risk-order-007",
+                context=_context(),
+            )
+            raise AssertionError("Expected projected symbol position breach to block order.")
+        except PlatformAPIError as exc:
+            assert exc.status_code == 422
+            assert exc.code == "RISK_LIMIT_BREACH"
+        assert adapter.place_order_calls == 0
+
+    asyncio.run(_run())

@@ -74,12 +74,24 @@ class RiskPreTradeService:
                 request_id=context.request_id,
             )
         order_notional = request.quantity * reference_price
-        if order_notional > policy.limits.maxPositionNotionalUsd:
+
+        existing_symbol_notional = 0.0
+        for portfolio in self._store.portfolios.values():
+            for position in portfolio.positions:
+                if position.symbol == request.symbol:
+                    existing_symbol_notional += abs(position.quantity * position.current_price)
+
+        if request.side == "sell":
+            projected_symbol_notional = max(0.0, existing_symbol_notional - order_notional)
+        else:
+            projected_symbol_notional = existing_symbol_notional + order_notional
+
+        if projected_symbol_notional > policy.limits.maxPositionNotionalUsd:
             raise self._limit_breach(
                 context=context,
                 message=(
-                    "Order notional exceeds risk maxPositionNotionalUsd "
-                    f"({order_notional} > {policy.limits.maxPositionNotionalUsd})."
+                    "Projected symbol notional exceeds risk maxPositionNotionalUsd "
+                    f"({projected_symbol_notional} > {policy.limits.maxPositionNotionalUsd})."
                 ),
             )
 

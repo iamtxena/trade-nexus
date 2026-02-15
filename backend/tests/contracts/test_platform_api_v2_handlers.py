@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from src.main import app
+from src.platform_api import router_v1 as router_v1_module
 
 
 HEADERS = {
@@ -68,6 +69,54 @@ def test_research_v2_route_includes_knowledge_and_context() -> None:
     assert "knowledgeEvidence" in payload
     assert "dataContextSummary" in payload
     assert payload["requestId"] == HEADERS["X-Request-Id"]
+
+
+def test_research_v2_route_applies_ml_signal_scoring(monkeypatch) -> None:
+    async def _market_context_stub(**_: object) -> dict[str, object]:
+        return {
+            "regimeSummary": "Uptrend with stable liquidity.",
+            "signals": [{"name": "focus_assets", "value": "crypto"}],
+            "mlSignals": {
+                "prediction": {"direction": "bullish", "confidence": 0.8, "timeframe": "24h"},
+                "sentiment": {"score": 0.7, "confidence": 0.65},
+                "volatility": {"predictedPct": 35.0, "confidence": 0.7},
+                "anomaly": {"isAnomaly": False, "score": 0.1},
+            },
+        }
+
+    monkeypatch.setattr(router_v1_module._data_knowledge_adapter, "get_market_context", _market_context_stub)
+    client = _client()
+
+    response = client.post(
+        "/v2/research/market-scan",
+        headers=HEADERS,
+        json={"assetClasses": ["crypto"], "capital": 25000},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["strategyIdeas"][0]["rationale"].startswith("ML score=")
+    assert "fallback=none" in payload["dataContextSummary"]
+
+
+def test_research_v2_route_uses_deterministic_ml_fallback(monkeypatch) -> None:
+    async def _market_context_stub(**_: object) -> dict[str, object]:
+        return {
+            "regimeSummary": "Context service degraded; fallback expected.",
+            "signals": [{"name": "focus_assets", "value": "crypto"}],
+        }
+
+    monkeypatch.setattr(router_v1_module._data_knowledge_adapter, "get_market_context", _market_context_stub)
+    client = _client()
+
+    response = client.post(
+        "/v2/research/market-scan",
+        headers=HEADERS,
+        json={"assetClasses": ["crypto"], "capital": 25000},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["strategyIdeas"][0]["rationale"].startswith("ML score=")
+    assert "fallback=none" not in payload["dataContextSummary"]
 
 
 def test_conversation_v2_routes() -> None:

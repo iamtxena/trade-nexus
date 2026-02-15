@@ -15,10 +15,10 @@
   },
   {
     "chunk": "docs/llm/chunks/architecture_interfaces_v1.md",
-    "chunk_hash": "253e386d78f68d405a918d7d86c7a342bfd69dc3e171ed28e94604619cf3f349",
+    "chunk_hash": "373a46f7504f807a2ae12081110420ef211f20584e191f99cf0fc2340b78a4b1",
     "id": "architecture_interfaces_v1",
     "source": "docs/architecture/INTERFACES.md",
-    "source_hash": "e15f41e090d8a35ee3656dd06e00972a477025d09223a7161143dc54adecdd2e"
+    "source_hash": "ca8bb30e17545ec49bb2d5a7de5d170be6637e003ed40027f67e34784c5a555e"
   },
   {
     "chunk": "docs/llm/chunks/architecture_target_v2_v1.md",
@@ -43,10 +43,10 @@
   },
   {
     "chunk": "docs/llm/chunks/portal_gate3_research_loop_context_v1.md",
-    "chunk_hash": "ca2064da1af4b4d634e19d52c26e61872a3a6771377c8b519aab71ffcef84d8c",
+    "chunk_hash": "f1682c566d6ab86fd5cccf9bd678bdece350b7e31ac1ae4d585000031b2becde",
     "id": "portal_gate3_research_loop_context_v1",
     "source": "docs/portal/platform/gate3-research-loop-context.md",
-    "source_hash": "1178986aeb57c9e03210a2dab0fcb89b8889db430c1ac8f6cc316aaed06c5b28"
+    "source_hash": "135650c4d1625e8e55ac13b61b3637b7f5bb5a8a18ba478250699494c1d7646a"
   },
   {
     "chunk": "docs/llm/chunks/portal_gate4_conversation_contract_v1.md",

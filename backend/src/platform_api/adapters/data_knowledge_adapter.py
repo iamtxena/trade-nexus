@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+from time import monotonic
 from typing import Protocol
 
 import httpx
@@ -41,6 +43,131 @@ class DataKnowledgeAdapter(Protocol):
         request_id: str,
     ) -> dict[str, object]:
         ...
+
+
+class CachingDataKnowledgeAdapter:
+    """Caches market-context responses with deterministic freshness policy."""
+
+    def __init__(
+        self,
+        *,
+        inner_adapter: DataKnowledgeAdapter,
+        ttl_seconds: float = 120.0,
+        max_entries: int = 256,
+    ) -> None:
+        self._inner_adapter = inner_adapter
+        self._ttl_seconds = max(0.0, ttl_seconds)
+        self._max_entries = max(1, max_entries)
+        self._market_context_cache: dict[tuple[str, str, tuple[str, ...]], tuple[float, dict[str, object]]] = {}
+
+    async def create_backtest_export(
+        self,
+        *,
+        dataset_ids: list[str],
+        asset_classes: list[str],
+        tenant_id: str,
+        user_id: str,
+        request_id: str,
+    ) -> dict[str, object]:
+        return await self._inner_adapter.create_backtest_export(
+            dataset_ids=dataset_ids,
+            asset_classes=asset_classes,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            request_id=request_id,
+        )
+
+    async def get_backtest_export(
+        self,
+        *,
+        export_id: str,
+        tenant_id: str,
+        user_id: str,
+        request_id: str,
+    ) -> dict[str, object] | None:
+        return await self._inner_adapter.get_backtest_export(
+            export_id=export_id,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            request_id=request_id,
+        )
+
+    async def get_market_context(
+        self,
+        *,
+        asset_classes: list[str],
+        tenant_id: str,
+        user_id: str,
+        request_id: str,
+    ) -> dict[str, object]:
+        if self._ttl_seconds <= 0:
+            return await self._inner_adapter.get_market_context(
+                asset_classes=asset_classes,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                request_id=request_id,
+            )
+
+        cache_key = self._market_context_key(
+            asset_classes=asset_classes,
+            tenant_id=tenant_id,
+            user_id=user_id,
+        )
+        now = monotonic()
+        cached = self._market_context_cache.get(cache_key)
+        if cached is not None:
+            expires_at, payload = cached
+            if now <= expires_at:
+                return copy.deepcopy(payload)
+
+        payload = await self._inner_adapter.get_market_context(
+            asset_classes=asset_classes,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            request_id=request_id,
+        )
+        if not isinstance(payload, dict):
+            raise AdapterError("Trader-data market context response must be an object.", code="TRADER_DATA_BAD_RESPONSE")
+
+        self._evict_expired(now=now)
+        if len(self._market_context_cache) >= self._max_entries:
+            # Deterministic eviction: drop entry with the earliest expiration.
+            oldest = min(self._market_context_cache.items(), key=lambda item: item[1][0])[0]
+            self._market_context_cache.pop(oldest, None)
+        self._market_context_cache[cache_key] = (now + self._ttl_seconds, copy.deepcopy(payload))
+        return payload
+
+    def invalidate_market_context(
+        self,
+        *,
+        asset_classes: list[str],
+        tenant_id: str,
+        user_id: str,
+    ) -> None:
+        cache_key = self._market_context_key(
+            asset_classes=asset_classes,
+            tenant_id=tenant_id,
+            user_id=user_id,
+        )
+        self._market_context_cache.pop(cache_key, None)
+
+    def clear_market_context_cache(self) -> None:
+        self._market_context_cache.clear()
+
+    @staticmethod
+    def _market_context_key(
+        *,
+        asset_classes: list[str],
+        tenant_id: str,
+        user_id: str,
+    ) -> tuple[str, str, tuple[str, ...]]:
+        normalized_assets = tuple(sorted(asset.strip().lower() for asset in asset_classes))
+        return (tenant_id, user_id, normalized_assets)
+
+    def _evict_expired(self, *, now: float) -> None:
+        stale_keys = [key for key, (expires_at, _) in self._market_context_cache.items() if now > expires_at]
+        for key in stale_keys:
+            self._market_context_cache.pop(key, None)
 
 
 class InMemoryDataKnowledgeAdapter:
@@ -118,6 +245,25 @@ class InMemoryDataKnowledgeAdapter:
                 {"name": "liquidity", "value": "stable"},
                 {"name": "focus_assets", "value": ",".join(classes) if classes else "crypto"},
             ],
+            "mlSignals": {
+                "prediction": {
+                    "direction": "bullish",
+                    "confidence": 0.72,
+                    "timeframe": "24h",
+                },
+                "sentiment": {
+                    "score": 0.58,
+                    "confidence": 0.66,
+                },
+                "volatility": {
+                    "predictedPct": 44.2,
+                    "confidence": 0.61,
+                },
+                "anomaly": {
+                    "isAnomaly": False,
+                    "score": 0.08,
+                },
+            },
             "generatedAt": utc_now(),
         }
 

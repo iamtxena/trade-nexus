@@ -33,3 +33,13 @@ After backtest completion, runtime feedback is ingested into KB as `LessonLearne
 1. Full conversation UX rollout.
 2. OpenClaw expansion.
 3. Full ML decision loop rollout.
+
+## Gate5 Extension (ML Safety + Cache Freshness)
+
+Gate5 extends this flow with optional-safe ML enrichment while preserving deterministic behavior:
+
+1. Market context may include `mlSignals` (`prediction`, `sentiment`, `volatility`, `anomaly`).
+2. Research scoring validates signal shapes and confidence before use.
+3. Missing/invalid model output falls back to deterministic baseline scoring (no opaque execution side effects).
+4. Market context retrieval is cache-backed with explicit TTL and order-insensitive asset keying.
+5. Research responses expose fallback state in `dataContextSummary` for auditability.

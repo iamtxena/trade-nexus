@@ -129,12 +129,13 @@ class CachingDataKnowledgeAdapter:
         if not isinstance(payload, dict):
             raise AdapterError("Trader-data market context response must be an object.", code="TRADER_DATA_BAD_RESPONSE")
 
-        self._evict_expired(now=now)
+        store_time = monotonic()
+        self._evict_expired(now=store_time)
         if len(self._market_context_cache) >= self._max_entries:
             # Deterministic eviction: drop entry with the earliest expiration.
             oldest = min(self._market_context_cache.items(), key=lambda item: item[1][0])[0]
             self._market_context_cache.pop(oldest, None)
-        self._market_context_cache[cache_key] = (now + self._ttl_seconds, copy.deepcopy(payload))
+        self._market_context_cache[cache_key] = (store_time + self._ttl_seconds, copy.deepcopy(payload))
         return payload
 
     def invalidate_market_context(

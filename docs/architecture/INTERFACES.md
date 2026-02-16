@@ -300,7 +300,7 @@ export interface DataKnowledgeAdapter {
     };
     mlSignals?: {
       prediction?: { direction?: 'bullish' | 'bearish' | 'neutral'; confidence?: number; timeframe?: string };
-      sentiment?: { score?: number; confidence?: number };
+      sentiment?: { score?: number; confidence?: number; source?: string; sourceCount?: number; lookbackHours?: number };
       volatility?: { predictedPct?: number; confidence?: number };
       anomaly?: { isAnomaly?: boolean; score?: number };
     };

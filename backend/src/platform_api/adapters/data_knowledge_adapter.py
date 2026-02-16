@@ -191,6 +191,7 @@ def normalize_market_context_payload(payload: dict[str, object]) -> dict[str, ob
 
     if sentiment is not None:
         ml_signals["sentiment"] = sentiment
+        normalized.pop("sentiment", None)
         if "score" in sentiment:
             _upsert_signal(
                 normalized_signals,
@@ -516,7 +517,7 @@ class TraderDataHTTPAdapter:
             user_id=user_id,
             request_id=request_id,
         )
-        return normalize_market_context_payload(response)
+        return response
 
     async def _post(
         self,

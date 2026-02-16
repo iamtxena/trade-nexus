@@ -255,7 +255,6 @@ run_scenario_2() {
     fi
     rm -f "$react_stderr"
   done
-  DEACTIVATED_REVISIONS=()
 
   if [[ "$reactivation_failed" == "true" ]]; then
     echo "  WARNING: One or more revisions failed to reactivate — drill FAIL."
@@ -264,6 +263,7 @@ run_scenario_2() {
     record_result 2 "$name" "FAIL" "$(( end - start ))"
     return 0
   fi
+  DEACTIVATED_REVISIONS=()
 
   echo "Running smoke check (will trigger cold start)..."
 
@@ -515,7 +515,6 @@ run_scenario_4() {
     fi
     rm -f "$react_stderr"
   done
-  DEACTIVATED_REVISIONS=()
 
   if [[ "$reactivation_failed" == "true" ]]; then
     echo "  WARNING: One or more revisions failed to reactivate — drill FAIL."
@@ -524,6 +523,7 @@ run_scenario_4() {
     record_result 4 "$name" "FAIL" "$(( end - start ))"
     return 0
   fi
+  DEACTIVATED_REVISIONS=()
 
   echo "Revisions reactivated. Running smoke check for recovery..."
 

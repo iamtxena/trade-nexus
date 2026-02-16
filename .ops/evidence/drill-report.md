@@ -1,17 +1,26 @@
-# Ops Drill Report — 2026-02-16 (v6, all review findings resolved)
+# Ops Drill Report — 2026-02-16 (v7, all review findings resolved)
 
 > Operational readiness drill results for Trade Nexus backend.
-> Includes fixes from 5 review rounds (2 human + 3 automated).
+> Includes fixes from 6 review rounds (2 human + 4 automated).
 
 ## Drill Metadata
 
 | Field | Value |
 |-------|-------|
-| Date | 2026-02-16 14:34 UTC (last drill v4; code fixes v6) |
+| Date | 2026-02-16 14:34 UTC (last drill v4; code fixes v7) |
 | Operator | Claude Code (automated) |
 | Environment | Production (Azure Container Apps, West Europe) |
 | Active Revision | `trade-nexus-backend--0000028` |
-| Script Version | `ops-drill.sh` v6 (branch `ops/176-178-release-drills`) |
+| Script Version | `ops-drill.sh` v7 (branch `ops/176-178-release-drills`) |
+
+## Review Fixes Applied (Round 6 — Cursor + Greptile automated, post-392c146)
+
+| # | Source | Finding | Fix |
+|---|--------|---------|-----|
+| 1 | Greptile | Warm follow-up curl failure unhandled | Check `warm_exit` code before parsing latency; emit `warm_follow_up=FAILED` on error |
+| 2 | Greptile | `DEACTIVATED_REVISIONS` cleared before reactivation check (normal path) | Move clear AFTER the success check in scenarios 2/4 (not just abort paths) |
+| 3 | Cursor | `--url` without value crashes under `set -u` | Validate `$#` and non-flag value before reading `$2` |
+| 4 | Cursor | Warm follow-up errors corrupt latency measurement | Same fix as Greptile #1 — check curl exit code |
 
 ## Review Fixes Applied (Round 5 — Cursor + Greptile automated, post-8bd1546)
 
@@ -120,4 +129,4 @@
 
 ## Postmortem
 
-No drills failed. All 19 review findings (9 human + 10 automated) are resolved across 5 review rounds.
+No drills failed. All 22 review findings (9 human + 13 automated) are resolved across 6 review rounds.

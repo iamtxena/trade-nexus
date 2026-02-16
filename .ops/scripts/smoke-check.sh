@@ -24,6 +24,10 @@ trap cleanup EXIT
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --url)
+      if [[ $# -lt 2 || "$2" == --* ]]; then
+        echo "ERROR: --url requires a value" >&2
+        exit 1
+      fi
       BASE_URL="$2"
       shift 2
       ;;
@@ -154,15 +158,20 @@ check_endpoint() {
           --connect-timeout "$CONNECT_TIMEOUT" \
           --max-time "$MAX_TIME" \
           "$url" 2>&1)
+        local warm_exit=$?
         set -e
-        local warm_status warm_latency warm_ms
-        warm_status=$(echo "$warm_output" | awk '{print $1}')
-        warm_latency=$(echo "$warm_output" | awk '{print $2}')
-        warm_ms=$(awk "BEGIN {printf \"%.0f\", ${warm_latency} * 1000}")
-        echo "SMOKE_CHECK endpoint=${path} status=${warm_status} latency_ms=${warm_ms} cold_start=false (warm follow-up)"
-        # Track warm latency for SLO-2 evaluation
-        if (( warm_ms > WARM_LATENCY_MAX_MS )); then
-          WARM_LATENCY_MAX_MS=$warm_ms
+        if [[ $warm_exit -eq 0 ]]; then
+          local warm_status warm_latency warm_ms
+          warm_status=$(echo "$warm_output" | awk '{print $1}')
+          warm_latency=$(echo "$warm_output" | awk '{print $2}')
+          warm_ms=$(awk "BEGIN {printf \"%.0f\", ${warm_latency} * 1000}")
+          echo "SMOKE_CHECK endpoint=${path} status=${warm_status} latency_ms=${warm_ms} cold_start=false (warm follow-up)"
+          # Track warm latency for SLO-2 evaluation
+          if (( warm_ms > WARM_LATENCY_MAX_MS )); then
+            WARM_LATENCY_MAX_MS=$warm_ms
+          fi
+        else
+          echo "SMOKE_CHECK endpoint=${path} warm_follow_up=FAILED curl_exit=${warm_exit}"
         fi
       else
         # Non-cold-start successful response — track warm latency

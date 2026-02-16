@@ -75,6 +75,31 @@ def test_market_scan_reserves_budget_when_within_limits() -> None:
     asyncio.run(_run())
 
 
+def test_market_scan_allows_total_budget_boundary_without_float_precision_drift() -> None:
+    async def _run() -> None:
+        service, store, adapter = await _create_service_and_store()
+        store.research_provider_budget = {
+            "maxTotalCostUsd": 0.3,
+            "maxPerRequestCostUsd": 1.0,
+            "estimatedMarketScanCostUsd": 0.2,
+            "spentCostUsd": 0.1,
+        }
+
+        response = await service.market_scan(
+            request=MarketScanRequest(assetClasses=["crypto"], capital=25_000),
+            context=_context("req-budget-boundary"),
+        )
+
+        assert adapter.list_symbols_calls == 1
+        assert len(response.strategyIdeas) == 1
+        assert abs(float(store.research_provider_budget["spentCostUsd"]) - 0.3) < 1e-9
+        event = store.research_budget_events[-1]
+        assert event["decision"] == "reserved"
+        assert abs(float(event["spentAfterUsd"]) - 0.3) < 1e-9
+
+    asyncio.run(_run())
+
+
 def test_market_scan_fails_closed_when_per_request_budget_is_exceeded() -> None:
     async def _run() -> None:
         service, store, adapter = await _create_service_and_store()

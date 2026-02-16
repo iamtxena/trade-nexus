@@ -6,6 +6,7 @@ import asyncio
 import math
 import threading
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 
 from src.platform_api.adapters.lona_adapter import AdapterError, LonaAdapter
 from src.platform_api.errors import PlatformAPIError
@@ -26,6 +27,8 @@ from src.platform_api.schemas_v1 import (
 )
 from src.platform_api.services.backtest_resolution_service import BacktestResolutionService
 from src.platform_api.state_store import BacktestRecord, InMemoryStateStore, StrategyRecord, utc_now
+
+_BUDGET_DECIMAL_PLACES = Decimal("0.000001")
 
 
 @dataclass(frozen=True)
@@ -146,61 +149,62 @@ class StrategyBacktestService:
                     context=context,
                     decision="blocked",
                     reason="per_request_limit_breached",
-                    cost_usd=estimated_cost,
-                    spent_before_usd=spent_before,
-                    spent_after_usd=spent_before,
-                    max_total_usd=max_total,
-                    max_per_request_usd=max_per_request,
+                    cost_usd=float(estimated_cost),
+                    spent_before_usd=float(spent_before),
+                    spent_after_usd=float(spent_before),
+                    max_total_usd=float(max_total),
+                    max_per_request_usd=float(max_per_request),
                 )
                 raise PlatformAPIError(
                     status_code=429,
                     code="RESEARCH_PROVIDER_BUDGET_EXCEEDED",
                     message=(
                         "Research provider budget exceeded: "
-                        f"estimated market-scan cost {estimated_cost} exceeds maxPerRequestCostUsd {max_per_request}."
+                        "estimated market-scan cost "
+                        f"{float(estimated_cost)} exceeds maxPerRequestCostUsd {float(max_per_request)}."
                     ),
                     request_id=context.request_id,
                 )
 
-            spent_after = spent_before + estimated_cost
+            spent_after = self._normalize_budget_decimal(spent_before + estimated_cost)
             if spent_after > max_total:
                 self._record_research_budget_event(
                     context=context,
                     decision="blocked",
                     reason="total_budget_exceeded",
-                    cost_usd=estimated_cost,
-                    spent_before_usd=spent_before,
-                    spent_after_usd=spent_after,
-                    max_total_usd=max_total,
-                    max_per_request_usd=max_per_request,
+                    cost_usd=float(estimated_cost),
+                    spent_before_usd=float(spent_before),
+                    spent_after_usd=float(spent_after),
+                    max_total_usd=float(max_total),
+                    max_per_request_usd=float(max_per_request),
                 )
                 raise PlatformAPIError(
                     status_code=429,
                     code="RESEARCH_PROVIDER_BUDGET_EXCEEDED",
                     message=(
                         "Research provider budget exceeded: "
-                        f"projected spend {spent_after} exceeds maxTotalCostUsd {max_total}."
+                        f"projected spend {float(spent_after)} exceeds maxTotalCostUsd {float(max_total)}."
                     ),
                     request_id=context.request_id,
                 )
 
-            policy["spentCostUsd"] = spent_after
+            policy["spentCostUsd"] = float(spent_after)
             self._record_research_budget_event(
                 context=context,
                 decision="reserved",
                 reason="within_budget",
-                cost_usd=estimated_cost,
-                spent_before_usd=spent_before,
-                spent_after_usd=spent_after,
-                max_total_usd=max_total,
-                max_per_request_usd=max_per_request,
+                cost_usd=float(estimated_cost),
+                spent_before_usd=float(spent_before),
+                spent_after_usd=float(spent_after),
+                max_total_usd=float(max_total),
+                max_per_request_usd=float(max_per_request),
             )
             return MarketScanBudgetReservation(
-                cost_usd=estimated_cost,
-                spent_before_usd=spent_before,
-                spent_after_usd=spent_after,
-                max_total_usd=max_total,
-                max_per_request_usd=max_per_request,
+                cost_usd=float(estimated_cost),
+                spent_before_usd=float(spent_before),
+                spent_after_usd=float(spent_after),
+                max_total_usd=float(max_total),
+                max_per_request_usd=float(max_per_request),
             )
 
     async def _release_market_scan_budget(
@@ -218,19 +222,23 @@ class StrategyBacktestService:
             raw_spent = policy.get("spentCostUsd")
             if isinstance(raw_spent, bool) or not isinstance(raw_spent, (int, float)):
                 return
-            spent_before = float(raw_spent)
-            if not math.isfinite(spent_before):
+            spent_before_float = float(raw_spent)
+            if not math.isfinite(spent_before_float):
                 return
 
-            spent_after = max(0.0, spent_before - reservation.cost_usd)
-            policy["spentCostUsd"] = spent_after
+            spent_before = self._normalize_budget_decimal(Decimal(str(spent_before_float)))
+            released_cost = self._normalize_budget_decimal(Decimal(str(reservation.cost_usd)))
+            spent_after = self._normalize_budget_decimal(spent_before - released_cost)
+            if spent_after < Decimal("0"):
+                spent_after = Decimal("0")
+            policy["spentCostUsd"] = float(spent_after)
             self._record_research_budget_event(
                 context=context,
                 decision="released",
                 reason=reason,
-                cost_usd=reservation.cost_usd,
-                spent_before_usd=spent_before,
-                spent_after_usd=spent_after,
+                cost_usd=float(released_cost),
+                spent_before_usd=float(spent_before),
+                spent_after_usd=float(spent_after),
                 max_total_usd=reservation.max_total_usd,
                 max_per_request_usd=reservation.max_per_request_usd,
             )
@@ -241,7 +249,7 @@ class StrategyBacktestService:
         policy: dict[str, object],
         key: str,
         context: RequestContext,
-    ) -> float:
+    ) -> Decimal:
         if key not in policy:
             raise PlatformAPIError(
                 status_code=500,
@@ -267,7 +275,18 @@ class StrategyBacktestService:
                 message=f"Research provider budget field {key} must be a finite non-negative number.",
                 request_id=context.request_id,
             )
-        return value
+        try:
+            return self._normalize_budget_decimal(Decimal(str(value)))
+        except InvalidOperation:
+            raise PlatformAPIError(
+                status_code=500,
+                code="RESEARCH_PROVIDER_BUDGET_INVALID",
+                message=f"Research provider budget field {key} must be a finite non-negative number.",
+                request_id=context.request_id,
+            )
+
+    def _normalize_budget_decimal(self, value: Decimal) -> Decimal:
+        return value.quantize(_BUDGET_DECIMAL_PLACES)
 
     def _record_research_budget_event(
         self,

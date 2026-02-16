@@ -19,9 +19,19 @@ on:
       - "contracts/**"
       - "sdk/typescript/**"
       - ".github/workflows/contracts-governance.yml"
+  pull_request_review:
+    types:
+      - submitted
+      - edited
+      - dismissed
+  pull_request_review_thread:
+    types:
+      - resolved
+      - unresolved
 
 jobs:
   contract-governance:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     env:
       PYTHONPATH: backend
@@ -84,7 +94,7 @@ jobs:
         run: bash contracts/scripts/check-breaking-changes.sh
 
   review-governance:
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    if: github.event_name != 'push' && github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     permissions:
       contents: read

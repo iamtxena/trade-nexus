@@ -43,10 +43,10 @@
   },
   {
     "chunk": "docs/llm/chunks/portal_gate3_research_loop_context_v1.md",
-    "chunk_hash": "aadd467800578600b6e751392de5458347d00f330e9e4dd9f2f64ad06de1569e",
+    "chunk_hash": "f3c7cd392c354be590e3942cd0e062a57a234cb52b8280d82faf901d560247b1",
     "id": "portal_gate3_research_loop_context_v1",
     "source": "docs/portal/platform/gate3-research-loop-context.md",
-    "source_hash": "256046ce5eb150395ae4d496b10f1d647add17c99d61d758353aac0ca7b28494"
+    "source_hash": "447ecbec66903e0355d50685f95e28f8309ecf98897613aeaec7ac7608dd0ae3"
   },
   {
     "chunk": "docs/llm/chunks/portal_gate4_conversation_contract_v1.md",

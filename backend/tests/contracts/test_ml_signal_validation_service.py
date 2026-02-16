@@ -54,3 +54,20 @@ def test_ml_signal_validation_normalizes_out_of_range_values() -> None:
     assert signals.volatility_predicted_pct == 50.0
     assert signals.anomaly_score == 0.0
     assert signals.used_fallback is True
+
+
+def test_ml_signal_validation_clamps_high_sentiment_percentages() -> None:
+    service = MLSignalValidationService()
+    signals = service.validate(
+        {
+            "mlSignals": {
+                "prediction": {"direction": "bullish", "confidence": 0.8},
+                "sentiment": {"score": 240, "confidence": 0.9},
+                "volatility": {"predictedPct": 25.0, "confidence": 0.7},
+                "anomaly": {"isAnomaly": False, "score": 0.1},
+            }
+        }
+    )
+
+    assert signals.sentiment_score == 1.0
+    assert "sentiment_score_clamped" in signals.fallback_reasons

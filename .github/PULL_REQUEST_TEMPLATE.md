@@ -43,3 +43,5 @@ Add screenshots for UI changes.
 - [ ] I have updated documentation as needed
 - [ ] My changes generate no new warnings
 - [ ] Any dependent changes have been merged
+- [ ] I confirmed all PR review threads are resolved before requesting merge
+- [ ] For Platform API/runtime contract changes, Cursor and Greptile reviews are completed

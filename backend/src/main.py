@@ -7,8 +7,6 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api.lona_routes import router as lona_router
-from src.api.routes import router
 from src.platform_api.errors import (
     PlatformAPIError,
     platform_api_error_handler,
@@ -19,6 +17,29 @@ from src.platform_api.router_v2 import router as platform_api_v2_router
 from src.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+_legacy_router_import_error: ModuleNotFoundError | None = None
+try:
+    from src.api.lona_routes import router as lona_router
+    from src.api.routes import router as legacy_router
+except ModuleNotFoundError as exc:
+    optional_legacy_deps = {
+        "langchain",
+        "langchain_core",
+        "langchain_xai",
+        "numpy",
+        "pandas",
+        "scikit-learn",
+        "sklearn",
+        "torch",
+    }
+    if exc.name not in optional_legacy_deps:
+        raise
+    # Legacy /api routes depend on optional ML stack packages that are not required
+    # for Platform API contract and runtime checks.
+    lona_router = None
+    legacy_router = None
+    _legacy_router_import_error = exc
 
 # Load environment variables
 load_dotenv()
@@ -60,8 +81,14 @@ async def platform_api_unhandled_error_middleware(request: Request, call_next):
 
 
 # Include routes
-app.include_router(router, prefix="/api")
-app.include_router(lona_router, prefix="/api")
+if legacy_router is not None and lona_router is not None:
+    app.include_router(legacy_router, prefix="/api")
+    app.include_router(lona_router, prefix="/api")
+elif _legacy_router_import_error is not None:
+    logger.warning(
+        "Optional legacy /api routes disabled because dependency import failed: %s",
+        _legacy_router_import_error,
+    )
 app.include_router(platform_api_v1_router)
 app.include_router(platform_api_v2_router)
 

@@ -23,6 +23,8 @@ on:
 jobs:
   contract-governance:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: backend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,7 +48,16 @@ jobs:
           java-version: "21"
 
       - name: Install test tooling
-        run: python -m pip install --upgrade pip pytest
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            pytest \
+            pytest-asyncio \
+            fastapi \
+            httpx \
+            pydantic \
+            pydantic-settings \
+            python-dotenv
 
       - name: Lint OpenAPI contract
         run: npx --yes @redocly/cli@1.34.5 lint docs/architecture/specs/platform-api.openapi.yaml
@@ -57,6 +68,12 @@ jobs:
       - name: Run OpenAPI contract freeze tests
         run: pytest backend/tests/contracts/test_openapi_contract_freeze.py
 
+      - name: Run backend contract behavior tests
+        run: |
+          pytest backend/tests/contracts \
+            --ignore=backend/tests/contracts/test_openapi_contract_baseline.py \
+            --ignore=backend/tests/contracts/test_openapi_contract_freeze.py
+
       - name: Verify SDK generation drift
         run: bash contracts/scripts/verify-sdk-drift.sh
 
@@ -65,3 +82,224 @@ jobs:
 
       - name: Detect incompatible contract changes
         run: bash contracts/scripts/check-breaking-changes.sh
+
+  review-governance:
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    steps:
+      - name: Enforce review gate sequencing
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prNumber = context.payload.pull_request.number;
+            const headSha = context.payload.pull_request.head.sha;
+
+            async function listAllChangedFiles() {
+              const files = [];
+              for await (const page of github.paginate.iterator(
+                github.rest.pulls.listFiles,
+                {
+                  owner,
+                  repo,
+                  pull_number: prNumber,
+                  per_page: 100,
+                },
+              )) {
+                files.push(...page.data.map((item) => item.filename));
+              }
+              return files;
+            }
+
+            async function getReviewThreads() {
+              const threads = [];
+              let cursor = null;
+              let hasNextPage = true;
+              while (hasNextPage) {
+                const response = await github.graphql(
+                  `
+                  query($owner: String!, $repo: String!, $prNumber: Int!, $cursor: String) {
+                    repository(owner: $owner, name: $repo) {
+                      pullRequest(number: $prNumber) {
+                        reviewThreads(first: 100, after: $cursor) {
+                          pageInfo {
+                            hasNextPage
+                            endCursor
+                          }
+                          nodes {
+                            isResolved
+                            comments(first: 10) {
+                              nodes {
+                                url
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  `,
+                  {
+                    owner,
+                    repo,
+                    prNumber,
+                    cursor,
+                  },
+                );
+                const threadConnection = response.repository.pullRequest.reviewThreads;
+                threads.push(...threadConnection.nodes);
+                hasNextPage = threadConnection.pageInfo.hasNextPage;
+                cursor = threadConnection.pageInfo.endCursor;
+              }
+              return threads;
+            }
+
+            async function getReviewActors() {
+              const actors = [];
+              let cursor = null;
+              let hasNextPage = true;
+              while (hasNextPage) {
+                const response = await github.graphql(
+                  `
+                  query($owner: String!, $repo: String!, $prNumber: Int!, $cursor: String) {
+                    repository(owner: $owner, name: $repo) {
+                      pullRequest(number: $prNumber) {
+                        reviews(first: 100, after: $cursor) {
+                          pageInfo {
+                            hasNextPage
+                            endCursor
+                          }
+                          nodes {
+                            author {
+                              login
+                            }
+                            state
+                          }
+                        }
+                      }
+                    }
+                  }
+                  `,
+                  {
+                    owner,
+                    repo,
+                    prNumber,
+                    cursor,
+                  },
+                );
+                const reviewsConnection = response.repository.pullRequest.reviews;
+                for (const review of reviewsConnection.nodes) {
+                  if (review.author && review.author.login && review.state !== "DISMISSED") {
+                    actors.push(String(review.author.login).toLowerCase());
+                  }
+                }
+                hasNextPage = reviewsConnection.pageInfo.hasNextPage;
+                cursor = reviewsConnection.pageInfo.endCursor;
+              }
+              return actors;
+            }
+
+            async function getCheckRuns() {
+              const runs = [];
+              let page = 1;
+              while (true) {
+                const response = await github.rest.checks.listForRef(
+                  {
+                    owner,
+                    repo,
+                    ref: headSha,
+                    per_page: 100,
+                    page,
+                  },
+                );
+                const batch = response.data.check_runs || [];
+                runs.push(...batch);
+                if (batch.length < 100) {
+                  break;
+                }
+                page += 1;
+              }
+              return runs;
+            }
+
+            async function sleep(ms) {
+              await new Promise((resolve) => setTimeout(resolve, ms));
+            }
+
+            const changedFiles = await listAllChangedFiles();
+            const requiresSequencingGate = changedFiles.some((filename) =>
+              filename.startsWith("backend/src/platform_api/") ||
+              filename.startsWith("backend/tests/contracts/") ||
+              filename.startsWith("docs/architecture/") ||
+              filename === ".github/workflows/contracts-governance.yml",
+            );
+
+            const reviewThreads = await getReviewThreads();
+            const unresolvedThreads = reviewThreads.filter((thread) => !thread.isResolved);
+            if (unresolvedThreads.length > 0) {
+              const unresolvedUrls = unresolvedThreads
+                .map((thread) => thread.comments.nodes[0]?.url)
+                .filter(Boolean)
+                .slice(0, 10);
+              core.setFailed(
+                `Unresolved review threads detected (${unresolvedThreads.length}). Resolve all threads before merge. ${unresolvedUrls.join(" ")}`,
+              );
+              return;
+            }
+
+            if (!requiresSequencingGate) {
+              core.info("Review sequencing gate not required for this PR scope.");
+              return;
+            }
+
+            const reviewActors = await getReviewActors();
+            if (!reviewActors.includes("greptile-apps")) {
+              core.setFailed("Missing required Greptile review submission.");
+              return;
+            }
+
+            const maxWaitMs = 5 * 60 * 1000;
+            const pollIntervalMs = 15 * 1000;
+            const waitUntil = Date.now() + maxWaitMs;
+            let cursorRuns = [];
+            let cursorPassed = false;
+
+            while (Date.now() <= waitUntil) {
+              const checkRuns = await getCheckRuns();
+              cursorRuns = checkRuns.filter((run) => run.name.toLowerCase().includes("cursor"));
+              if (cursorRuns.length === 0) {
+                await sleep(pollIntervalMs);
+                continue;
+              }
+
+              const completedRuns = cursorRuns.filter((run) => run.status === "completed");
+              cursorPassed = completedRuns.some((run) =>
+                ["success", "neutral", "skipped"].includes(run.conclusion || ""),
+              );
+              if (cursorPassed) {
+                break;
+              }
+
+              const hasCompletedButFailing = completedRuns.some((run) =>
+                !["success", "neutral", "skipped"].includes(run.conclusion || ""),
+              );
+              if (hasCompletedButFailing) {
+                break;
+              }
+              await sleep(pollIntervalMs);
+            }
+
+            if (!cursorPassed) {
+              const statuses = cursorRuns.length
+                ? cursorRuns.map((run) => `${run.name}:${run.status}/${run.conclusion || "null"}`).join(", ")
+                : "no-cursor-check-runs";
+              core.setFailed(`Cursor check has not reached a passing conclusion within timeout. Current status: ${statuses}`);
+              return;
+            }
+
+            core.info("Review governance checks passed.");

@@ -136,6 +136,19 @@ Long operations return resources with status:
 - validate error envelopes and status codes,
 - validate idempotency behavior.
 
+### Gate5 Contract Matrix (minimum CI gate)
+
+The `contracts-governance` GitHub workflow is the required status check for contract-facing PRs and must run:
+
+1. `pytest backend/tests/contracts/test_openapi_contract_baseline.py`
+2. `pytest backend/tests/contracts/test_openapi_contract_freeze.py`
+3. `pytest backend/tests/contracts --ignore=backend/tests/contracts/test_openapi_contract_baseline.py --ignore=backend/tests/contracts/test_openapi_contract_freeze.py`
+4. `bash contracts/scripts/verify-sdk-drift.sh`
+5. `bash contracts/scripts/mock-smoke-test.sh`
+6. `bash contracts/scripts/check-breaking-changes.sh`
+
+This matrix enforces both OpenAPI governance and runtime contract behavior (v1/v2 handlers, risk, orchestrator, adapters, and client lane tests).
+
 ### Consumer tests
 
 - CLI tests use generated mock server responses,

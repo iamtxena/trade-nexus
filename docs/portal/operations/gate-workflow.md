@@ -36,3 +36,10 @@ Gate update:
 1. Parent epics are updated on every PR state transition (`STARTED`, `IN_REVIEW`, `MERGED`, `BLOCKED`).
 2. Child issues are closed only when linked PR is merged and required gates are green.
 3. Gate5 deployment/reliability tracking references `/docs/portal/operations/gate5-deployment-profile.md`.
+
+## Merge Gate Sequencing
+
+1. `review-governance` must pass before merge.
+2. All review threads must be resolved before merge.
+3. For Platform API/runtime contract changes, both `cursor` and `greptile-apps` reviews must be present before merge.
+4. If a comment is intentionally not applied, post rationale on the thread and resolve it.

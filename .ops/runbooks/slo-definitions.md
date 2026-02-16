@@ -64,7 +64,7 @@
 |-----|--------|---------------|---------------|
 | Availability | 99.0% | TBD | — |
 | Warm Latency | p95 < 500ms | TBD | — |
-| Cold-Start Latency | p95 < 120s (wall-clock) | 93s | 2026-02-16 |
+| Cold-Start Latency | p95 < 120s (wall-clock) | 96s | 2026-02-16 |
 | Error Rate | < 5% 5xx/hr | TBD | — |
 | Rollback Time | < 5 min | TBD | — |
 

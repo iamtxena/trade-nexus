@@ -206,14 +206,24 @@ run_scenario_2() {
 
   if [[ "$deactivation_failed" == "true" ]]; then
     echo "  Deactivation failed — restoring and aborting scenario."
+    local restore_ok=true
     for rev in $(echo "$active_revisions" | jq -r '.[]'); do
+      set +e
       az containerapp revision activate \
         --name "$CONTAINER_APP" \
         --resource-group "$RESOURCE_GROUP" \
         --revision "$rev" \
-        -o none 2>/dev/null || true
+        -o none 2>/dev/null
+      local restore_exit=$?
+      set -e
+      if [[ $restore_exit -ne 0 ]]; then
+        echo "  WARNING: Failed to reactivate ${rev} — cleanup trap will retry"
+        restore_ok=false
+      fi
     done
-    DEACTIVATED_REVISIONS=()
+    if [[ "$restore_ok" == "true" ]]; then
+      DEACTIVATED_REVISIONS=()
+    fi
     local end
     end=$(epoch_seconds)
     record_result 2 "$name" "FAIL" "$(( end - start ))"
@@ -434,14 +444,24 @@ run_scenario_4() {
 
   if [[ "$deactivation_failed" == "true" ]]; then
     echo "  Deactivation failed — restoring and aborting scenario."
+    local restore_ok=true
     for rev in $(echo "$active_revisions" | jq -r '.[]'); do
+      set +e
       az containerapp revision activate \
         --name "$CONTAINER_APP" \
         --resource-group "$RESOURCE_GROUP" \
         --revision "$rev" \
-        -o none 2>/dev/null || true
+        -o none 2>/dev/null
+      local restore_exit=$?
+      set -e
+      if [[ $restore_exit -ne 0 ]]; then
+        echo "  WARNING: Failed to reactivate ${rev} — cleanup trap will retry"
+        restore_ok=false
+      fi
     done
-    DEACTIVATED_REVISIONS=()
+    if [[ "$restore_ok" == "true" ]]; then
+      DEACTIVATED_REVISIONS=()
+    fi
     local end
     end=$(epoch_seconds)
     record_result 4 "$name" "FAIL" "$(( end - start ))"

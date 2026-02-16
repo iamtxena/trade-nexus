@@ -1,19 +1,28 @@
-# Ops Drill Report — 2026-02-16 (v5, all automated review findings resolved)
+# Ops Drill Report — 2026-02-16 (v6, all review findings resolved)
 
 > Operational readiness drill results for Trade Nexus backend.
-> Includes fixes from 4 review rounds (2 human + 2 automated).
+> Includes fixes from 5 review rounds (2 human + 3 automated).
 
 ## Drill Metadata
 
 | Field | Value |
 |-------|-------|
-| Date | 2026-02-16 14:34 UTC (last drill v4; code fixes v5) |
+| Date | 2026-02-16 14:34 UTC (last drill v4; code fixes v6) |
 | Operator | Claude Code (automated) |
 | Environment | Production (Azure Container Apps, West Europe) |
 | Active Revision | `trade-nexus-backend--0000028` |
-| Script Version | `ops-drill.sh` v5 (branch `ops/176-178-release-drills`) |
+| Script Version | `ops-drill.sh` v6 (branch `ops/176-178-release-drills`) |
 
-## Review Fixes Applied (Round 4 — Cursor automated, post-382329a)
+## Review Fixes Applied (Round 5 — Cursor + Greptile automated, post-8bd1546)
+
+| # | Source | Finding | Fix |
+|---|--------|---------|-----|
+| 1 | Greptile | Unguarded `az revision activate` in rollback.sh (target activation) | Apply same stderr capture + exit code + structured ROLLBACK_RESULT pattern |
+| 2 | Greptile | Cold-start status tracking 93s vs evidence 96s mismatch | Updated `slo-definitions.md` to 96s (matching latest drill evidence) |
+| 3 | Cursor | Restore failures silently discarded in abort paths | Only clear `DEACTIVATED_REVISIONS` if all restorations succeed; cleanup trap retries on failure |
+| 4 | Cursor | smoke-check.sh ignores warm latency SLO-2 | Track `WARM_LATENCY_MAX_MS`, emit `slo2=breach` warning when >500ms, include in SMOKE_RESULT |
+
+## Review Fixes Applied (Round 4 — Cursor automated)
 
 | # | Source | Finding | Fix |
 |---|--------|---------|-----|
@@ -111,4 +120,4 @@
 
 ## Postmortem
 
-No drills failed. All 15 review findings (9 human + 6 automated) are resolved across 4 review rounds.
+No drills failed. All 19 review findings (9 human + 10 automated) are resolved across 5 review rounds.

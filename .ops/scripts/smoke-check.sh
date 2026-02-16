@@ -48,6 +48,8 @@ MAX_TIME=30
 OVERALL_PASS=true
 COLD_START_DETECTED=false
 COLD_START_SECONDS=0
+WARM_LATENCY_MAX_MS=0  # Track highest warm-response latency (ms)
+SLO2_THRESHOLD_MS=500  # SLO-2: p95 < 500ms warm latency
 FIRST_REQUEST_DONE=false
 FIRST_ATTEMPT_EPOCH=0  # wall-clock time of very first request attempt
 
@@ -158,6 +160,15 @@ check_endpoint() {
         warm_latency=$(echo "$warm_output" | awk '{print $2}')
         warm_ms=$(awk "BEGIN {printf \"%.0f\", ${warm_latency} * 1000}")
         echo "SMOKE_CHECK endpoint=${path} status=${warm_status} latency_ms=${warm_ms} cold_start=false (warm follow-up)"
+        # Track warm latency for SLO-2 evaluation
+        if (( warm_ms > WARM_LATENCY_MAX_MS )); then
+          WARM_LATENCY_MAX_MS=$warm_ms
+        fi
+      else
+        # Non-cold-start successful response — track warm latency
+        if (( latency_ms > WARM_LATENCY_MAX_MS )); then
+          WARM_LATENCY_MAX_MS=$latency_ms
+        fi
       fi
 
       break
@@ -195,10 +206,16 @@ done
 echo ""
 
 # --- Final summary ----------------------------------------------------------
+WARM_LATENCY_SLO2="ok"
+if (( WARM_LATENCY_MAX_MS > SLO2_THRESHOLD_MS )); then
+  WARM_LATENCY_SLO2="breach"
+  echo "WARNING: Warm latency ${WARM_LATENCY_MAX_MS}ms exceeds SLO-2 threshold (${SLO2_THRESHOLD_MS}ms)"
+fi
+
 if [[ "$OVERALL_PASS" == "true" ]]; then
-  echo "SMOKE_RESULT status=PASS cold_start_seconds=${COLD_START_SECONDS}"
+  echo "SMOKE_RESULT status=PASS cold_start_seconds=${COLD_START_SECONDS} warm_latency_max_ms=${WARM_LATENCY_MAX_MS} slo2=${WARM_LATENCY_SLO2}"
   exit 0
 else
-  echo "SMOKE_RESULT status=FAIL cold_start_seconds=${COLD_START_SECONDS}"
+  echo "SMOKE_RESULT status=FAIL cold_start_seconds=${COLD_START_SECONDS} warm_latency_max_ms=${WARM_LATENCY_MAX_MS} slo2=${WARM_LATENCY_SLO2}"
   exit 1
 fi

@@ -133,11 +133,26 @@ TARGET_ACTIVE=$(echo "$SORTED_REVISIONS" | jq -r --arg target "$TARGET_REVISION"
 
 if [[ "$TARGET_ACTIVE" != "true" ]]; then
   echo "Activating deactivated revision: ${TARGET_REVISION}..."
+  AZ_ACTIVATE_STDERR=$(mktemp)
+  set +e
   az containerapp revision activate \
     --name "$CONTAINER_APP" \
     --resource-group "$RESOURCE_GROUP" \
     --revision "$TARGET_REVISION" \
-    -o none 2>&1
+    -o none 2>"$AZ_ACTIVATE_STDERR"
+  ACTIVATE_EXIT=$?
+  set -e
+
+  if [[ $ACTIVATE_EXIT -ne 0 ]]; then
+    echo "  ERROR: Failed to activate ${TARGET_REVISION} (exit=${ACTIVATE_EXIT}):"
+    cat "$AZ_ACTIVATE_STDERR" >&2
+    rm -f "$AZ_ACTIVATE_STDERR"
+    END_EPOCH=$(epoch_seconds)
+    DURATION=$(( END_EPOCH - START_EPOCH ))
+    echo "ROLLBACK_RESULT status=FAIL duration_seconds=${DURATION} reason=activate_target_failed"
+    exit 1
+  fi
+  rm -f "$AZ_ACTIVATE_STDERR"
   echo "  Revision activated."
 fi
 

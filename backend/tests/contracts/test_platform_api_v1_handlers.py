@@ -44,6 +44,35 @@ def test_health_and_research_routes() -> None:
     assert len(payload["strategyIdeas"]) == 2
 
 
+def test_research_route_returns_provider_budget_exceeded_error() -> None:
+    client = _client()
+    original_budget = copy.deepcopy(router_v1._store.research_provider_budget)
+    original_events = copy.deepcopy(router_v1._store.research_budget_events)
+    try:
+        router_v1._store.research_provider_budget = {
+            "maxTotalCostUsd": 1.0,
+            "maxPerRequestCostUsd": 0.1,
+            "estimatedMarketScanCostUsd": 0.2,
+            "spentCostUsd": 0.0,
+        }
+        response = client.post(
+            "/v1/research/market-scan",
+            headers=HEADERS,
+            json={
+                "assetClasses": ["crypto"],
+                "capital": 25000,
+            },
+        )
+    finally:
+        router_v1._store.research_provider_budget = original_budget
+        router_v1._store.research_budget_events = original_events
+
+    assert response.status_code == 429
+    payload = response.json()
+    assert payload["requestId"] == HEADERS["X-Request-Id"]
+    assert payload["error"]["code"] == "RESEARCH_PROVIDER_BUDGET_EXCEEDED"
+
+
 def test_strategy_and_backtest_routes() -> None:
     client = _client()
 

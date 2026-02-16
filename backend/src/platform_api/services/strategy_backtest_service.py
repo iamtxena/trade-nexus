@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from src.platform_api.adapters.lona_adapter import AdapterError, LonaAdapter
 from src.platform_api.errors import PlatformAPIError
 from src.platform_api.knowledge.ingestion import KnowledgeIngestionPipeline
@@ -42,6 +44,7 @@ class StrategyBacktestService:
     async def market_scan(self, *, request: MarketScanRequest, context: RequestContext) -> MarketScanResponse:
         symbol_snapshot: list[str] = []
         fallback_note: str | None = None
+        self._reserve_market_scan_budget(context=context)
         try:
             provider_symbols = await self._lona_adapter.list_symbols(
                 is_global=False,
@@ -78,6 +81,154 @@ class StrategyBacktestService:
         elif fallback_note:
             regime = f"{regime} {fallback_note}"
         return MarketScanResponse(requestId=context.request_id, regimeSummary=regime, strategyIdeas=ideas)
+
+    def _reserve_market_scan_budget(self, *, context: RequestContext) -> None:
+        policy = self._store.research_provider_budget
+        if not isinstance(policy, dict):
+            raise PlatformAPIError(
+                status_code=500,
+                code="RESEARCH_PROVIDER_BUDGET_INVALID",
+                message="Research provider budget policy is invalid.",
+                request_id=context.request_id,
+            )
+
+        max_total = self._read_budget_value(
+            policy=policy,
+            key="maxTotalCostUsd",
+            default=100.0,
+            context=context,
+        )
+        max_per_request = self._read_budget_value(
+            policy=policy,
+            key="maxPerRequestCostUsd",
+            default=5.0,
+            context=context,
+        )
+        estimated_cost = self._read_budget_value(
+            policy=policy,
+            key="estimatedMarketScanCostUsd",
+            default=0.25,
+            context=context,
+        )
+        spent_before = self._read_budget_value(
+            policy=policy,
+            key="spentCostUsd",
+            default=0.0,
+            context=context,
+        )
+
+        if estimated_cost > max_per_request:
+            self._record_research_budget_event(
+                context=context,
+                decision="blocked",
+                reason="per_request_limit_breached",
+                cost_usd=estimated_cost,
+                spent_before_usd=spent_before,
+                spent_after_usd=spent_before,
+                max_total_usd=max_total,
+                max_per_request_usd=max_per_request,
+            )
+            raise PlatformAPIError(
+                status_code=429,
+                code="RESEARCH_PROVIDER_BUDGET_EXCEEDED",
+                message=(
+                    "Research provider budget exceeded: "
+                    f"estimated market-scan cost {estimated_cost} exceeds maxPerRequestCostUsd {max_per_request}."
+                ),
+                request_id=context.request_id,
+            )
+
+        spent_after = spent_before + estimated_cost
+        if spent_after > max_total:
+            self._record_research_budget_event(
+                context=context,
+                decision="blocked",
+                reason="total_budget_exceeded",
+                cost_usd=estimated_cost,
+                spent_before_usd=spent_before,
+                spent_after_usd=spent_after,
+                max_total_usd=max_total,
+                max_per_request_usd=max_per_request,
+            )
+            raise PlatformAPIError(
+                status_code=429,
+                code="RESEARCH_PROVIDER_BUDGET_EXCEEDED",
+                message=(
+                    "Research provider budget exceeded: "
+                    f"projected spend {spent_after} exceeds maxTotalCostUsd {max_total}."
+                ),
+                request_id=context.request_id,
+            )
+
+        policy["spentCostUsd"] = spent_after
+        self._record_research_budget_event(
+            context=context,
+            decision="reserved",
+            reason="within_budget",
+            cost_usd=estimated_cost,
+            spent_before_usd=spent_before,
+            spent_after_usd=spent_after,
+            max_total_usd=max_total,
+            max_per_request_usd=max_per_request,
+        )
+
+    def _read_budget_value(
+        self,
+        *,
+        policy: dict[str, object],
+        key: str,
+        default: float,
+        context: RequestContext,
+    ) -> float:
+        raw = policy.get(key, default)
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            raise PlatformAPIError(
+                status_code=500,
+                code="RESEARCH_PROVIDER_BUDGET_INVALID",
+                message=f"Research provider budget field {key} must be a finite non-negative number.",
+                request_id=context.request_id,
+            )
+
+        value = float(raw)
+        if not math.isfinite(value) or value < 0.0:
+            raise PlatformAPIError(
+                status_code=500,
+                code="RESEARCH_PROVIDER_BUDGET_INVALID",
+                message=f"Research provider budget field {key} must be a finite non-negative number.",
+                request_id=context.request_id,
+            )
+        return value
+
+    def _record_research_budget_event(
+        self,
+        *,
+        context: RequestContext,
+        decision: str,
+        reason: str,
+        cost_usd: float,
+        spent_before_usd: float,
+        spent_after_usd: float,
+        max_total_usd: float,
+        max_per_request_usd: float,
+    ) -> None:
+        if not isinstance(self._store.research_budget_events, list):
+            self._store.research_budget_events = []
+        self._store.research_budget_events.append(
+            {
+                "timestamp": utc_now(),
+                "requestId": context.request_id,
+                "tenantId": context.tenant_id,
+                "userId": context.user_id,
+                "operation": "market_scan:list_symbols",
+                "decision": decision,
+                "reason": reason,
+                "costUsd": cost_usd,
+                "spentBeforeUsd": spent_before_usd,
+                "spentAfterUsd": spent_after_usd,
+                "maxTotalCostUsd": max_total_usd,
+                "maxPerRequestCostUsd": max_per_request_usd,
+            }
+        )
 
     async def list_strategies(
         self,

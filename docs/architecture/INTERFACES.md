@@ -368,6 +368,20 @@ Rules:
 3. Error and fallback paths must preserve correlation fields so incidents are traceable by `requestId`.
 4. Structured field keys are stable and must not be repurposed with different semantics.
 
+## 3.3) SLO And Alert Baseline Contract (R-04)
+
+Reliability and release readiness are gated by one explicit SLO/alert baseline configuration:
+
+- `contracts/config/slo-alert-baseline.v1.json`
+
+Rules:
+
+1. Baseline version and SLO/alert IDs are immutable within a release wave unless documented in a contract change PR.
+2. Every baseline entry must define owner team, target, and observation window.
+3. Portal documentation must stay aligned with the versioned config (`docs/portal/operations/gate5-slo-alerting-baseline.md`).
+4. CI must fail if config/docs drift is detected (`contracts/scripts/check-slo-alert-baseline.py`).
+5. Baseline coverage must include execution, risk, research, reconciliation, and conversation critical paths.
+
 ## 4) Async Resource Contract
 
 Long-running operations use resource status:

@@ -102,7 +102,7 @@ class StrategyBacktestService:
             for entry in provider_symbols
             if isinstance(entry, dict) and entry.get("name")
         ]
-        if len(symbol_snapshot) == 0:
+        if len(symbol_snapshot) == 0 and fallback_note is None:
             fallback_note = "Lona symbol snapshot was empty; using deterministic fallback symbols."
 
         ideas = [

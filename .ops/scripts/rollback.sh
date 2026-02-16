@@ -138,12 +138,28 @@ if [[ "$TARGET_ACTIVE" != "true" ]]; then
 fi
 
 # --- 5. Shift 100% traffic to target revision ------------------------------
-# Detect revision mode to determine if explicit traffic set is needed
+# Detect revision mode to determine if explicit traffic set is needed.
+# Fail fast if mode detection fails — do not assume single-revision silently.
+AZ_MODE_STDERR=$(mktemp)
+set +e
 REVISION_MODE=$(az containerapp show \
   --name "$CONTAINER_APP" \
   --resource-group "$RESOURCE_GROUP" \
   --query "properties.configuration.activeRevisionsMode" \
-  -o tsv 2>/dev/null || echo "single")
+  -o tsv 2>"$AZ_MODE_STDERR")
+MODE_EXIT=$?
+set -e
+
+if [[ $MODE_EXIT -ne 0 || -z "$REVISION_MODE" ]]; then
+  echo "ERROR: Failed to detect revision mode (exit=${MODE_EXIT}):"
+  cat "$AZ_MODE_STDERR" >&2
+  rm -f "$AZ_MODE_STDERR"
+  END_EPOCH=$(epoch_seconds)
+  DURATION=$(( END_EPOCH - START_EPOCH ))
+  echo "ROLLBACK_RESULT status=FAIL duration_seconds=${DURATION} reason=mode_detection_failed"
+  exit 1
+fi
+rm -f "$AZ_MODE_STDERR"
 
 echo "Revision mode: ${REVISION_MODE}"
 echo "Shifting traffic to ${TARGET_REVISION}..."
@@ -178,13 +194,52 @@ else
   # Deactivate current and activate target to ensure correct routing.
   if [[ "$CURRENT_REVISION" != "$TARGET_REVISION" ]]; then
     echo "  Single-revision mode: deactivating ${CURRENT_REVISION}, traffic will route to ${TARGET_REVISION}."
+    AZ_DEACT_STDERR=$(mktemp)
+    set +e
     az containerapp revision deactivate \
       --name "$CONTAINER_APP" \
       --resource-group "$RESOURCE_GROUP" \
       --revision "$CURRENT_REVISION" \
-      -o none 2>/dev/null || true
+      -o none 2>"$AZ_DEACT_STDERR"
+    DEACT_EXIT=$?
+    set -e
+
+    if [[ $DEACT_EXIT -ne 0 ]]; then
+      echo "ROLLBACK_TRAFFIC_SHIFT status=FAIL"
+      echo "  ERROR: Failed to deactivate ${CURRENT_REVISION} (exit=${DEACT_EXIT}):"
+      cat "$AZ_DEACT_STDERR" >&2
+      rm -f "$AZ_DEACT_STDERR"
+      END_EPOCH=$(epoch_seconds)
+      DURATION=$(( END_EPOCH - START_EPOCH ))
+      echo "ROLLBACK_RESULT status=FAIL duration_seconds=${DURATION} from=${CURRENT_REVISION} to=${TARGET_REVISION} reason=deactivate_failed"
+      exit 1
+    fi
+    rm -f "$AZ_DEACT_STDERR"
   fi
-  echo "ROLLBACK_TRAFFIC_SHIFT status=OK mode=single-revision"
+
+  # Post-action verification: confirm target is the active revision
+  echo "  Verifying active revision post-rollback..."
+  AZ_VERIFY_STDERR=$(mktemp)
+  set +e
+  POST_ACTIVE=$(az containerapp revision list \
+    --name "$CONTAINER_APP" \
+    --resource-group "$RESOURCE_GROUP" \
+    -o json 2>"$AZ_VERIFY_STDERR" | jq -r '[.[] | select(.properties.active == true)] | .[0].name')
+  VERIFY_EXIT=$?
+  set -e
+  rm -f "$AZ_VERIFY_STDERR"
+
+  if [[ "$POST_ACTIVE" == "$TARGET_REVISION" ]]; then
+    echo "  Verified: active revision is ${POST_ACTIVE}"
+    echo "ROLLBACK_TRAFFIC_SHIFT status=OK mode=single-revision verified=true"
+  else
+    echo "  WARNING: Expected active=${TARGET_REVISION}, got active=${POST_ACTIVE}"
+    echo "ROLLBACK_TRAFFIC_SHIFT status=FAIL mode=single-revision expected=${TARGET_REVISION} actual=${POST_ACTIVE}"
+    END_EPOCH=$(epoch_seconds)
+    DURATION=$(( END_EPOCH - START_EPOCH ))
+    echo "ROLLBACK_RESULT status=FAIL duration_seconds=${DURATION} from=${CURRENT_REVISION} to=${TARGET_REVISION} reason=post_verify_mismatch"
+    exit 1
+  fi
 fi
 
 # --- 6. Smoke check --------------------------------------------------------

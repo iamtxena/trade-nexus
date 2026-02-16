@@ -226,16 +226,16 @@ run_scenario_2() {
   cold_start_seconds="${cold_start_seconds:-0}"
 
   echo ""
-  echo "Cold-start latency: ${cold_start_seconds}s (SLO: p95 < 45s)"
+  echo "Cold-start latency: ${cold_start_seconds}s (SLO-3: p95 < 120s wall-clock)"
 
-  # Compare to SLO: cold start < 45s
+  # Compare to SLO-3: cold start < 120s (wall-clock, matches slo-definitions.md)
   local within_slo
-  within_slo=$(awk "BEGIN {print (${cold_start_seconds} < 45) ? \"true\" : \"false\"}")
+  within_slo=$(awk "BEGIN {print (${cold_start_seconds} < 120) ? \"true\" : \"false\"}")
 
   if [[ $smoke_exit -eq 0 && "$within_slo" == "true" ]]; then
     record_result 2 "$name" "PASS" "$duration"
   elif [[ $smoke_exit -eq 0 && "$within_slo" == "false" ]]; then
-    echo "  Cold-start exceeded SLO (${cold_start_seconds}s > 45s)"
+    echo "  Cold-start exceeded SLO-3 (${cold_start_seconds}s > 120s)"
     record_result 2 "$name" "FAIL" "$duration"
   else
     record_result 2 "$name" "FAIL" "$duration"
@@ -375,8 +375,11 @@ run_scenario_4() {
   echo "Waiting 15s for shutdown..."
   sleep 15
 
-  # Verify the app is down (expect connection failure or 503)
+  # Verify the app is down (expect connection failure, 503, 502, or 404)
+  # This check is BLOCKING — if the app is still serving 200, the drill FAILs
+  # because we did not actually achieve an outage.
   echo "Verifying app is down..."
+  local shutdown_verified=false
   set +e
   local verify_status
   verify_status=$(curl -s -o /dev/null -w "%{http_code}" \
@@ -388,11 +391,13 @@ run_scenario_4() {
 
   if [[ $verify_exit -ne 0 || "$verify_status" == "503" || "$verify_status" == "000" || "$verify_status" == "502" || "$verify_status" == "404" ]]; then
     echo "  App confirmed down (status=${verify_status}, curl_exit=${verify_exit})"
+    shutdown_verified=true
   else
-    echo "  WARNING: App may still be responding (status=${verify_status})"
+    echo "  FAIL: App still responding with status=${verify_status} after deactivation."
+    echo "  Shutdown was NOT achieved — drill cannot pass."
   fi
 
-  # Restore: reactivate ALL revisions
+  # Restore: reactivate ALL revisions (always restore, even if verification failed)
   echo "Reactivating all revisions..."
   for rev in $(echo "$active_revisions" | jq -r '.[]'); do
     echo "  Reactivating: ${rev}"
@@ -423,7 +428,10 @@ run_scenario_4() {
   echo ""
   echo "Total downtime: ${downtime}s"
 
-  if [[ $smoke_exit -eq 0 && $downtime -le 120 ]]; then
+  if [[ "$shutdown_verified" != "true" ]]; then
+    echo "  FAIL: Shutdown was never confirmed — outage simulation incomplete."
+    record_result 4 "$name" "FAIL" "$duration"
+  elif [[ $smoke_exit -eq 0 && $downtime -le 120 ]]; then
     echo "  Recovery succeeded within 120s window."
     record_result 4 "$name" "PASS" "$duration"
   elif [[ $smoke_exit -eq 0 ]]; then

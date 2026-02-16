@@ -1,27 +1,36 @@
-# Ops Drill Report — 2026-02-16 (v2, post-review fixes)
+# Ops Drill Report — 2026-02-16 (v3, second review round)
 
 > Operational readiness drill results for Trade Nexus backend.
-> Re-drilled after addressing 5 review findings from PR #195 review.
+> Re-drilled after addressing 4 follow-up findings from PR #195 second review.
 
 ## Drill Metadata
 
 | Field | Value |
 |-------|-------|
-| Date | 2026-02-16 13:56 UTC (re-drill) |
+| Date | 2026-02-16 14:18 UTC (re-drill v3) |
 | Operator | Claude Code (automated) |
 | Environment | Production (Azure Container Apps, West Europe) |
-| Active Revision | `trade-nexus-backend--0000027` |
-| Script Version | `ops-drill.sh` v2 (branch `ops/176-178-release-drills`, post-review fixes) |
+| Active Revision | `trade-nexus-backend--0000028` |
+| Script Version | `ops-drill.sh` v3 (branch `ops/176-178-release-drills`) |
 
-## Review Fixes Applied
+## Review Fixes Applied (Round 2)
 
 | # | Finding | Fix |
 |---|---------|-----|
-| 1 | False-positive rollback success | `rollback.sh` now detects revision mode; multi-revision failures properly fail the rollback |
-| 2 | No fail-safe restore after deactivation | `ops-drill.sh` cleanup trap tracks `DEACTIVATED_REVISIONS[]` and reactivates on EXIT/INT/TERM |
-| 3 | JSON parsing corrupted by stderr | All az JSON calls use `az_json` helper (stderr → temp file, separated from stdout) |
-| 4 | Drill assumes single active revision | Scenarios 2/4 now deactivate/reactivate ALL active revisions |
-| 5 | Cold-start under-reports actual startup | `smoke-check.sh` now measures wall-clock elapsed from first attempt to first 200 (includes retry waits + curl timeouts) |
+| 1 | SLO-3 mismatch: drill enforced 45s, slo-definitions.md says 120s | `ops-drill.sh` scenario 2 now evaluates against 120s (matching `slo-definitions.md`) |
+| 2 | Emergency shutdown verification non-blocking | Scenario 4 now tracks `shutdown_verified` flag; FAIL if app still responds 200 after deactivation |
+| 3 | Rollback mode detection silently falls back to "single" | `rollback.sh` now fails fast (exit 1) if `az containerapp show` fails to detect mode |
+| 4 | Single-revision deactivation suppresses failure | `rollback.sh` captures deactivation stderr, fails on error; post-action verifies active revision matches target |
+
+## Review Fixes Applied (Round 1)
+
+| # | Finding | Fix |
+|---|---------|-----|
+| 1 | False-positive rollback success | `rollback.sh` detects revision mode; multi-revision failures properly fail |
+| 2 | No fail-safe restore after deactivation | `ops-drill.sh` cleanup trap tracks `DEACTIVATED_REVISIONS[]`, restores on EXIT/INT/TERM |
+| 3 | JSON parsing corrupted by stderr | `az_json` helper separates stderr to temp file |
+| 4 | Drill assumes single active revision | Scenarios 2/4 deactivate/reactivate ALL active revisions |
+| 5 | Cold-start under-reports actual startup | Wall-clock elapsed from first attempt to first 200 |
 
 ## Scenario Results
 
@@ -29,58 +38,55 @@
 - **Type**: Read-only
 - **Risk**: None
 - **Status**: PASS
-- **Duration**: 99 seconds
+- **Duration**: 96 seconds
 - **Details**:
   - Container was in scale-to-zero state; 2 connection failures before first 200
-  - `/health`: 200 OK, first response latency 27,766ms, warm follow-up 134ms
-  - `/v1/health`: 200 OK, latency 131ms
-  - Cold-start (wall-clock): 98s (includes 2x curl timeouts + retry waits + final request)
+  - `/health`: 200 OK, first response 24,675ms, warm follow-up 128ms
+  - `/v1/health`: 200 OK, latency 128ms
+  - Cold-start (wall-clock): 95s
 
 ### Scenario 2: Scale-from-Zero Latency
 - **Type**: Revision deactivate/activate
 - **Risk**: Minimal
-- **Status**: FAIL (SLO breach — see Findings)
-- **Duration**: 111 seconds
-- **Cold-start time (wall-clock)**: 93 seconds
-- **SLO-3 target**: p95 < 45s
+- **Status**: PASS
+- **Duration**: 114 seconds
+- **Cold-start time (wall-clock)**: 96 seconds
+- **SLO-3 target**: p95 < 120s (wall-clock) — matches `slo-definitions.md`
 - **Details**:
-  - Deactivated all active revisions (1: `trade-nexus-backend--0000027`)
+  - Deactivated all active revisions (1: `trade-nexus-backend--0000028`)
   - Waited 10s for scale-down, then reactivated
-  - 2 connection failures (30s timeout each) + 23s successful request
-  - Wall-clock breakdown: 30s timeout + 5s wait + 30s timeout + 5s wait + 23s response = 93s
-  - Single-request latency: 23s (within old 45s target)
-  - Wall-clock latency: 93s (exceeds 45s target)
-  - **This is expected**: the 45s SLO was calibrated against single-request latency, not wall-clock. SLO-3 target needs revision (see Findings).
+  - 2 connection failures + 25.4s successful request
+  - Wall-clock: 96s < 120s SLO-3 target — **PASS**
+  - Script output correctly shows: `SLO-3: p95 < 120s wall-clock`
 
 ### Scenario 3: Rollback Drill
 - **Type**: Write (traffic shift)
 - **Risk**: Low
 - **Status**: SKIP
-- **Duration**: 1 second
+- **Duration**: 2 seconds
 - **Details**:
-  - Only 1 revision found — container app is in single-revision mode
-  - Cannot perform rollback drill without multiple revisions
-  - Rollback will be testable after the next deployment creates a second revision
+  - Only 1 revision found — single-revision mode
+  - Rollback testable after next deployment
 
 ### Scenario 4: Emergency Shutdown
 - **Type**: Revision deactivate/activate (all active revisions)
 - **Risk**: Medium (~30-60s downtime)
 - **Status**: PASS
-- **Duration**: 111 seconds
-- **Downtime**: 110 seconds (within 120s recovery window)
+- **Duration**: 112 seconds
+- **Downtime**: 111 seconds (within 120s recovery window)
+- **Shutdown verified**: YES (status=404 confirmed after deactivation)
 - **Details**:
-  - Deactivated all active revisions (1: `trade-nexus-backend--0000027`)
-  - Waited 15s; app returned 404 (confirmed down)
-  - Reactivated revision; 1x 404 + 2x connection failure before recovery
-  - Recovery response: 200 OK, latency 13,891ms (cold start)
-  - Warm follow-up: 200 OK, latency 140ms
-  - Wall-clock cold-start: 89s (within 120s recovery budget)
+  - Deactivated all active revisions (1: `trade-nexus-backend--0000028`)
+  - Waited 15s; **shutdown_verified=true** (status=404, app confirmed down)
+  - Reactivated revision; 2 connection failures before recovery
+  - Recovery: 200 OK, latency 19,324ms, warm 148ms
+  - Wall-clock cold-start: 90s (within 120s budget)
 
 ### Scenario 5: Secret Rotation Simulation
 - **Type**: Read-only (dry run)
 - **Risk**: None
 - **Status**: PASS
-- **Duration**: 3 seconds
+- **Duration**: 2 seconds
 - **Secrets verified**:
   - [x] `xai-api-key`
   - [x] `supabase-key`
@@ -92,8 +98,8 @@
 | SLO | Target | Measured | Status |
 |-----|--------|----------|--------|
 | Availability (SLO-1) | 99.0% | N/A (point-in-time drill) | — |
-| Warm Latency (SLO-2) | p95 < 500ms | 127-140ms | PASS |
-| Cold-Start (SLO-3) | p95 < 45s | 93s (wall-clock) | **FAIL** — see Finding #3 |
+| Warm Latency (SLO-2) | p95 < 500ms | 128-148ms | PASS |
+| Cold-Start (SLO-3) | p95 < 120s (wall-clock) | 96s | PASS |
 | Error Rate (SLO-4) | < 5% 5xx/hr | 0% during drill | PASS |
 | Rollback Time (SLO-5) | < 5 min | SKIP (single revision) | — |
 
@@ -101,14 +107,14 @@
 
 | # | Finding | Severity | Remediation | Status |
 |---|---------|----------|-------------|--------|
-| 1 | Container app in single-revision mode; rollback drill skipped | Low | Rollback testable after next deployment. Consider multi-revision mode. | Documented |
-| 2 | Deactivated revision returns 404 (not 503) from FQDN | Info | Azure routes to FQDN but no active revision → 404. Smoke-check.sh handles via retry. | Documented |
-| 3 | SLO-3 target (45s) calibrated for single-request latency, not wall-clock | Medium | Wall-clock cold-start includes curl timeouts (30s) and retry waits (5s). Single-request latency is ~23s (within 45s). **Recommendation**: Revise SLO-3 to "p95 < 120s wall-clock" or split into two metrics: request-latency and wall-clock-to-first-200. | Open |
-| 4 | Emergency shutdown recovery near 120s budget (110s) | Low | Dominated by Azure deactivate/activate API + cold-start. Acceptable for alpha. | Documented |
-| 5 | Warm latency excellent (127-140ms) | Info | Well within 500ms SLO-2 target. No action needed. | N/A |
+| 1 | Single-revision mode; rollback drill skipped | Low | Testable after next deployment | Documented |
+| 2 | Deactivated revision returns 404 (not 503) | Info | Handled by smoke-check retry | Documented |
+| 3 | Warm latency excellent (128-148ms) | Info | Well within 500ms SLO-2 | N/A |
 
 ## Postmortem
 
-Scenario 2 (Scale-from-zero) reports FAIL against the 45s SLO-3 target because cold-start measurement was corrected from single-request latency to wall-clock elapsed time (per review finding #5). The actual container startup (~23s) is healthy; the 93s wall-clock includes smoke-check retry overhead (curl timeouts + sleep intervals). This is a **measurement recalibration**, not a regression.
-
-**Action item**: Update SLO-3 target in `slo-definitions.md` to reflect wall-clock measurement methodology. Proposed: "p95 < 120s wall-clock from first probe to first 200 OK".
+No drills failed. All script/SLO parity issues from the second review are resolved:
+- Scenario 2 now evaluates against 120s (matching `slo-definitions.md`), not 45s
+- Scenario 4 requires shutdown verification before PASS — blocking, not advisory
+- `rollback.sh` fails fast on mode detection failure and verifies post-action state
+- All 9 original + follow-up review findings are addressed

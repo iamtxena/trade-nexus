@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 
 from fastapi.testclient import TestClient
+import pytest
 
 from src.main import app
 from src.platform_api import router_v1 as router_v1_module
@@ -19,6 +20,13 @@ HEADERS = {
 
 def _client() -> TestClient:
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _restore_ml_signal_snapshots() -> None:
+    original = copy.deepcopy(router_v1_module._store.ml_signal_snapshots)
+    yield
+    router_v1_module._store.ml_signal_snapshots = original
 
 
 def test_knowledge_v2_routes() -> None:

@@ -216,7 +216,7 @@
       "source": "docs/portal/operations/gate5-release-runbooks-and-client-validation.md",
       "topic": "operations",
       "concepts": ["release_runbook", "cross_client_validation", "incident_handling"],
-      "endpoints": ["/health", "/v1/health", "/v2/conversations/sessions", "/v2/conversations/sessions/{sessionId}/turns"],
+      "endpoints": ["/v1/health", "/v2/conversations/sessions", "/v2/conversations/sessions/{sessionId}/turns"],
       "workflows": ["release_validation_sequence", "client_lane_compatibility"],
       "owners": ["Team E", "Team F", "Team G"],
       "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/106"

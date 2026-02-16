@@ -21,7 +21,9 @@ Run this playbook only when foundational dependencies are complete:
 1. `#44` consumer-driven mock contract checks merged.
 2. `#45` SLO and alert baseline merged.
 3. `#75` deployment profile reconciled to one active path.
-4. `#80` pre-release readiness dependency closed.
+4. `#80` pre-release readiness dependency is either:
+   - closed, or
+   - explicitly waived with rationale and approver reference recorded on `#150`.
 
 ## Release Validation Sequence
 

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import math
 
 from src.platform_api.errors import PlatformAPIError
+from src.platform_api.observability import log_context_event
 from src.platform_api.schemas_v1 import CreateDeploymentRequest, CreateOrderRequest, RequestContext
 from src.platform_api.services.risk_audit_service import RiskAuditService
 from src.platform_api.services.ml_signal_constants import (
@@ -20,6 +22,8 @@ from src.platform_api.state_store import InMemoryStateStore
 
 _ACTIVE_DEPLOYMENT_STATES = {"queued", "running", "paused"}
 _VOLATILITY_FORECAST_MARKET_KEY = "__market__"
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -648,6 +652,18 @@ class RiskPreTradeService:
             policy_mode=policy_mode,
             metadata=metadata,
         )
+        log_context_event(
+            logger,
+            level=logging.INFO,
+            message="Risk pretrade decision recorded.",
+            context=context,
+            component="risk",
+            operation="pretrade_decision",
+            resource_type=resource_type,
+            resource_id=resource_id,
+            decision="approved",
+            checkType=check_type,
+        )
 
     def _record_block(
         self,
@@ -674,4 +690,17 @@ class RiskPreTradeService:
             outcome_code=outcome_code,
             reason=reason,
             metadata=metadata,
+        )
+        log_context_event(
+            logger,
+            level=logging.WARNING,
+            message="Risk pretrade decision recorded.",
+            context=context,
+            component="risk",
+            operation="pretrade_decision",
+            resource_type=resource_type,
+            resource_id=resource_id,
+            decision="blocked",
+            checkType=check_type,
+            outcomeCode=outcome_code,
         )

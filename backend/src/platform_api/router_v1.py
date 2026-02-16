@@ -127,12 +127,19 @@ async def _request_context(
     request: Request,
     x_request_id: str | None = Header(default=None, alias="X-Request-Id"),
 ) -> RequestContext:
-    request_id = x_request_id or f"req-{uuid4()}"
+    state_request_id = getattr(request.state, "request_id", None)
+    request_id = x_request_id or (state_request_id if isinstance(state_request_id, str) and state_request_id.strip() else f"req-{uuid4()}")
     request.state.request_id = request_id
+    state_tenant_id = getattr(request.state, "tenant_id", None)
+    state_user_id = getattr(request.state, "user_id", None)
+    tenant_id = state_tenant_id if isinstance(state_tenant_id, str) and state_tenant_id.strip() else "tenant-local"
+    user_id = state_user_id if isinstance(state_user_id, str) and state_user_id.strip() else "user-local"
+    request.state.tenant_id = tenant_id
+    request.state.user_id = user_id
     return RequestContext(
         request_id=request_id,
-        tenant_id="tenant-local",
-        user_id="user-local",
+        tenant_id=tenant_id,
+        user_id=user_id,
     )
 
 

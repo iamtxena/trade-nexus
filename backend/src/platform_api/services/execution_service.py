@@ -13,6 +13,7 @@ from src.platform_api.adapters.execution_adapter import (
     portfolio_to_dict,
 )
 from src.platform_api.errors import PlatformAPIError
+from src.platform_api.observability import context_log_fields, log_context_event
 from src.platform_api.knowledge.ingestion import KnowledgeIngestionPipeline
 from src.platform_api.schemas_v1 import (
     CreateDeploymentRequest,
@@ -96,6 +97,17 @@ class ExecutionService:
         idempotency_key: str,
         context: RequestContext,
     ) -> DeploymentResponse:
+        log_context_event(
+            logger,
+            level=logging.INFO,
+            message="Execution create_deployment received.",
+            context=context,
+            component="execution",
+            operation="create_deployment",
+            resource_type="deployment",
+            resource_id=request.strategyId,
+            mode=request.mode,
+        )
         if request.strategyId not in self._store.strategies:
             raise PlatformAPIError(
                 status_code=404,
@@ -160,6 +172,17 @@ class ExecutionService:
         if self._knowledge_ingestion_pipeline is not None:
             self._knowledge_ingestion_pipeline.ingest_deployment_outcome(record)
 
+        log_context_event(
+            logger,
+            level=logging.INFO,
+            message="Execution create_deployment completed.",
+            context=context,
+            component="execution",
+            operation="create_deployment",
+            resource_type="deployment",
+            resource_id=deployment_id,
+            status_code=202,
+        )
         return DeploymentResponse(requestId=context.request_id, deployment=Deployment(**deployment_dict))
 
     async def get_deployment(self, *, deployment_id: str, context: RequestContext) -> DeploymentResponse:
@@ -297,6 +320,18 @@ class ExecutionService:
         idempotency_key: str,
         context: RequestContext,
     ) -> OrderResponse:
+        log_context_event(
+            logger,
+            level=logging.INFO,
+            message="Execution create_order received.",
+            context=context,
+            component="execution",
+            operation="create_order",
+            resource_type="order",
+            resource_id=request.deploymentId,
+            symbol=request.symbol,
+            side=request.side,
+        )
         payload = request.model_dump()
         conflict, cached = self._store.get_idempotent_response(
             scope="orders",
@@ -355,6 +390,17 @@ class ExecutionService:
             response=order_dict,
         )
 
+        log_context_event(
+            logger,
+            level=logging.INFO,
+            message="Execution create_order completed.",
+            context=context,
+            component="execution",
+            operation="create_order",
+            resource_type="order",
+            resource_id=order_id,
+            status_code=201,
+        )
         return OrderResponse(requestId=context.request_id, order=Order(**order_dict))
 
     async def get_order(self, *, order_id: str, context: RequestContext) -> OrderResponse:
@@ -426,20 +472,37 @@ class ExecutionService:
 
         try:
             if scope == "deployments":
-                await self._reconciliation_service.run_deployment_drift_checks(
+                summary = await self._reconciliation_service.run_deployment_drift_checks(
                     tenant_id=context.tenant_id,
                     user_id=context.user_id,
                     request_id=context.request_id,
                 )
             else:
-                await self._reconciliation_service.run_order_drift_checks(
+                summary = await self._reconciliation_service.run_order_drift_checks(
                     tenant_id=context.tenant_id,
                     user_id=context.user_id,
                     request_id=context.request_id,
                 )
+            log_context_event(
+                logger,
+                level=logging.INFO,
+                message="Reconciliation drift check completed.",
+                context=context,
+                component="reconciliation",
+                operation="drift_check",
+                resource_type="reconciliation",
+                resource_id=scope,
+                driftCount=summary.drift_count,
+            )
         except Exception:
             logger.exception(
                 "Reconciliation drift check failed; continuing list request.",
-                extra={"scope": scope, "request_id": context.request_id},
+                extra=context_log_fields(
+                    context=context,
+                    component="reconciliation",
+                    operation="drift_check_failed",
+                    resource_type="reconciliation",
+                    resource_id=scope,
+                ),
             )
             return

@@ -349,6 +349,25 @@ Validation rules:
 2. v2 conversation lane checks must pass for OpenClaw-compatible session/turn flows.
 3. Failing consumer mock checks blocks merge regardless of OpenAPI baseline/freeze pass status.
 
+## 3.2) Structured Observability Contract (R-01)
+
+Structured runtime logs must include correlation fields on request and service events:
+
+- `requestId`
+- `tenantId`
+- `userId`
+- `component`
+- `operation`
+- `resourceType` (when applicable)
+- `resourceId` (when applicable)
+
+Rules:
+
+1. Platform API middleware must propagate request correlation IDs into request state before route handling.
+2. Service-level logs for execution, risk, research, reconciliation, and conversation must emit structured fields.
+3. Error and fallback paths must preserve correlation fields so incidents are traceable by `requestId`.
+4. Structured field keys are stable and must not be repurposed with different semantics.
+
 ## 4) Async Resource Contract
 
 Long-running operations use resource status:

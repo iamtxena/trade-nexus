@@ -48,3 +48,8 @@ Drift event payloads include:
 - `resolution`
 
 Use these events to audit status corrections and detect recurring provider mismatches.
+
+## Post-GateX R1 Remediation
+
+- `#207`: list adapter paths (`deployments`, `orders`, `portfolios`) now forward caller `tenant_id` and `user_id`.
+- Runtime services do not inject fallback tenant/user identities for provider list requests.

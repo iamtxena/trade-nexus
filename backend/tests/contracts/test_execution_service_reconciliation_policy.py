@@ -10,12 +10,24 @@ from src.platform_api.state_store import InMemoryStateStore
 
 
 class _StubExecutionAdapter:
-    async def list_deployments(self, *, status: str | None):  # type: ignore[no-untyped-def]
-        _ = status
+    async def list_deployments(  # type: ignore[no-untyped-def]
+        self,
+        *,
+        status: str | None,
+        tenant_id: str,
+        user_id: str,
+    ):
+        _ = (status, tenant_id, user_id)
         return []
 
-    async def list_orders(self, *, status: str | None):  # type: ignore[no-untyped-def]
-        _ = status
+    async def list_orders(  # type: ignore[no-untyped-def]
+        self,
+        *,
+        status: str | None,
+        tenant_id: str,
+        user_id: str,
+    ):
+        _ = (status, tenant_id, user_id)
         return []
 
 

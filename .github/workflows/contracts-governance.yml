@@ -160,44 +160,71 @@ jobs:
             }
 
             async function getReviewActors() {
-              const response = await github.graphql(
-                `
-                query($owner: String!, $repo: String!, $prNumber: Int!) {
-                  repository(owner: $owner, name: $repo) {
-                    pullRequest(number: $prNumber) {
-                      reviews(first: 100) {
-                        nodes {
-                          author {
-                            login
+              const actors = [];
+              let cursor = null;
+              let hasNextPage = true;
+              while (hasNextPage) {
+                const response = await github.graphql(
+                  `
+                  query($owner: String!, $repo: String!, $prNumber: Int!, $cursor: String) {
+                    repository(owner: $owner, name: $repo) {
+                      pullRequest(number: $prNumber) {
+                        reviews(first: 100, after: $cursor) {
+                          pageInfo {
+                            hasNextPage
+                            endCursor
                           }
-                          state
+                          nodes {
+                            author {
+                              login
+                            }
+                            state
+                          }
                         }
                       }
                     }
                   }
+                  `,
+                  {
+                    owner,
+                    repo,
+                    prNumber,
+                    cursor,
+                  },
+                );
+                const reviewsConnection = response.repository.pullRequest.reviews;
+                for (const review of reviewsConnection.nodes) {
+                  if (review.author && review.author.login && review.state !== "DISMISSED") {
+                    actors.push(String(review.author.login).toLowerCase());
+                  }
                 }
-                `,
-                {
-                  owner,
-                  repo,
-                  prNumber,
-                },
-              );
-              return response.repository.pullRequest.reviews.nodes
-                .filter((review) => review.author && review.author.login && review.state !== "DISMISSED")
-                .map((review) => String(review.author.login).toLowerCase());
+                hasNextPage = reviewsConnection.pageInfo.hasNextPage;
+                cursor = reviewsConnection.pageInfo.endCursor;
+              }
+              return actors;
             }
 
             async function getCheckRuns() {
-              const response = await github.rest.checks.listForRef(
-                {
-                  owner,
-                  repo,
-                  ref: headSha,
-                  per_page: 100,
-                },
-              );
-              return response.data.check_runs || [];
+              const runs = [];
+              let page = 1;
+              while (true) {
+                const response = await github.rest.checks.listForRef(
+                  {
+                    owner,
+                    repo,
+                    ref: headSha,
+                    per_page: 100,
+                    page,
+                  },
+                );
+                const batch = response.data.check_runs || [];
+                runs.push(...batch);
+                if (batch.length < 100) {
+                  break;
+                }
+                page += 1;
+              }
+              return runs;
             }
 
             async function sleep(ms) {

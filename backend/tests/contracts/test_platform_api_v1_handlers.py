@@ -434,6 +434,43 @@ def test_dataset_routes_and_dataset_ref_backtests() -> None:
     assert unresolved.json()["error"]["code"] in {"DATASET_NOT_PUBLISHED", "DATASET_NOT_FOUND"}
 
 
+def test_dataset_transform_rejects_unsupported_frequency() -> None:
+    client = _client()
+
+    init_resp = client.post(
+        "/v1/datasets/uploads:init",
+        headers=HEADERS,
+        json={
+            "filename": "btc-frequency.csv",
+            "contentType": "text/csv",
+            "sizeBytes": 1024,
+        },
+    )
+    assert init_resp.status_code == 202
+    dataset_id = init_resp.json()["datasetId"]
+
+    complete_resp = client.post(
+        f"/v1/datasets/{dataset_id}/uploads:complete",
+        headers=HEADERS,
+    )
+    assert complete_resp.status_code == 202
+
+    validate_resp = client.post(
+        f"/v1/datasets/{dataset_id}/validate",
+        headers=HEADERS,
+    )
+    assert validate_resp.status_code == 202
+
+    invalid_transform = client.post(
+        f"/v1/datasets/{dataset_id}/transform/candles",
+        headers=HEADERS,
+        json={"frequency": "7m"},
+    )
+    assert invalid_transform.status_code == 422
+    payload = invalid_transform.json()
+    assert payload["error"]["code"] == "DATASET_TRANSFORM_FREQUENCY_UNSUPPORTED"
+
+
 def test_stop_deployment_uses_adapter_failure_status(monkeypatch) -> None:
     client = _client()
 

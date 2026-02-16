@@ -30,6 +30,9 @@ Data lifecycle behavior is documented and implemented behind architecture bounda
   - `GET /v1/datasets/{datasetId}`
   - `GET /v1/datasets/{datasetId}/quality-report`
 - Gate2 implementation is a thin-stub baseline for orchestration and contract flow.
+- Post-GateX R1 (`#208`): transform frequency is now runtime-enforced.
+  - Supported values: `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`.
+  - Unsupported values return `422` with `DATASET_TRANSFORM_FREQUENCY_UNSUPPORTED`.
 
 ## Canonical References
 

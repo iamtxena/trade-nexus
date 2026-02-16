@@ -103,9 +103,9 @@ status, strategies_payload = request("GET", "/v1/strategies")
 if status != 200:
     raise AssertionError(f"/v1/strategies expected 200, got {status}: {strategies_payload}")
 assert_non_empty_str(strategies_payload, "requestId")
-strategies = strategies_payload.get("strategies")
-if not isinstance(strategies, list):
-    raise AssertionError(f"Expected strategies list, got: {strategies!r}")
+items = strategies_payload.get("items")
+if not isinstance(items, list):
+    raise AssertionError(f"Expected items list, got: {items!r}")
 
 # OpenClaw consumer expectations: v2 conversation session + turn workflow.
 status, create_session_payload = request(

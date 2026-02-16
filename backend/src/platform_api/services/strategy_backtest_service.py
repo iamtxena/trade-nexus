@@ -72,6 +72,7 @@ class StrategyBacktestService:
                 context=context,
                 reason=f"adapter_error:{exc.code}",
             )
+            provider_symbols = []
             fallback_note = f"Lona symbol snapshot unavailable ({exc.code}); using deterministic fallback symbols."
         except asyncio.CancelledError:
             await self._release_market_scan_budget(

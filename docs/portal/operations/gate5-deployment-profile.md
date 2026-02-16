@@ -4,7 +4,7 @@ summary: Single active deployment target profile and release-gate checklist for 
 owners:
   - Team F
   - Team G
-updated: 2026-02-15
+updated: 2026-02-16
 ---
 
 # Gate5 Deployment Profile
@@ -38,4 +38,5 @@ Gate5 enforces one active deployment target profile with no contradictory runtim
 
 - Deployment architecture source: `/docs/architecture/DEPLOYMENT.md`
 - Gate workflow process: `/docs/portal/operations/gate-workflow.md`
+- Reliability/deployment closure evidence: `/docs/portal/operations/gate5-reliability-deployment-closure.md`
 - Reliability parent epic: `#81`

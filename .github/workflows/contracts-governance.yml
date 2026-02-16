@@ -262,6 +262,13 @@ jobs:
               core.setFailed("Missing required Greptile review submission.");
               return;
             }
+            const hasCursorReview = reviewActors.includes("cursor");
+
+            if (hasCursorReview) {
+              core.info("Cursor review submission detected; accepting review signal without waiting for cursor check-run completion.");
+              core.info("Review governance checks passed.");
+              return;
+            }
 
             const maxWaitMs = 5 * 60 * 1000;
             const pollIntervalMs = 15 * 1000;

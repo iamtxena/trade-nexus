@@ -126,3 +126,60 @@ async def _run_adapter_contract() -> None:
 
 def test_live_engine_execution_adapter_contract() -> None:
     asyncio.run(_run_adapter_contract())
+
+
+async def _run_list_context_propagation_contract() -> None:
+    adapter = LiveEngineExecutionAdapter(
+        base_url="http://live-engine.local",
+        service_api_key="service-key",
+    )
+    calls: list[dict[str, str | None]] = []
+
+    async def fake_request(**kwargs):  # type: ignore[no-untyped-def]
+        calls.append(
+            {
+                "path": kwargs["path"],
+                "tenant_id": kwargs["tenant_id"],
+                "user_id": kwargs["user_id"],
+            }
+        )
+        return {"items": []}
+
+    adapter._request = fake_request  # type: ignore[assignment]
+
+    await adapter.list_deployments(
+        status="running",
+        tenant_id="tenant-remediate",
+        user_id="user-remediate",
+    )
+    await adapter.list_orders(
+        status="pending",
+        tenant_id="tenant-remediate",
+        user_id="user-remediate",
+    )
+    await adapter.list_portfolios(
+        tenant_id="tenant-remediate",
+        user_id="user-remediate",
+    )
+
+    assert calls == [
+        {
+            "path": "/api/internal/deployments?status=running",
+            "tenant_id": "tenant-remediate",
+            "user_id": "user-remediate",
+        },
+        {
+            "path": "/api/internal/orders?status=pending",
+            "tenant_id": "tenant-remediate",
+            "user_id": "user-remediate",
+        },
+        {
+            "path": "/api/internal/portfolios",
+            "tenant_id": "tenant-remediate",
+            "user_id": "user-remediate",
+        },
+    ]
+
+
+def test_live_engine_execution_adapter_list_paths_forward_context() -> None:
+    asyncio.run(_run_list_context_propagation_contract())

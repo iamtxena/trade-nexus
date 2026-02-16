@@ -83,7 +83,11 @@ class ExecutionService:
         context: RequestContext,
     ) -> DeploymentListResponse:
         await self._run_drift_checks(context=context, scope="deployments")
-        records = await self._execution_adapter.list_deployments(status=status)
+        records = await self._execution_adapter.list_deployments(
+            status=status,
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+        )
         return DeploymentListResponse(
             requestId=context.request_id,
             items=[Deployment(**deployment_to_dict(record)) for record in records],
@@ -276,7 +280,10 @@ class ExecutionService:
         return DeploymentResponse(requestId=context.request_id, deployment=Deployment(**deployment_to_dict(record)))
 
     async def list_portfolios(self, *, context: RequestContext) -> PortfolioListResponse:
-        records = await self._execution_adapter.list_portfolios()
+        records = await self._execution_adapter.list_portfolios(
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+        )
         return PortfolioListResponse(
             requestId=context.request_id,
             items=[Portfolio(**portfolio_to_dict(record)) for record in records],
@@ -306,7 +313,11 @@ class ExecutionService:
         context: RequestContext,
     ) -> OrderListResponse:
         await self._run_drift_checks(context=context, scope="orders")
-        records = await self._execution_adapter.list_orders(status=status)
+        records = await self._execution_adapter.list_orders(
+            status=status,
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+        )
         return OrderListResponse(
             requestId=context.request_id,
             items=[Order(**order_to_dict(record)) for record in records],

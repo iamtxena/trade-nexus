@@ -43,12 +43,24 @@ class _NoSideEffectAdapter:
         _ = (provider_deployment_id, tenant_id, user_id)
         return {"status": "running", "latestPnl": self.latest_pnl}
 
-    async def list_deployments(self, *, status: str | None):  # type: ignore[no-untyped-def]
-        _ = status
+    async def list_deployments(  # type: ignore[no-untyped-def]
+        self,
+        *,
+        status: str | None,
+        tenant_id: str,
+        user_id: str,
+    ):
+        _ = (status, tenant_id, user_id)
         return []
 
-    async def list_orders(self, *, status: str | None):  # type: ignore[no-untyped-def]
-        _ = status
+    async def list_orders(  # type: ignore[no-untyped-def]
+        self,
+        *,
+        status: str | None,
+        tenant_id: str,
+        user_id: str,
+    ):
+        _ = (status, tenant_id, user_id)
         return []
 
     async def get_order(self, *, provider_order_id: str, tenant_id: str, user_id: str):  # type: ignore[no-untyped-def]
@@ -65,7 +77,8 @@ class _NoSideEffectAdapter:
         _ = (portfolio_id, tenant_id, user_id)
         return None
 
-    async def list_portfolios(self):  # type: ignore[no-untyped-def]
+    async def list_portfolios(self, *, tenant_id: str, user_id: str):  # type: ignore[no-untyped-def]
+        _ = (tenant_id, user_id)
         return []
 
 

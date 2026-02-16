@@ -45,7 +45,7 @@
   },
   {
     "chunk": "docs/llm/chunks/architecture_interfaces_v1.md",
-    "chunk_hash": "21f45858b6ca19ec7b47936f6e05b9526eb2583a52d9a1e4207a2967e3cef837",
+    "chunk_hash": "ae764d1a08b454af56d44ec98550afc6d98dc4ca4c6272306d712ef9d733f11c",
     "concepts": [
       "interfaces",
       "public_api",
@@ -65,7 +65,7 @@
       "Architecture/Contracts lead"
     ],
     "source": "docs/architecture/INTERFACES.md",
-    "source_hash": "bcf8242178de7da6c8c7e42f78b37193cf6a3e13016057acf5081fba1b40053c",
+    "source_hash": "f822f28829251915007d6a14c465137b5c2da598053109191b20f64e490a9d98",
     "title": "Architecture Interfaces",
     "topic": "architecture",
     "workflows": [
@@ -96,7 +96,7 @@
   },
   {
     "chunk": "docs/llm/chunks/portal_gate3_execution_hardening_v1.md",
-    "chunk_hash": "b128a7928f63d52ee470b0e9bc1253d951685ab6a1af67e97b5a9624efc84ee4",
+    "chunk_hash": "025d9356b913f999316ccef2a00d4ef6ebe69668c7e36489c98770a716635a0f",
     "concepts": [
       "execution_adapter",
       "lifecycle_mapping",
@@ -115,7 +115,7 @@
       "Team G"
     ],
     "source": "docs/portal/operations/gate3-execution-hardening.md",
-    "source_hash": "623d90a005653c1199d26359bac5dc482cd7c58ac49a718ecaef05c357907d36",
+    "source_hash": "6b30016f1803ff7961aec0eb4486879467156164b24b384e4c01b7032386a6b1",
     "title": "Gate3 Execution Hardening",
     "topic": "operations",
     "workflows": [

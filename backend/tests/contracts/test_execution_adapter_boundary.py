@@ -64,7 +64,10 @@ async def _run_execution_adapter_portfolio_contracts() -> None:
     store = InMemoryStateStore()
     adapter = InMemoryExecutionAdapter(store)
 
-    portfolios = await adapter.list_portfolios()
+    portfolios = await adapter.list_portfolios(
+        tenant_id="tenant-a",
+        user_id="user-a",
+    )
     assert len(portfolios) >= 1
 
     snapshot = await adapter.get_portfolio_snapshot(

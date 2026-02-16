@@ -52,7 +52,13 @@ class ExecutionAdapter(Protocol):
     ) -> dict[str, float | str | None]:
         ...
 
-    async def list_deployments(self, *, status: str | None) -> list[DeploymentRecord]:
+    async def list_deployments(
+        self,
+        *,
+        status: str | None,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[DeploymentRecord]:
         ...
 
     async def place_order(
@@ -82,13 +88,24 @@ class ExecutionAdapter(Protocol):
     async def get_order(self, *, provider_order_id: str, tenant_id: str, user_id: str) -> OrderRecord | None:
         ...
 
-    async def list_orders(self, *, status: str | None) -> list[OrderRecord]:
+    async def list_orders(
+        self,
+        *,
+        status: str | None,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[OrderRecord]:
         ...
 
     async def get_portfolio_snapshot(self, *, portfolio_id: str, tenant_id: str, user_id: str) -> PortfolioRecord | None:
         ...
 
-    async def list_portfolios(self) -> list[PortfolioRecord]:
+    async def list_portfolios(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[PortfolioRecord]:
         ...
 
 
@@ -162,7 +179,14 @@ class InMemoryExecutionAdapter:
             "latestPnl": deployment.latest_pnl,
         }
 
-    async def list_deployments(self, *, status: str | None) -> list[DeploymentRecord]:
+    async def list_deployments(
+        self,
+        *,
+        status: str | None,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[DeploymentRecord]:
+        _ = (tenant_id, user_id)
         items = list(self._store.deployments.values())
         if status:
             items = [item for item in items if item.status == status]
@@ -217,7 +241,14 @@ class InMemoryExecutionAdapter:
     async def get_order(self, *, provider_order_id: str, tenant_id: str, user_id: str) -> OrderRecord | None:
         return self._find_order_by_provider_ref(provider_order_id)
 
-    async def list_orders(self, *, status: str | None) -> list[OrderRecord]:
+    async def list_orders(
+        self,
+        *,
+        status: str | None,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[OrderRecord]:
+        _ = (tenant_id, user_id)
         items = list(self._store.orders.values())
         if status:
             items = [item for item in items if item.status == status]
@@ -226,7 +257,13 @@ class InMemoryExecutionAdapter:
     async def get_portfolio_snapshot(self, *, portfolio_id: str, tenant_id: str, user_id: str) -> PortfolioRecord | None:
         return self._store.portfolios.get(portfolio_id)
 
-    async def list_portfolios(self) -> list[PortfolioRecord]:
+    async def list_portfolios(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[PortfolioRecord]:
+        _ = (tenant_id, user_id)
         return list(self._store.portfolios.values())
 
     def _find_deployment_by_provider_ref(self, provider_ref_id: str) -> DeploymentRecord | None:
@@ -332,14 +369,20 @@ class LiveEngineExecutionAdapter:
         latest_pnl = deployment.get("latestPnl")
         return {"status": str(deployment.get("status", "failed")), "latestPnl": latest_pnl if isinstance(latest_pnl, (int, float)) else None}
 
-    async def list_deployments(self, *, status: str | None) -> list[DeploymentRecord]:
+    async def list_deployments(
+        self,
+        *,
+        status: str | None,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[DeploymentRecord]:
         query = f"?status={status}" if status else ""
         body = await self._request(
             method="GET",
             path=f"/api/internal/deployments{query}",
             payload=None,
-            tenant_id="tenant-local",
-            user_id="service-account",
+            tenant_id=tenant_id,
+            user_id=user_id,
         )
         deployments = body.get("items")
         if not isinstance(deployments, list):
@@ -422,14 +465,20 @@ class LiveEngineExecutionAdapter:
             return None
         return self._to_order_record(order)
 
-    async def list_orders(self, *, status: str | None) -> list[OrderRecord]:
+    async def list_orders(
+        self,
+        *,
+        status: str | None,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[OrderRecord]:
         query = f"?status={status}" if status else ""
         body = await self._request(
             method="GET",
             path=f"/api/internal/orders{query}",
             payload=None,
-            tenant_id="tenant-local",
-            user_id="service-account",
+            tenant_id=tenant_id,
+            user_id=user_id,
         )
         orders = body.get("items")
         if not isinstance(orders, list):
@@ -452,13 +501,18 @@ class LiveEngineExecutionAdapter:
             return None
         return self._to_portfolio_record(portfolio)
 
-    async def list_portfolios(self) -> list[PortfolioRecord]:
+    async def list_portfolios(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[PortfolioRecord]:
         body = await self._request(
             method="GET",
             path="/api/internal/portfolios",
             payload=None,
-            tenant_id="tenant-local",
-            user_id="service-account",
+            tenant_id=tenant_id,
+            user_id=user_id,
         )
         portfolios = body.get("items")
         if not isinstance(portfolios, list):

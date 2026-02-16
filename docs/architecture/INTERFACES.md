@@ -203,6 +203,22 @@ export interface ExecutionAdapter {
     latestPnl?: number;
   }>;
 
+  listDeployments(input: {
+    status?: string;
+    tenantId: string;
+    userId: string;
+  }): Promise<Array<{
+    id: string;
+    strategyId: string;
+    mode: 'paper' | 'live';
+    status: 'queued' | 'running' | 'paused' | 'stopping' | 'stopped' | 'failed';
+    capital: number;
+    providerRefId: string;
+    latestPnl?: number;
+    createdAt: string;
+    updatedAt: string;
+  }>>;
+
   placeOrder(input: {
     symbol: string;
     side: 'buy' | 'sell';
@@ -237,6 +253,41 @@ export interface ExecutionAdapter {
       unrealizedPnl: number;
     }>;
   }>;
+
+  listPortfolios(input: {
+    tenantId: string;
+    userId: string;
+  }): Promise<Array<{
+    id: string;
+    mode: 'paper' | 'live';
+    cash: number;
+    totalValue: number;
+    pnlTotal?: number;
+    positions: Array<{
+      symbol: string;
+      quantity: number;
+      avgPrice: number;
+      currentPrice: number;
+      unrealizedPnl: number;
+    }>;
+  }>>;
+
+  listOrders(input: {
+    status?: string;
+    tenantId: string;
+    userId: string;
+  }): Promise<Array<{
+    id: string;
+    symbol: string;
+    side: 'buy' | 'sell';
+    type: 'market' | 'limit';
+    quantity: number;
+    price?: number;
+    status: 'pending' | 'filled' | 'cancelled' | 'failed';
+    deploymentId?: string;
+    providerOrderId: string;
+    createdAt: string;
+  }>>;
 }
 ```
 

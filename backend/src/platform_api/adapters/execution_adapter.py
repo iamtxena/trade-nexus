@@ -554,7 +554,14 @@ class LiveEngineExecutionAdapter:
                 code="LIVE_ENGINE_REQUEST_FAILED",
                 status_code=response.status_code,
             )
-        body = response.json()
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise AdapterError(
+                "Live-engine response is not valid JSON.",
+                code="LIVE_ENGINE_BAD_RESPONSE_JSON",
+                status_code=502,
+            ) from exc
         if not isinstance(body, dict):
             raise AdapterError("Live-engine response must be an object.", code="LIVE_ENGINE_BAD_RESPONSE")
         return body

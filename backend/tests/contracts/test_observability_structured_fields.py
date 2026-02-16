@@ -91,6 +91,48 @@ def test_structured_observability_fields_for_research_risk_and_execution(caplog)
     assert any(getattr(record, "resourceType", None) == "order" for record in execution_records)
 
 
+def test_v2_request_context_falls_back_for_blank_identity_headers(caplog) -> None:
+    client = _client()
+    caplog.set_level(logging.INFO)
+    caplog.clear()
+
+    response = client.post(
+        "/v2/research/market-scan",
+        headers={
+            "Authorization": "Bearer test-token",
+            "X-API-Key": "test-key",
+            "X-Request-Id": "req-obs-blank-identity-001",
+            "X-Tenant-Id": "   ",
+            "X-User-Id": "",
+        },
+        json={"assetClasses": ["crypto"], "capital": 25000},
+    )
+    assert response.status_code == 200
+
+    api_records = _records_by_component(caplog, "api")
+    research_records = _records_by_component(caplog, "research")
+    assert api_records
+    assert research_records
+
+    request_records = [
+        record
+        for record in api_records
+        if getattr(record, "requestId", None) == "req-obs-blank-identity-001"
+    ]
+    assert request_records
+    for record in request_records:
+        assert getattr(record, "tenantId", None) == "tenant-local"
+        assert getattr(record, "userId", None) == "user-local"
+
+    research_record = next(
+        record
+        for record in reversed(research_records)
+        if getattr(record, "requestId", None) == "req-obs-blank-identity-001"
+    )
+    assert getattr(research_record, "tenantId", None) == "tenant-local"
+    assert getattr(research_record, "userId", None) == "user-local"
+
+
 def test_structured_observability_fields_for_conversation_and_reconciliation(caplog) -> None:
     client = _client()
     caplog.set_level(logging.INFO)

@@ -49,9 +49,9 @@ async def _request_context(
     state_user_id = getattr(request.state, "user_id", None)
     tenant_id = request.headers.get("X-Tenant-Id")
     user_id = request.headers.get("X-User-Id")
-    if tenant_id is None:
+    if not isinstance(tenant_id, str) or not tenant_id.strip():
         tenant_id = state_tenant_id if isinstance(state_tenant_id, str) and state_tenant_id.strip() else "tenant-local"
-    if user_id is None:
+    if not isinstance(user_id, str) or not user_id.strip():
         user_id = state_user_id if isinstance(state_user_id, str) and state_user_id.strip() else "user-local"
     request.state.tenant_id = tenant_id
     request.state.user_id = user_id

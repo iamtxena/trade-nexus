@@ -74,13 +74,20 @@ def _is_platform_request(path: str) -> bool:
     return path.startswith("/v1/") or path.startswith("/v2/")
 
 
+def _header_or_fallback(request: Request, *, header: str, fallback: str) -> str:
+    value = request.headers.get(header)
+    if isinstance(value, str) and value.strip():
+        return value
+    return fallback
+
+
 @app.middleware("http")
 async def platform_api_observability_context_middleware(request: Request, call_next):
     """Attach request correlation identifiers and emit structured request logs."""
     if _is_platform_request(request.url.path):
         request.state.request_id = request.headers.get("X-Request-Id") or f"req-{uuid4()}"
-        request.state.tenant_id = request.headers.get("X-Tenant-Id", "tenant-local")
-        request.state.user_id = request.headers.get("X-User-Id", "user-local")
+        request.state.tenant_id = _header_or_fallback(request, header="X-Tenant-Id", fallback="tenant-local")
+        request.state.user_id = _header_or_fallback(request, header="X-User-Id", fallback="user-local")
         log_request_event(
             logger,
             level=logging.INFO,

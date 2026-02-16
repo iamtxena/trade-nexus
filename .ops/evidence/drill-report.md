@@ -1,19 +1,26 @@
-# Ops Drill Report — 2026-02-16 (v4, Cursor + Greptile review)
+# Ops Drill Report — 2026-02-16 (v5, all automated review findings resolved)
 
 > Operational readiness drill results for Trade Nexus backend.
-> Re-drilled after addressing 5 automated review findings from Cursor + Greptile.
+> Includes fixes from 4 review rounds (2 human + 2 automated).
 
 ## Drill Metadata
 
 | Field | Value |
 |-------|-------|
-| Date | 2026-02-16 14:34 UTC (re-drill v4) |
+| Date | 2026-02-16 14:34 UTC (last drill v4; code fixes v5) |
 | Operator | Claude Code (automated) |
 | Environment | Production (Azure Container Apps, West Europe) |
 | Active Revision | `trade-nexus-backend--0000028` |
-| Script Version | `ops-drill.sh` v4 (branch `ops/176-178-release-drills`) |
+| Script Version | `ops-drill.sh` v5 (branch `ops/176-178-release-drills`) |
 
-## Review Fixes Applied (Round 3 — Cursor + Greptile)
+## Review Fixes Applied (Round 4 — Cursor automated, post-382329a)
+
+| # | Source | Finding | Fix |
+|---|--------|---------|-----|
+| 1 | Cursor | Reactivation failures can produce false drill passes | Scenarios 2/4 reactivation captures stderr, checks exit code, FAILs drill if any reactivation fails |
+| 2 | Cursor | Scenario 2 can exit before recording failure | `grep "SMOKE_RESULT"` pipeline guarded with `\|\| true` to prevent abort under `set -euo pipefail` |
+
+## Review Fixes Applied (Round 3 — Cursor + Greptile automated)
 
 | # | Source | Finding | Fix |
 |---|--------|---------|-----|
@@ -104,4 +111,4 @@
 
 ## Postmortem
 
-No drills failed. All 13 review findings (9 human + 4 automated) are resolved across 3 review rounds.
+No drills failed. All 15 review findings (9 human + 6 automated) are resolved across 4 review rounds.

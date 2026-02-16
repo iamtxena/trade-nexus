@@ -225,15 +225,35 @@ run_scenario_2() {
 
   # Reactivate all revisions and measure cold-start
   echo "Reactivating revisions..."
+  local reactivation_failed=false
   for rev in $(echo "$active_revisions" | jq -r '.[]'); do
     echo "  Reactivating: ${rev}"
+    local react_stderr
+    react_stderr=$(mktemp)
+    set +e
     az containerapp revision activate \
       --name "$CONTAINER_APP" \
       --resource-group "$RESOURCE_GROUP" \
       --revision "$rev" \
-      -o none 2>/dev/null
+      -o none 2>"$react_stderr"
+    local react_exit=$?
+    set -e
+    if [[ $react_exit -ne 0 ]]; then
+      echo "  ERROR: Failed to reactivate ${rev} (exit=${react_exit}):"
+      cat "$react_stderr" >&2
+      reactivation_failed=true
+    fi
+    rm -f "$react_stderr"
   done
   DEACTIVATED_REVISIONS=()
+
+  if [[ "$reactivation_failed" == "true" ]]; then
+    echo "  WARNING: One or more revisions failed to reactivate — drill FAIL."
+    local end
+    end=$(epoch_seconds)
+    record_result 2 "$name" "FAIL" "$(( end - start ))"
+    return 0
+  fi
 
   echo "Running smoke check (will trigger cold start)..."
 
@@ -250,7 +270,7 @@ run_scenario_2() {
 
   # Parse cold-start seconds from smoke output
   local cold_start_seconds
-  cold_start_seconds=$(echo "$SMOKE_OUTPUT" | grep "SMOKE_RESULT" | sed 's/.*cold_start_seconds=//' | awk '{print $1}')
+  cold_start_seconds=$(echo "$SMOKE_OUTPUT" | grep "SMOKE_RESULT" | sed 's/.*cold_start_seconds=//' | awk '{print $1}' || true)
   cold_start_seconds="${cold_start_seconds:-0}"
 
   echo ""
@@ -455,15 +475,35 @@ run_scenario_4() {
 
   # Restore: reactivate ALL revisions (always restore, even if verification failed)
   echo "Reactivating all revisions..."
+  local reactivation_failed=false
   for rev in $(echo "$active_revisions" | jq -r '.[]'); do
     echo "  Reactivating: ${rev}"
+    local react_stderr
+    react_stderr=$(mktemp)
+    set +e
     az containerapp revision activate \
       --name "$CONTAINER_APP" \
       --resource-group "$RESOURCE_GROUP" \
       --revision "$rev" \
-      -o none 2>/dev/null
+      -o none 2>"$react_stderr"
+    local react_exit=$?
+    set -e
+    if [[ $react_exit -ne 0 ]]; then
+      echo "  ERROR: Failed to reactivate ${rev} (exit=${react_exit}):"
+      cat "$react_stderr" >&2
+      reactivation_failed=true
+    fi
+    rm -f "$react_stderr"
   done
   DEACTIVATED_REVISIONS=()
+
+  if [[ "$reactivation_failed" == "true" ]]; then
+    echo "  WARNING: One or more revisions failed to reactivate — drill FAIL."
+    local end
+    end=$(epoch_seconds)
+    record_result 4 "$name" "FAIL" "$(( end - start ))"
+    return 0
+  fi
 
   echo "Revisions reactivated. Running smoke check for recovery..."
 

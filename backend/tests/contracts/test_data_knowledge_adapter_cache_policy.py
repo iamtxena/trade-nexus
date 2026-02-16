@@ -245,3 +245,54 @@ def test_market_context_invalid_top_level_sentiment_remains_optional_safe() -> N
         assert "sentiment_confidence" not in names
 
     asyncio.run(_run())
+
+
+def test_market_context_merges_top_level_sentiment_metadata_with_existing_ml_sentiment() -> None:
+    class _DualSourceSentimentAdapter(_StubMarketContextAdapter):
+        async def get_market_context(  # type: ignore[no-untyped-def]
+            self,
+            *,
+            asset_classes: list[str],
+            tenant_id: str,
+            user_id: str,
+            request_id: str,
+        ):
+            _ = (asset_classes, tenant_id, user_id, request_id)
+            self.calls += 1
+            return {
+                "regimeSummary": "Dual sentiment source payload.",
+                "signals": [{"name": "focus_assets", "value": "crypto"}],
+                "sentiment": {
+                    "score": 68,
+                    "confidence": 81,
+                    "source": "curated-news",
+                    "sourceCount": 12,
+                    "lookbackHours": 24,
+                },
+                "mlSignals": {
+                    "prediction": {"direction": "bullish", "confidence": 0.8},
+                    "sentiment": {"score": 0.64, "confidence": 0.71},
+                    "volatility": {"predictedPct": 33.0, "confidence": 0.66},
+                    "anomaly": {"isAnomaly": False, "score": 0.05},
+                },
+            }
+
+    async def _run() -> None:
+        inner = _DualSourceSentimentAdapter()
+        adapter = CachingDataKnowledgeAdapter(inner_adapter=inner, ttl_seconds=10)
+        payload = await adapter.get_market_context(
+            asset_classes=["crypto"],
+            tenant_id="tenant-a",
+            user_id="user-a",
+            request_id="req-cache-011",
+        )
+
+        sentiment = payload["mlSignals"]["sentiment"]
+        assert sentiment["score"] == 0.64
+        assert sentiment["confidence"] == 0.71
+        assert sentiment["source"] == "curated-news"
+        assert sentiment["sourceCount"] == 12
+        assert sentiment["lookbackHours"] == 24
+        assert "sentiment" not in payload
+
+    asyncio.run(_run())

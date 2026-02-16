@@ -161,6 +161,25 @@ def _normalize_sentiment_from_signals(signals: list[dict[str, str]]) -> dict[str
     return result
 
 
+def _merge_sentiment_candidates(
+    *,
+    ml_sentiment: dict[str, object] | None,
+    top_level_sentiment: dict[str, object] | None,
+    signal_sentiment: dict[str, object] | None,
+) -> dict[str, object] | None:
+    # Canonical precedence: mlSignals.sentiment > top-level sentiment > signals-derived.
+    candidates = (ml_sentiment, top_level_sentiment, signal_sentiment)
+    merged: dict[str, object] = {}
+    for key in ("score", "confidence", "source", "sourceCount", "lookbackHours"):
+        for candidate in candidates:
+            if isinstance(candidate, dict) and key in candidate:
+                merged[key] = candidate[key]
+                break
+    if "score" not in merged and "confidence" not in merged:
+        return None
+    return merged
+
+
 def _upsert_signal(signals: list[dict[str, str]], *, name: str, value: str) -> None:
     for signal in signals:
         if signal["name"].strip().lower() == name.lower():
@@ -183,11 +202,14 @@ def normalize_market_context_payload(payload: dict[str, object]) -> dict[str, ob
     raw_ml_signals = normalized.get("mlSignals")
     ml_signals: dict[str, object] = copy.deepcopy(raw_ml_signals) if isinstance(raw_ml_signals, dict) else {}
 
-    sentiment = _normalize_sentiment_candidate(ml_signals.get("sentiment"))
-    if sentiment is None:
-        sentiment = _normalize_sentiment_candidate(normalized.get("sentiment"))
-    if sentiment is None:
-        sentiment = _normalize_sentiment_from_signals(normalized_signals)
+    ml_sentiment = _normalize_sentiment_candidate(ml_signals.get("sentiment"))
+    top_level_sentiment = _normalize_sentiment_candidate(normalized.get("sentiment"))
+    signal_sentiment = _normalize_sentiment_from_signals(normalized_signals)
+    sentiment = _merge_sentiment_candidates(
+        ml_sentiment=ml_sentiment,
+        top_level_sentiment=top_level_sentiment,
+        signal_sentiment=signal_sentiment,
+    )
 
     if sentiment is not None:
         ml_signals["sentiment"] = sentiment

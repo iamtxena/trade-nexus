@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import threading
 from dataclasses import dataclass
 
 from src.platform_api.adapters.lona_adapter import AdapterError, LonaAdapter
@@ -51,7 +52,7 @@ class StrategyBacktestService:
         self._lona_adapter = lona_adapter
         self._backtest_resolution_service = backtest_resolution_service
         self._knowledge_ingestion_pipeline = knowledge_ingestion_pipeline
-        self._research_budget_lock = asyncio.Lock()
+        self._research_budget_lock = threading.Lock()
 
     async def market_scan(self, *, request: MarketScanRequest, context: RequestContext) -> MarketScanResponse:
         symbol_snapshot: list[str] = []
@@ -78,6 +79,13 @@ class StrategyBacktestService:
                 reason=f"adapter_error:{exc.code}",
             )
             fallback_note = f"Lona symbol snapshot unavailable ({exc.code}); using deterministic fallback symbols."
+        except asyncio.CancelledError:
+            await self._release_market_scan_budget(
+                reservation=reservation,
+                context=context,
+                reason="adapter_error_unexpected:CancelledError",
+            )
+            raise
         except Exception as exc:
             await self._release_market_scan_budget(
                 reservation=reservation,
@@ -110,7 +118,7 @@ class StrategyBacktestService:
         return MarketScanResponse(requestId=context.request_id, regimeSummary=regime, strategyIdeas=ideas)
 
     async def _reserve_market_scan_budget(self, *, context: RequestContext) -> MarketScanBudgetReservation:
-        async with self._research_budget_lock:
+        with self._research_budget_lock:
             policy = self._store.research_provider_budget
             if not isinstance(policy, dict):
                 raise PlatformAPIError(
@@ -194,7 +202,7 @@ class StrategyBacktestService:
         context: RequestContext,
         reason: str,
     ) -> None:
-        async with self._research_budget_lock:
+        with self._research_budget_lock:
             policy = self._store.research_provider_budget
             if not isinstance(policy, dict):
                 return

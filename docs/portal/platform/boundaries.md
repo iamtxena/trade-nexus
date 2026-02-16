@@ -21,3 +21,7 @@ updated: 2026-02-14
 - `/docs/architecture/specs/platform-api.openapi.yaml`
 - `/docs/architecture/API_CONTRACT_GOVERNANCE.md`
 - `/docs/architecture/INTERFACES.md`
+
+## Post-GateX R1 Remediation
+
+- `#209`: adapter JSON decode failures are normalized into deterministic `AdapterError` envelopes.

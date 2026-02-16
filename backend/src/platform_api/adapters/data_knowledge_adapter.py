@@ -655,7 +655,14 @@ class TraderDataHTTPAdapter:
                 code="TRADER_DATA_REQUEST_FAILED",
                 status_code=response.status_code,
             )
-        payload = response.json()
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise AdapterError(
+                "Trader-data response is not valid JSON.",
+                code="TRADER_DATA_BAD_RESPONSE_JSON",
+                status_code=502,
+            ) from exc
         if not isinstance(payload, dict):
             raise AdapterError("Trader-data response must be an object.", code="TRADER_DATA_BAD_RESPONSE")
         return payload

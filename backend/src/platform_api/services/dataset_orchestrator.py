@@ -21,6 +21,16 @@ from src.platform_api.schemas_v1 import (
 )
 from src.platform_api.state_store import DatasetRecord, InMemoryStateStore, QualityReportRecord, utc_now
 
+_SUPPORTED_CANDLE_FREQUENCIES = (
+    "1m",
+    "5m",
+    "15m",
+    "30m",
+    "1h",
+    "4h",
+    "1d",
+)
+
 
 class DatasetOrchestrator:
     """Gate2 dataset control-plane stubs with contract-compliant responses."""
@@ -97,6 +107,17 @@ class DatasetOrchestrator:
         context: RequestContext,
     ) -> DatasetResponse:
         dataset = self._require_dataset(dataset_id=dataset_id, request_id=context.request_id)
+        normalized_frequency = request.frequency.strip().lower()
+        if normalized_frequency not in _SUPPORTED_CANDLE_FREQUENCIES:
+            raise PlatformAPIError(
+                status_code=422,
+                code="DATASET_TRANSFORM_FREQUENCY_UNSUPPORTED",
+                message=(
+                    "Unsupported transform frequency. "
+                    f"Allowed frequencies: {', '.join(_SUPPORTED_CANDLE_FREQUENCIES)}."
+                ),
+                request_id=context.request_id,
+            )
         dataset.status = "transforming"
         dataset.updated_at = utc_now()
         dataset.status = "ready"

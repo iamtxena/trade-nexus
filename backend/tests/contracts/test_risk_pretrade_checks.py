@@ -391,8 +391,8 @@ def test_pretrade_uses_deterministic_fallback_when_volatility_confidence_is_nan(
 
         assert response.order.id == "ord-risk-001"
         assert adapter.place_order_calls == 1
-        assert store.risk_audit_records
-        metadata = store.risk_audit_records[-1].metadata
+        assert store.risk_audit_trail
+        metadata = list(store.risk_audit_trail.values())[-1].metadata
         assert metadata["volatilityForecastPct"] == 50.0
         assert metadata["volatilityForecastConfidence"] == 0.0
         assert metadata["volatilitySizingMultiplier"] == 1.0

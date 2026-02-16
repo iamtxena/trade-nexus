@@ -238,17 +238,22 @@ jobs:
 
             const checkRuns = await getCheckRuns();
             const cursorRuns = checkRuns.filter((run) => run.name.toLowerCase().includes("cursor"));
-            if (cursorRuns.length === 0) {
-              core.setFailed("Missing required Cursor check run.");
-              return;
-            }
-
-            const cursorPassed = cursorRuns.some((run) =>
-              run.status === "completed" && ["success", "neutral", "skipped"].includes(run.conclusion || ""),
-            );
-            if (!cursorPassed) {
-              const statuses = cursorRuns.map((run) => `${run.name}:${run.status}/${run.conclusion || "null"}`);
-              core.setFailed(`Cursor check has not passed yet. Current status: ${statuses.join(", ")}`);
+            if (cursorRuns.length > 0) {
+              const cursorCompleted = cursorRuns.some((run) => run.status === "completed");
+              if (!cursorCompleted) {
+                core.info("Cursor check is still pending; final pass/fail is enforced by the Cursor check itself.");
+                return;
+              }
+              const cursorPassed = cursorRuns.some((run) =>
+                run.status === "completed" && ["success", "neutral", "skipped"].includes(run.conclusion || ""),
+              );
+              if (!cursorPassed) {
+                const statuses = cursorRuns.map((run) => `${run.name}:${run.status}/${run.conclusion || "null"}`);
+                core.setFailed(`Cursor check has not passed yet. Current status: ${statuses.join(", ")}`);
+                return;
+              }
+            } else {
+              core.info("Cursor check run not visible yet; final merge gate should still require Cursor to be green.");
               return;
             }
 

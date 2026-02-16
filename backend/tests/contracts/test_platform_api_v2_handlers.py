@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+
 from fastapi.testclient import TestClient
 
 from src.main import app
@@ -69,6 +71,32 @@ def test_research_v2_route_includes_knowledge_and_context() -> None:
     assert "knowledgeEvidence" in payload
     assert "dataContextSummary" in payload
     assert payload["requestId"] == HEADERS["X-Request-Id"]
+
+
+def test_research_v2_route_returns_provider_budget_exceeded_error() -> None:
+    client = _client()
+    original_budget = copy.deepcopy(router_v1_module._store.research_provider_budget)
+    original_events = copy.deepcopy(router_v1_module._store.research_budget_events)
+    try:
+        router_v1_module._store.research_provider_budget = {
+            "maxTotalCostUsd": 1.0,
+            "maxPerRequestCostUsd": 0.1,
+            "estimatedMarketScanCostUsd": 0.2,
+            "spentCostUsd": 0.0,
+        }
+        response = client.post(
+            "/v2/research/market-scan",
+            headers=HEADERS,
+            json={"assetClasses": ["crypto"], "capital": 25000},
+        )
+    finally:
+        router_v1_module._store.research_provider_budget = original_budget
+        router_v1_module._store.research_budget_events = original_events
+
+    assert response.status_code == 429
+    payload = response.json()
+    assert payload["requestId"] == HEADERS["X-Request-Id"]
+    assert payload["error"]["code"] == "RESEARCH_PROVIDER_BUDGET_EXCEEDED"
 
 
 def test_research_v2_route_applies_ml_signal_scoring(monkeypatch) -> None:

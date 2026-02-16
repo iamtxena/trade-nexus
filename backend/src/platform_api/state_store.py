@@ -312,6 +312,13 @@ class InMemoryStateStore:
         self.drift_events: dict[str, DriftEventRecord] = {}
         self.risk_audit_trail: dict[str, RiskAuditRecord] = {}
         self.volatility_forecasts: dict[str, dict[str, float]] = {}
+        self.research_provider_budget: dict[str, Any] = {
+            "maxTotalCostUsd": 100.0,
+            "maxPerRequestCostUsd": 5.0,
+            "estimatedMarketScanCostUsd": 0.25,
+            "spentCostUsd": 0.0,
+        }
+        self.research_budget_events: list[dict[str, Any]] = []
         self.conversation_sessions: dict[str, ConversationSessionRecord] = {}
         self.conversation_turns: dict[str, list[ConversationTurnRecord]] = {}
         self.conversation_user_memory: dict[str, dict[str, Any]] = {}

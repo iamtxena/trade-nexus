@@ -45,7 +45,7 @@
   },
   {
     "chunk": "docs/llm/chunks/architecture_interfaces_v1.md",
-    "chunk_hash": "726bdd2e64fed4b62dc7c8e2de8bb283774c83c8b555cf962c25178cd1e3ea13",
+    "chunk_hash": "52af11c0453a57c4f9a03811fd9b8f14fc5ac7ce153024b597e4a576f1396225",
     "concepts": [
       "interfaces",
       "public_api",
@@ -65,7 +65,7 @@
       "Architecture/Contracts lead"
     ],
     "source": "docs/architecture/INTERFACES.md",
-    "source_hash": "fa389e5623c3f6d20bb98fb03183bb9a6854b176132642cbe7c326589b172837",
+    "source_hash": "edd82d2fafc6af8de47bd8df4c5218b255180d8374a1482a043ac35d860bef65",
     "title": "Architecture Interfaces",
     "topic": "architecture",
     "workflows": [
@@ -151,7 +151,7 @@
   },
   {
     "chunk": "docs/llm/chunks/portal_gate3_research_loop_context_v1.md",
-    "chunk_hash": "f1682c566d6ab86fd5cccf9bd678bdece350b7e31ac1ae4d585000031b2becde",
+    "chunk_hash": "dffecb73777b91d3ecc651bc15669c6c46f4428528fb1068495a15e0ae8d2fcb",
     "concepts": [
       "research_loop",
       "knowledge_evidence",
@@ -168,7 +168,7 @@
       "Team G"
     ],
     "source": "docs/portal/platform/gate3-research-loop-context.md",
-    "source_hash": "135650c4d1625e8e55ac13b61b3637b7f5bb5a8a18ba478250699494c1d7646a",
+    "source_hash": "ed14d33b54039c2cb2416400e732a62d1b9a3241bbd798b14fdbbe5b454640af",
     "title": "Gate3 Research Loop with Context",
     "topic": "platform",
     "workflows": [

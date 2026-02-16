@@ -232,6 +232,53 @@ def test_market_scan_releases_budget_on_adapter_failure() -> None:
     asyncio.run(_run())
 
 
+def test_market_scan_releases_budget_on_unexpected_adapter_exception() -> None:
+    class _UnexpectedFailureLonaAdapter(_RecordingLonaAdapter):
+        async def list_symbols(
+            self,
+            *,
+            is_global: bool,
+            limit: int,
+            tenant_id: str,
+            user_id: str,
+        ) -> list[dict[str, str]]:
+            _ = (is_global, limit, tenant_id, user_id)
+            self.list_symbols_calls += 1
+            raise RuntimeError("unexpected provider failure")
+
+    async def _run() -> None:
+        store = InMemoryStateStore()
+        data_bridge = InMemoryDataBridgeAdapter(store)
+        backtest_resolution = BacktestResolutionService(data_bridge)
+        adapter = _UnexpectedFailureLonaAdapter()
+        service = StrategyBacktestService(
+            store=store,
+            lona_adapter=adapter,
+            backtest_resolution_service=backtest_resolution,
+        )
+        store.research_provider_budget = {
+            "maxTotalCostUsd": 2.0,
+            "maxPerRequestCostUsd": 1.0,
+            "estimatedMarketScanCostUsd": 0.4,
+            "spentCostUsd": 0.0,
+        }
+
+        response = await service.market_scan(
+            request=MarketScanRequest(assetClasses=["crypto"], capital=25_000),
+            context=_context(),
+        )
+
+        assert adapter.list_symbols_calls == 1
+        assert len(response.strategyIdeas) == 1
+        assert store.research_provider_budget["spentCostUsd"] == 0.0
+        assert len(store.research_budget_events) >= 2
+        assert store.research_budget_events[-2]["decision"] == "reserved"
+        assert store.research_budget_events[-1]["decision"] == "released"
+        assert store.research_budget_events[-1]["reason"] == "adapter_error_unexpected:RuntimeError"
+
+    asyncio.run(_run())
+
+
 def test_market_scan_budget_guardrail_is_concurrency_safe() -> None:
     async def _run() -> None:
         service, store, adapter = await _create_service_and_store()

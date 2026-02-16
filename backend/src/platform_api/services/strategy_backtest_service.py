@@ -78,6 +78,16 @@ class StrategyBacktestService:
                 reason=f"adapter_error:{exc.code}",
             )
             fallback_note = f"Lona symbol snapshot unavailable ({exc.code}); using deterministic fallback symbols."
+        except Exception as exc:
+            await self._release_market_scan_budget(
+                reservation=reservation,
+                context=context,
+                reason=f"adapter_error_unexpected:{type(exc).__name__}",
+            )
+            fallback_note = (
+                "Lona symbol snapshot unavailable (adapter_unexpected_error); "
+                "using deterministic fallback symbols."
+            )
 
         ideas = [
             MarketScanIdea(

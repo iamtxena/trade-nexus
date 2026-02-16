@@ -49,6 +49,10 @@ const repoRoot = process.argv[2];
 const packageJsonPath = path.join(repoRoot, 'sdk/typescript/package.json');
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
 const backtestsApiPath = path.join(repoRoot, 'sdk/typescript/src/apis/BacktestsApi.ts');
+const backtestDataExportResponsePath = path.join(
+  repoRoot,
+  'sdk/typescript/src/models/BacktestDataExportResponse.ts',
+);
 
 packageJson.description = 'Generated TypeScript SDK for the Trade Nexus Platform API';
 packageJson.license = 'MIT';
@@ -78,6 +82,40 @@ if (fs.existsSync(backtestsApiPath)) {
 
   if (normalizedBacktestsApi !== backtestsApi) {
     fs.writeFileSync(backtestsApiPath, normalizedBacktestsApi, 'utf8');
+  }
+}
+
+if (fs.existsSync(backtestDataExportResponsePath)) {
+  const backtestDataExportResponse = fs.readFileSync(backtestDataExportResponsePath, 'utf8');
+  let normalizedBacktestDataExportResponse = backtestDataExportResponse;
+
+  normalizedBacktestDataExportResponse = normalizedBacktestDataExportResponse.replace(
+    '    _export: BacktestDataExport;',
+    '    export: BacktestDataExport;',
+  );
+  normalizedBacktestDataExportResponse = normalizedBacktestDataExportResponse.replace(
+    `    if (!('_export' in value) || value['_export'] === undefined) return false;`,
+    `    if (!('export' in value) || value['export'] === undefined) return false;`,
+  );
+  normalizedBacktestDataExportResponse = normalizedBacktestDataExportResponse.replace(
+    `        '_export': BacktestDataExportFromJSON(json['export']),`,
+    `        'export': BacktestDataExportFromJSON(json['export']),`,
+  );
+  normalizedBacktestDataExportResponse = normalizedBacktestDataExportResponse.replace(
+    `        'export': BacktestDataExportToJSON(value['_export']),`,
+    `        'export': BacktestDataExportToJSON(value['export']),`,
+  );
+
+  if (!normalizedBacktestDataExportResponse.includes('    export: BacktestDataExport;')) {
+    throw new Error('Failed to normalize BacktestDataExportResponse export field.');
+  }
+
+  if (normalizedBacktestDataExportResponse.includes('_export')) {
+    throw new Error('BacktestDataExportResponse still exposes _export after normalization.');
+  }
+
+  if (normalizedBacktestDataExportResponse !== backtestDataExportResponse) {
+    fs.writeFileSync(backtestDataExportResponsePath, normalizedBacktestDataExportResponse, 'utf8');
   }
 }
 NODE

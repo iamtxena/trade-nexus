@@ -31,6 +31,13 @@ canonical OpenAPI source.
    - enforces tag format `sdk-v<version>` on tag-triggered runs
    - runs SDK build and package dry-run
 
+## Post-generation normalizations
+
+`contracts/scripts/generate-sdk.sh` applies deterministic normalizations after OpenAPI generation so the published SDK matches the API contract and consumer expectations:
+
+- `BacktestsApi` request parameter is normalized to required `CreateBacktestRequest` (non-null).
+- `BacktestDataExportResponse` public field is normalized to `export` (not `_export`) to match the OpenAPI response shape.
+
 ## Local validation command
 
 ```bash

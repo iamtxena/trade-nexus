@@ -132,6 +132,94 @@
       "workflows": ["incident_response", "gate4_docs_review"],
       "owners": ["Team F", "Team G", "Team E", "Team B"],
       "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81"
+    },
+    {
+      "id": "portal_gate5_ml_signal_integration_v1",
+      "title": "Gate5 ML Signal Integration",
+      "source": "docs/portal/platform/gate5-ml-signal-integration.md",
+      "topic": "platform",
+      "concepts": ["ml_signal_contracts", "fallback_matrix", "auditability"],
+      "endpoints": ["/v2/research/market-scan", "/v1/deployments", "/v1/orders"],
+      "workflows": ["research_scoring_with_ml", "risk_safe_fallback"],
+      "owners": ["Team C", "Team B", "Team G"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/77"
+    },
+    {
+      "id": "portal_gate5_structured_observability_v1",
+      "title": "Gate5 Structured Observability Fields",
+      "source": "docs/portal/operations/gate5-structured-observability.md",
+      "topic": "operations",
+      "concepts": ["structured_logging", "request_correlation", "service_instrumentation"],
+      "endpoints": ["/v1/research/market-scan", "/v1/deployments", "/v1/orders", "/v2/conversations/sessions"],
+      "workflows": ["runtime_observability", "incident_traceability"],
+      "owners": ["Team F", "Team G"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81"
+    },
+    {
+      "id": "portal_gate5_consumer_mock_contracts_v1",
+      "title": "Gate5 Consumer-Driven Mock Contract Checks",
+      "source": "docs/portal/operations/gate5-consumer-mock-contracts.md",
+      "topic": "operations",
+      "concepts": ["consumer_driven_contracts", "mock_server", "lane_compatibility"],
+      "endpoints": ["/v1/research/market-scan", "/v1/strategies", "/v2/conversations/sessions", "/v2/conversations/sessions/{sessionId}/turns"],
+      "workflows": ["mock_contract_validation", "cross_client_contract_checks"],
+      "owners": ["Team F", "Team E"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81"
+    },
+    {
+      "id": "portal_gate5_deployment_profile_v1",
+      "title": "Gate5 Deployment Profile",
+      "source": "docs/portal/operations/gate5-deployment-profile.md",
+      "topic": "operations",
+      "concepts": ["deployment_profile", "single_active_path", "release_gates"],
+      "endpoints": [],
+      "workflows": ["deployment_reconciliation", "release_readiness"],
+      "owners": ["Team F", "Team G"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81"
+    },
+    {
+      "id": "portal_gate5_orchestrator_execution_traces_v1",
+      "title": "Gate5 Orchestrator Execution Traces",
+      "source": "docs/portal/operations/gate5-orchestrator-execution-traces.md",
+      "topic": "operations",
+      "concepts": ["orchestrator_traces", "lifecycle_transitions", "retry_auditability"],
+      "endpoints": ["/v1/deployments", "/v1/orders"],
+      "workflows": ["orchestrator_trace_capture", "retry_trace_persistence"],
+      "owners": ["Team F", "Team G"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81"
+    },
+    {
+      "id": "portal_gate5_slo_alerting_baseline_v1",
+      "title": "Gate5 SLO And Alerting Baseline",
+      "source": "docs/portal/operations/gate5-slo-alerting-baseline.md",
+      "topic": "operations",
+      "concepts": ["slo_baseline", "alert_thresholds", "owner_accountability"],
+      "endpoints": [],
+      "workflows": ["slo_governance", "release_gate_enforcement"],
+      "owners": ["Team F", "Team G"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/81"
+    },
+    {
+      "id": "portal_gate5_reliability_deployment_closure_v1",
+      "title": "Gate5 Reliability And Deployment Closure",
+      "source": "docs/portal/operations/gate5-reliability-deployment-closure.md",
+      "topic": "operations",
+      "concepts": ["closure_evidence", "reliability_scope", "deployment_readiness"],
+      "endpoints": [],
+      "workflows": ["gate5_reliability_closeout", "release_signoff_prep"],
+      "owners": ["Team F", "Team G"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/106"
+    },
+    {
+      "id": "portal_gate5_release_runbooks_client_validation_v1",
+      "title": "Gate5 Release Runbooks And Client Validation",
+      "source": "docs/portal/operations/gate5-release-runbooks-and-client-validation.md",
+      "topic": "operations",
+      "concepts": ["release_runbook", "cross_client_validation", "incident_handling"],
+      "endpoints": ["/health", "/v1/health", "/v2/conversations/sessions", "/v2/conversations/sessions/{sessionId}/turns"],
+      "workflows": ["release_validation_sequence", "client_lane_compatibility"],
+      "owners": ["Team E", "Team F", "Team G"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/106"
     }
   ]
 }

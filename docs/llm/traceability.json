@@ -82,5 +82,61 @@
     "id": "portal_gate4_risk_policy_controls_v1",
     "source": "docs/portal/operations/gate4-risk-policy-controls.md",
     "source_hash": "d1e553ac4d1850ef53a92be39baadcce07215a8b4ad06be0500a3af6989b7e72"
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate5_consumer_mock_contracts_v1.md",
+    "chunk_hash": "f34e780ede385920874eb135c9e4a746918ac7cef2fb89d8edd12a0ee71be890",
+    "id": "portal_gate5_consumer_mock_contracts_v1",
+    "source": "docs/portal/operations/gate5-consumer-mock-contracts.md",
+    "source_hash": "72dd3c47e3abd84077c4c22e3f527576e78c0d9013eb64374102182f8745908b"
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate5_deployment_profile_v1.md",
+    "chunk_hash": "b2a757d37dad24462b5f311396c2a17f89eba6c00b320862391115f298cf7525",
+    "id": "portal_gate5_deployment_profile_v1",
+    "source": "docs/portal/operations/gate5-deployment-profile.md",
+    "source_hash": "8c8fc4a076725f9ad42124f23750ebfbb5404bb6124bdbd066835b6881114bcd"
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate5_ml_signal_integration_v1.md",
+    "chunk_hash": "3802fd51d84806927cca6d30dad75bae4b77052fd9b4b8dedd5ca781a38c68fe",
+    "id": "portal_gate5_ml_signal_integration_v1",
+    "source": "docs/portal/platform/gate5-ml-signal-integration.md",
+    "source_hash": "53517d133f7114be8f4467222ea73b26c8745736b874e6fea99f290b53129f47"
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate5_orchestrator_execution_traces_v1.md",
+    "chunk_hash": "13ac5ca023e77bd157b73ea1c8cbc76660a1f867d504bbbd14a4510ca4d1b14a",
+    "id": "portal_gate5_orchestrator_execution_traces_v1",
+    "source": "docs/portal/operations/gate5-orchestrator-execution-traces.md",
+    "source_hash": "890cb2293b8f95e667e66a6b76f182d074ae758a584fe1a4c602e7e63f5c3496"
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate5_release_runbooks_client_validation_v1.md",
+    "chunk_hash": "a5937679cdd8baf662c3e21ec23d065a9732ced4a96720bebf30318a8299c835",
+    "id": "portal_gate5_release_runbooks_client_validation_v1",
+    "source": "docs/portal/operations/gate5-release-runbooks-and-client-validation.md",
+    "source_hash": "8390c5222ef461f518c8c9caf7661239c4e50c75f30cd7979c45cc4b1288d283"
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate5_reliability_deployment_closure_v1.md",
+    "chunk_hash": "ce6533f41022d7d558938295239f0f897ec6d0092422cf7ff9bb0657ebc9c274",
+    "id": "portal_gate5_reliability_deployment_closure_v1",
+    "source": "docs/portal/operations/gate5-reliability-deployment-closure.md",
+    "source_hash": "b1c5e80c3780ffb0c201da0ee1bdf1992ba555b25a9e2bd3dbe426f54c922f86"
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate5_slo_alerting_baseline_v1.md",
+    "chunk_hash": "999772c7a34bb86f09d34c84cdba0059c86d059cf2f93a96b9311af8f8750a7f",
+    "id": "portal_gate5_slo_alerting_baseline_v1",
+    "source": "docs/portal/operations/gate5-slo-alerting-baseline.md",
+    "source_hash": "377a3bfcab0d62c9c7bd07973c5bf19faf2f1a8a2eca1be94de558dd330bd201"
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_gate5_structured_observability_v1.md",
+    "chunk_hash": "9e326dad1896fce0582433f500f47ec5b9245e7284e34b80fe757e42b31073d4",
+    "id": "portal_gate5_structured_observability_v1",
+    "source": "docs/portal/operations/gate5-structured-observability.md",
+    "source_hash": "8ddfab927bcb3e472c645da2d7aff342e40e003ba0a3d56a034df21fb4a37369"
   }
 ]

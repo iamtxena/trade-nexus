@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 
 from src.platform_api.errors import PlatformAPIError
 from src.platform_api.schemas_v1 import CreateDeploymentRequest, CreateOrderRequest, RequestContext
@@ -344,11 +345,15 @@ class RiskPreTradeService:
             return self._volatility_fallback(reason="volatility_confidence_missing")
 
         predicted_pct = float(raw_predicted_pct)
+        if not math.isfinite(predicted_pct):
+            return self._volatility_fallback(reason="volatility_predicted_pct_invalid")
         if predicted_pct < 0.0:
             return self._volatility_fallback(reason="volatility_predicted_pct_negative")
         predicted_pct = self._clamp(predicted_pct, minimum=0.0, maximum=500.0)
 
         confidence = float(raw_confidence)
+        if not math.isfinite(confidence):
+            return self._volatility_fallback(reason="volatility_confidence_invalid")
         if confidence > 1.0:
             confidence = confidence / 100.0
         if confidence < 0.0 or confidence > 1.0:

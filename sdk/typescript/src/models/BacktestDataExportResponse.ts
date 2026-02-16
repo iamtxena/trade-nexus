@@ -38,7 +38,7 @@ export interface BacktestDataExportResponse {
      * @type {BacktestDataExport}
      * @memberof BacktestDataExportResponse
      */
-    _export: BacktestDataExport;
+    export: BacktestDataExport;
 }
 
 /**
@@ -46,7 +46,7 @@ export interface BacktestDataExportResponse {
  */
 export function instanceOfBacktestDataExportResponse(value: object): value is BacktestDataExportResponse {
     if (!('requestId' in value) || value['requestId'] === undefined) return false;
-    if (!('_export' in value) || value['_export'] === undefined) return false;
+    if (!('export' in value) || value['export'] === undefined) return false;
     return true;
 }
 
@@ -61,7 +61,7 @@ export function BacktestDataExportResponseFromJSONTyped(json: any, ignoreDiscrim
     return {
         
         'requestId': json['requestId'],
-        '_export': BacktestDataExportFromJSON(json['export']),
+        'export': BacktestDataExportFromJSON(json['export']),
     };
 }
 
@@ -77,7 +77,7 @@ export function BacktestDataExportResponseToJSONTyped(value?: BacktestDataExport
     return {
         
         'requestId': value['requestId'],
-        'export': BacktestDataExportToJSON(value['_export']),
+        'export': BacktestDataExportToJSON(value['export']),
     };
 }
 

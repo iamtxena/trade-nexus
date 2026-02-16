@@ -469,6 +469,7 @@ def test_dataset_transform_rejects_unsupported_frequency() -> None:
     assert invalid_transform.status_code == 422
     payload = invalid_transform.json()
     assert payload["error"]["code"] == "DATASET_TRANSFORM_FREQUENCY_UNSUPPORTED"
+    assert payload["error"]["message"].endswith("Allowed frequencies: 1m, 5m, 15m, 30m, 1h, 4h, 1d.")
 
 
 def test_stop_deployment_uses_adapter_failure_status(monkeypatch) -> None:

@@ -21,7 +21,7 @@ from src.platform_api.schemas_v1 import (
 )
 from src.platform_api.state_store import DatasetRecord, InMemoryStateStore, QualityReportRecord, utc_now
 
-_SUPPORTED_CANDLE_FREQUENCIES = {
+_SUPPORTED_CANDLE_FREQUENCIES = (
     "1m",
     "5m",
     "15m",
@@ -29,7 +29,7 @@ _SUPPORTED_CANDLE_FREQUENCIES = {
     "1h",
     "4h",
     "1d",
-}
+)
 
 
 class DatasetOrchestrator:
@@ -114,7 +114,7 @@ class DatasetOrchestrator:
                 code="DATASET_TRANSFORM_FREQUENCY_UNSUPPORTED",
                 message=(
                     "Unsupported transform frequency. "
-                    f"Allowed frequencies: {', '.join(sorted(_SUPPORTED_CANDLE_FREQUENCIES))}."
+                    f"Allowed frequencies: {', '.join(_SUPPORTED_CANDLE_FREQUENCIES)}."
                 ),
                 request_id=context.request_id,
             )

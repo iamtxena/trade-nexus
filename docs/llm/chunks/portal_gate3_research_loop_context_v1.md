@@ -38,7 +38,7 @@ After backtest completion, runtime feedback is ingested into KB as `LessonLearne
 
 Gate5 extends this flow with optional-safe ML enrichment while preserving deterministic behavior:
 
-1. Market context may include `mlSignals` (`prediction`, `sentiment`, `volatility`, `anomaly`).
+1. Market context may include `mlSignals` (`prediction`, `sentiment`, `volatility`, `anomaly`, `regime`).
 2. Runtime normalizes top-level `sentiment` context fields into canonical `mlSignals.sentiment` before validation/scoring.
 3. Research scoring validates signal shapes and confidence before use.
 4. Missing/invalid model output falls back to deterministic baseline scoring (no opaque execution side effects).
@@ -48,3 +48,5 @@ Gate5 extends this flow with optional-safe ML enrichment while preserving determ
 8. Budget breach or invalid policy fails closed before adapter side effects; typed adapter failures release reserved budget and return deterministic fallback responses.
 9. Unexpected adapter exceptions release reserved budget and fail closed with an explicit error code.
 10. Budget decision events are recorded for auditability.
+11. Research loop persists validated anomaly/regime snapshots for downstream risk gating (`__market__` key fallback-safe).
+12. Risk pretrade gates apply deterministic regime sizing reduction (`risk_off` + confidence `>=0.55`) and fail closed on anomaly breach (`isAnomaly=true`, `score>=0.8`, `confidence>=0.7`).

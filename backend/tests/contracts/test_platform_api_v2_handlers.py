@@ -108,7 +108,8 @@ def test_research_v2_route_applies_ml_signal_scoring(monkeypatch) -> None:
                 "prediction": {"direction": "bullish", "confidence": 0.8, "timeframe": "24h"},
                 "sentiment": {"score": 0.7, "confidence": 0.65},
                 "volatility": {"predictedPct": 35.0, "confidence": 0.7},
-                "anomaly": {"isAnomaly": False, "score": 0.1},
+                "anomaly": {"isAnomaly": False, "score": 0.1, "confidence": 0.78},
+                "regime": {"label": "risk_on", "confidence": 0.72},
             },
         }
 
@@ -162,7 +163,8 @@ def test_research_v2_route_normalizes_top_level_sentiment_context(monkeypatch) -
             "mlSignals": {
                 "prediction": {"direction": "bullish", "confidence": 0.8, "timeframe": "24h"},
                 "volatility": {"predictedPct": 35.0, "confidence": 0.7},
-                "anomaly": {"isAnomaly": False, "score": 0.1},
+                "anomaly": {"isAnomaly": False, "score": 0.1, "confidence": 0.76},
+                "regime": {"label": "risk_on", "confidence": 0.69},
             },
         }
 
@@ -192,7 +194,7 @@ def test_research_v2_route_handles_invalid_top_level_sentiment_with_fallback(mon
             "mlSignals": {
                 "prediction": {"direction": "neutral", "confidence": 0.6, "timeframe": "24h"},
                 "volatility": {"predictedPct": 40.0, "confidence": 0.65},
-                "anomaly": {"isAnomaly": False, "score": 0.1},
+                "anomaly": {"isAnomaly": False, "score": 0.1, "confidence": 0.58},
             },
         }
 
@@ -229,7 +231,8 @@ def test_research_v2_route_merges_dual_source_sentiment_metadata(monkeypatch) ->
                 "prediction": {"direction": "bullish", "confidence": 0.8, "timeframe": "24h"},
                 "sentiment": {"score": 0.64, "confidence": 0.71},
                 "volatility": {"predictedPct": 35.0, "confidence": 0.7},
-                "anomaly": {"isAnomaly": False, "score": 0.1},
+                "anomaly": {"isAnomaly": False, "score": 0.1, "confidence": 0.8},
+                "regime": {"label": "risk_on", "confidence": 0.75},
             },
         }
 
@@ -249,6 +252,79 @@ def test_research_v2_route_merges_dual_source_sentiment_metadata(monkeypatch) ->
     assert "source=curated-news" in payload["dataContextSummary"]
     assert "lookbackHours=24" in payload["dataContextSummary"]
     assert "fallback=none" in payload["dataContextSummary"]
+
+
+def test_research_v2_route_flags_risk_off_anomaly_breach_context(monkeypatch) -> None:
+    async def _market_context_stub(**_: object) -> dict[str, object]:
+        return {
+            "regimeSummary": "Anomalous risk-off conditions detected.",
+            "signals": [{"name": "focus_assets", "value": "crypto"}],
+            "mlSignals": {
+                "prediction": {"direction": "neutral", "confidence": 0.74, "timeframe": "24h"},
+                "sentiment": {"score": 0.42, "confidence": 0.7},
+                "volatility": {"predictedPct": 88.0, "confidence": 0.82},
+                "anomaly": {"isAnomaly": True, "score": 0.93, "confidence": 0.91},
+                "regime": {"label": "risk_off", "confidence": 0.86},
+            },
+        }
+
+    monkeypatch.setattr(router_v1_module._data_knowledge_adapter, "get_market_context", _market_context_stub)
+    client = _client()
+
+    response = client.post(
+        "/v2/research/market-scan",
+        headers=HEADERS,
+        json={"assetClasses": ["crypto"], "capital": 25000},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert "anomaly_breach" in payload["strategyIdeas"][0]["rationale"]
+    assert "regime_risk_off" in payload["strategyIdeas"][0]["rationale"]
+    assert "anomalyState=breach" in payload["dataContextSummary"]
+    assert "regime=risk_off" in payload["dataContextSummary"]
+
+
+def test_research_v2_snapshot_blocks_v1_order_on_anomaly_breach(monkeypatch) -> None:
+    async def _market_context_stub(**_: object) -> dict[str, object]:
+        return {
+            "regimeSummary": "Severe anomaly regime.",
+            "signals": [{"name": "focus_assets", "value": "crypto"}],
+            "mlSignals": {
+                "prediction": {"direction": "neutral", "confidence": 0.72, "timeframe": "24h"},
+                "sentiment": {"score": 0.47, "confidence": 0.66},
+                "volatility": {"predictedPct": 52.0, "confidence": 0.78},
+                "anomaly": {"isAnomaly": True, "score": 0.95, "confidence": 0.92},
+                "regime": {"label": "risk_off", "confidence": 0.85},
+            },
+        }
+
+    original_snapshots = copy.deepcopy(router_v1_module._store.ml_signal_snapshots)
+    monkeypatch.setattr(router_v1_module._data_knowledge_adapter, "get_market_context", _market_context_stub)
+    client = _client()
+    try:
+        scan = client.post(
+            "/v2/research/market-scan",
+            headers=HEADERS,
+            json={"assetClasses": ["crypto"], "capital": 25000},
+        )
+        assert scan.status_code == 200
+
+        order = client.post(
+            "/v1/orders",
+            headers={**HEADERS, "Idempotency-Key": "idem-v2-risk-loop-001"},
+            json={
+                "symbol": "BTCUSDT",
+                "side": "buy",
+                "type": "limit",
+                "quantity": 0.05,
+                "price": 50000,
+                "deploymentId": "dep-001",
+            },
+        )
+        assert order.status_code == 423
+        assert order.json()["error"]["code"] == "RISK_ML_ANOMALY_BREACH"
+    finally:
+        router_v1_module._store.ml_signal_snapshots = original_snapshots
 
 
 def test_conversation_v2_routes() -> None:

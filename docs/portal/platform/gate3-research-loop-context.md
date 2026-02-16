@@ -52,3 +52,7 @@ Gate5 extends this flow with optional-safe ML enrichment while preserving determ
 10. Budget decision events are recorded for auditability.
 11. Research loop persists validated anomaly/regime snapshots for downstream risk gating (`__market__` key fallback-safe).
 12. Risk pretrade gates apply deterministic regime sizing reduction (`risk_off` + confidence `>=0.55`) and fail closed on anomaly breach (`isAnomaly=true`, `score>=0.8`, `confidence>=0.7`).
+
+Detailed Gate5 ML contracts, fallback matrix, and auditability coverage:
+
+- `/docs/portal/platform/gate5-ml-signal-integration.md`

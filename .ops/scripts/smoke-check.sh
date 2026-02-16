@@ -8,7 +8,6 @@ set -euo pipefail
 # Exit:  0 = all endpoints healthy, 1 = one or more endpoints failed
 # =============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_URL="https://trade-nexus-backend.whitecliff-198cd26a.westeurope.azurecontainerapps.io"
 BASE_URL="${DEFAULT_URL}"
 
@@ -50,6 +49,7 @@ OVERALL_PASS=true
 COLD_START_DETECTED=false
 COLD_START_SECONDS=0
 FIRST_REQUEST_DONE=false
+FIRST_ATTEMPT_EPOCH=0  # wall-clock time of very first request attempt
 
 # =============================================================================
 # check_endpoint — curl an endpoint with retries for cold start
@@ -72,6 +72,11 @@ check_endpoint() {
     local tmpfile
     tmpfile=$(mktemp)
     TMPFILES+=("$tmpfile")
+
+    # Record wall-clock start on very first attempt (before curl, across all endpoints)
+    if [[ "$FIRST_ATTEMPT_EPOCH" -eq 0 ]]; then
+      FIRST_ATTEMPT_EPOCH=$(date +%s)
+    fi
 
     # curl: -s silent, -o body, -w timing, --connect-timeout, --max-time
     set +e
@@ -110,12 +115,25 @@ check_endpoint() {
       # Detect cold start on first successful request
       if [[ "$FIRST_REQUEST_DONE" == "false" ]]; then
         FIRST_REQUEST_DONE=true
-        local latency_int=${latency_raw%.*}
-        # Compare with threshold (handle decimals via awk)
-        is_cold_start=$(awk "BEGIN {print (${latency_raw} > ${COLD_START_THRESHOLD}) ? \"true\" : \"false\"}")
-        if [[ "$is_cold_start" == "true" ]]; then
-          COLD_START_DETECTED=true
-          COLD_START_SECONDS=$(awk "BEGIN {printf \"%.1f\", ${latency_raw}}")
+        # Calculate wall-clock elapsed time from first attempt to first 200
+        # This includes retry wait time, giving a true cold-start duration
+        if [[ "$FIRST_ATTEMPT_EPOCH" -gt 0 ]]; then
+          local now_epoch
+          now_epoch=$(date +%s)
+          local elapsed_seconds=$(( now_epoch - FIRST_ATTEMPT_EPOCH ))
+          # Wall-clock elapsed counts as cold start if > threshold
+          is_cold_start=$(awk "BEGIN {print (${elapsed_seconds} > ${COLD_START_THRESHOLD}) ? \"true\" : \"false\"}")
+          if [[ "$is_cold_start" == "true" ]]; then
+            COLD_START_DETECTED=true
+            COLD_START_SECONDS="${elapsed_seconds}"
+          fi
+        else
+          # No retries happened; use single-request latency
+          is_cold_start=$(awk "BEGIN {print (${latency_raw} > ${COLD_START_THRESHOLD}) ? \"true\" : \"false\"}")
+          if [[ "$is_cold_start" == "true" ]]; then
+            COLD_START_DETECTED=true
+            COLD_START_SECONDS=$(awk "BEGIN {printf \"%.1f\", ${latency_raw}}")
+          fi
         fi
       fi
 

@@ -33,11 +33,11 @@
 
 ### SLO-3: Cold-Start Latency
 
-- **Target**: p95 < 45 seconds
-- **Measurement**: Time from first request to 200 OK after scale-from-zero
-- **Tool**: `smoke-check.sh` cold-start detection
-- **Note**: Azure Container Apps cold starts include image pull + app initialization
-- **Breach response**: Review container image size, startup dependencies
+- **Target**: p95 < 120 seconds (wall-clock from first probe to first 200 OK)
+- **Measurement**: Wall-clock elapsed time from first HTTP attempt to first successful 200, including curl timeouts and retry intervals
+- **Tool**: `smoke-check.sh` cold-start detection (wall-clock mode)
+- **Note**: Includes image pull, app initialization, curl connect timeouts (30s), and retry waits (5s). Single-request latency is typically ~20-30s; wall-clock is higher due to probe overhead.
+- **Breach response**: Review container image size, startup dependencies, consider pre-warming
 
 ### SLO-4: Error Rate
 
@@ -64,7 +64,7 @@
 |-----|--------|---------------|---------------|
 | Availability | 99.0% | TBD | — |
 | Warm Latency | p95 < 500ms | TBD | — |
-| Cold-Start Latency | p95 < 45s | TBD | — |
+| Cold-Start Latency | p95 < 120s (wall-clock) | 93s | 2026-02-16 |
 | Error Rate | < 5% 5xx/hr | TBD | — |
 | Rollback Time | < 5 min | TBD | — |
 

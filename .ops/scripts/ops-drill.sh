@@ -23,11 +23,29 @@ AUTO_CONFIRM=false
 RESULTS=()
 HAS_FAILURE=false
 
+# --- Fail-safe state for cleanup ------------------------------------------
+# Tracks revisions deactivated during scenarios 2/4 so they can be
+# restored if the script is interrupted (Ctrl+C, kill, set -e exit).
+DEACTIVATED_REVISIONS=()
+
 # --- Cleanup / trap --------------------------------------------------------
 cleanup() {
-  : # Placeholder; individual scenarios handle their own cleanup
+  if [[ ${#DEACTIVATED_REVISIONS[@]} -gt 0 ]]; then
+    echo ""
+    echo "!!! INTERRUPTED — restoring deactivated revisions !!!"
+    for rev in "${DEACTIVATED_REVISIONS[@]}"; do
+      echo "  Reactivating: ${rev}"
+      az containerapp revision activate \
+        --name "$CONTAINER_APP" \
+        --resource-group "$RESOURCE_GROUP" \
+        --revision "$rev" \
+        -o none 2>/dev/null || echo "  WARNING: Failed to reactivate ${rev} — manual intervention required"
+    done
+    DEACTIVATED_REVISIONS=()
+    echo "  Fail-safe restore complete."
+  fi
 }
-trap cleanup EXIT
+trap cleanup EXIT INT TERM
 
 # --- Parse arguments --------------------------------------------------------
 SCENARIO="${1:-}"
@@ -47,6 +65,29 @@ iso_timestamp() {
 
 epoch_seconds() {
   date +%s
+}
+
+# az_json — run an az command and capture JSON cleanly (stderr separated)
+# Usage: local result; result=$(az_json az containerapp revision list --name ... -o json)
+az_json() {
+  local az_stderr
+  az_stderr=$(mktemp)
+  local output
+  set +e
+  output=$("$@" 2>"$az_stderr")
+  local exit_code=$?
+  set -e
+  if [[ $exit_code -ne 0 ]]; then
+    echo "ERROR: az command failed (exit=${exit_code}):" >&2
+    cat "$az_stderr" >&2
+    rm -f "$az_stderr"
+    return $exit_code
+  fi
+  if [[ -s "$az_stderr" ]]; then
+    echo "  az warnings: $(cat "$az_stderr")" >&2
+  fi
+  rm -f "$az_stderr"
+  echo "$output"
 }
 
 confirm_or_skip() {
@@ -125,36 +166,46 @@ run_scenario_2() {
   local start
   start=$(epoch_seconds)
 
-  # Get current active revision
+  # Get ALL active revisions (handles multi-revision mode correctly)
   local revisions_json
-  revisions_json=$(az containerapp revision list \
+  revisions_json=$(az_json az containerapp revision list \
     --name "$CONTAINER_APP" \
     --resource-group "$RESOURCE_GROUP" \
-    -o json 2>&1)
+    -o json)
 
-  local active_revision
-  active_revision=$(echo "$revisions_json" | jq -r '[.[] | select(.properties.active == true)] | sort_by(.properties.createdTime) | reverse | .[0].name')
+  local active_revisions
+  active_revisions=$(echo "$revisions_json" | jq -r '[.[] | select(.properties.active == true)] | sort_by(.properties.createdTime) | reverse | [.[].name]')
+  local active_count
+  active_count=$(echo "$active_revisions" | jq 'length')
 
-  echo "Active revision: ${active_revision}"
+  echo "Active revisions (${active_count}): $(echo "$active_revisions" | jq -r 'join(", ")')"
 
-  # Deactivate revision to force scale-to-zero
-  echo "Deactivating revision to force scale-to-zero..."
-  az containerapp revision deactivate \
-    --name "$CONTAINER_APP" \
-    --resource-group "$RESOURCE_GROUP" \
-    --revision "$active_revision" \
-    -o none 2>&1
+  # Deactivate ALL active revisions to force genuine scale-to-zero
+  echo "Deactivating all active revisions to force scale-to-zero..."
+  for rev in $(echo "$active_revisions" | jq -r '.[]'); do
+    echo "  Deactivating: ${rev}"
+    az containerapp revision deactivate \
+      --name "$CONTAINER_APP" \
+      --resource-group "$RESOURCE_GROUP" \
+      --revision "$rev" \
+      -o none 2>/dev/null
+    DEACTIVATED_REVISIONS+=("$rev")
+  done
 
   echo "Waiting 10s for scale-down..."
   sleep 10
 
-  # Reactivate and measure cold-start
-  echo "Reactivating revision..."
-  az containerapp revision activate \
-    --name "$CONTAINER_APP" \
-    --resource-group "$RESOURCE_GROUP" \
-    --revision "$active_revision" \
-    -o none 2>&1
+  # Reactivate all revisions and measure cold-start
+  echo "Reactivating revisions..."
+  for rev in $(echo "$active_revisions" | jq -r '.[]'); do
+    echo "  Reactivating: ${rev}"
+    az containerapp revision activate \
+      --name "$CONTAINER_APP" \
+      --resource-group "$RESOURCE_GROUP" \
+      --revision "$rev" \
+      -o none 2>/dev/null
+  done
+  DEACTIVATED_REVISIONS=()
 
   echo "Running smoke check (will trigger cold start)..."
 
@@ -204,10 +255,10 @@ run_scenario_3() {
 
   # Check revision count
   local revisions_json
-  revisions_json=$(az containerapp revision list \
+  revisions_json=$(az_json az containerapp revision list \
     --name "$CONTAINER_APP" \
     --resource-group "$RESOURCE_GROUP" \
-    -o json 2>&1)
+    -o json)
 
   local rev_count
   rev_count=$(echo "$revisions_json" | jq 'length')
@@ -291,29 +342,35 @@ run_scenario_4() {
   local start
   start=$(epoch_seconds)
 
-  # Get current active revision
-  echo "Reading current revision..."
+  # Get ALL active revisions (handles multi-revision mode correctly)
+  echo "Reading current revisions..."
   local revisions_json
-  revisions_json=$(az containerapp revision list \
+  revisions_json=$(az_json az containerapp revision list \
     --name "$CONTAINER_APP" \
     --resource-group "$RESOURCE_GROUP" \
-    -o json 2>&1)
+    -o json)
 
-  local active_revision
-  active_revision=$(echo "$revisions_json" | jq -r '[.[] | select(.properties.active == true)] | sort_by(.properties.createdTime) | reverse | .[0].name')
+  local active_revisions
+  active_revisions=$(echo "$revisions_json" | jq -r '[.[] | select(.properties.active == true)] | sort_by(.properties.createdTime) | reverse | [.[].name]')
+  local active_count
+  active_count=$(echo "$active_revisions" | jq 'length')
 
-  echo "Active revision: ${active_revision}"
+  echo "Active revisions (${active_count}): $(echo "$active_revisions" | jq -r 'join(", ")')"
 
-  # Deactivate revision (emergency shutdown)
-  echo "Deactivating revision (emergency shutdown)..."
+  # Deactivate ALL active revisions (emergency shutdown)
+  echo "Deactivating all revisions (emergency shutdown)..."
   local shutdown_start
   shutdown_start=$(epoch_seconds)
 
-  az containerapp revision deactivate \
-    --name "$CONTAINER_APP" \
-    --resource-group "$RESOURCE_GROUP" \
-    --revision "$active_revision" \
-    -o none 2>&1
+  for rev in $(echo "$active_revisions" | jq -r '.[]'); do
+    echo "  Deactivating: ${rev}"
+    az containerapp revision deactivate \
+      --name "$CONTAINER_APP" \
+      --resource-group "$RESOURCE_GROUP" \
+      --revision "$rev" \
+      -o none 2>/dev/null
+    DEACTIVATED_REVISIONS+=("$rev")
+  done
 
   echo "Waiting 15s for shutdown..."
   sleep 15
@@ -329,21 +386,25 @@ run_scenario_4() {
   local verify_exit=$?
   set -e
 
-  if [[ $verify_exit -ne 0 || "$verify_status" == "503" || "$verify_status" == "000" || "$verify_status" == "502" ]]; then
+  if [[ $verify_exit -ne 0 || "$verify_status" == "503" || "$verify_status" == "000" || "$verify_status" == "502" || "$verify_status" == "404" ]]; then
     echo "  App confirmed down (status=${verify_status}, curl_exit=${verify_exit})"
   else
     echo "  WARNING: App may still be responding (status=${verify_status})"
   fi
 
-  # Restore: reactivate revision
-  echo "Reactivating revision ${active_revision}..."
-  az containerapp revision activate \
-    --name "$CONTAINER_APP" \
-    --resource-group "$RESOURCE_GROUP" \
-    --revision "$active_revision" \
-    -o none 2>&1
+  # Restore: reactivate ALL revisions
+  echo "Reactivating all revisions..."
+  for rev in $(echo "$active_revisions" | jq -r '.[]'); do
+    echo "  Reactivating: ${rev}"
+    az containerapp revision activate \
+      --name "$CONTAINER_APP" \
+      --resource-group "$RESOURCE_GROUP" \
+      --revision "$rev" \
+      -o none 2>/dev/null
+  done
+  DEACTIVATED_REVISIONS=()
 
-  echo "Revision reactivated. Running smoke check for recovery..."
+  echo "Revisions reactivated. Running smoke check for recovery..."
 
   # Smoke check (retries for up to 60s)
   set +e
@@ -393,10 +454,10 @@ run_scenario_5() {
 
   # Fetch container app config
   local app_json
-  app_json=$(az containerapp show \
+  app_json=$(az_json az containerapp show \
     --name "$CONTAINER_APP" \
     --resource-group "$RESOURCE_GROUP" \
-    -o json 2>&1)
+    -o json)
 
   # Extract secret names (values are never exposed)
   local actual_secrets

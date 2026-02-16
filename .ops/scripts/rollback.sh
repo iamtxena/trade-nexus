@@ -69,10 +69,20 @@ echo ""
 
 # --- 1. List revisions sorted by creation time (newest first) ---------------
 echo "Fetching revisions..."
+AZ_STDERR=$(mktemp)
 REVISIONS_JSON=$(az containerapp revision list \
   --name "$CONTAINER_APP" \
   --resource-group "$RESOURCE_GROUP" \
-  -o json 2>&1)
+  -o json 2>"$AZ_STDERR") || {
+  echo "ERROR: Failed to list revisions:"
+  cat "$AZ_STDERR" >&2
+  rm -f "$AZ_STDERR"
+  exit 1
+}
+if [[ -s "$AZ_STDERR" ]]; then
+  echo "  az warnings: $(cat "$AZ_STDERR")" >&2
+fi
+rm -f "$AZ_STDERR"
 
 REVISION_COUNT=$(echo "$REVISIONS_JSON" | jq 'length')
 
@@ -128,23 +138,53 @@ if [[ "$TARGET_ACTIVE" != "true" ]]; then
 fi
 
 # --- 5. Shift 100% traffic to target revision ------------------------------
-echo "Shifting traffic to ${TARGET_REVISION}..."
-
-# Try explicit traffic set; in single-revision mode this is not needed
-# (traffic auto-routes to the only active revision)
-set +e
-az containerapp ingress traffic set \
+# Detect revision mode to determine if explicit traffic set is needed
+REVISION_MODE=$(az containerapp show \
   --name "$CONTAINER_APP" \
   --resource-group "$RESOURCE_GROUP" \
-  --revision-weight "${TARGET_REVISION}=100" \
-  -o none 2>&1
-TRAFFIC_EXIT=$?
-set -e
+  --query "properties.configuration.activeRevisionsMode" \
+  -o tsv 2>/dev/null || echo "single")
 
-if [[ $TRAFFIC_EXIT -eq 0 ]]; then
-  echo "ROLLBACK_TRAFFIC_SHIFT status=OK"
+echo "Revision mode: ${REVISION_MODE}"
+echo "Shifting traffic to ${TARGET_REVISION}..."
+
+if [[ "$REVISION_MODE" == "multiple" || "$REVISION_MODE" == "Multiple" ]]; then
+  # Multi-revision mode: explicit traffic shift is required
+  AZ_TRAFFIC_STDERR=$(mktemp)
+  set +e
+  az containerapp ingress traffic set \
+    --name "$CONTAINER_APP" \
+    --resource-group "$RESOURCE_GROUP" \
+    --revision-weight "${TARGET_REVISION}=100" \
+    -o none 2>"$AZ_TRAFFIC_STDERR"
+  TRAFFIC_EXIT=$?
+  set -e
+
+  if [[ $TRAFFIC_EXIT -eq 0 ]]; then
+    echo "ROLLBACK_TRAFFIC_SHIFT status=OK"
+  else
+    echo "ROLLBACK_TRAFFIC_SHIFT status=FAIL"
+    echo "  ERROR: Traffic shift failed (exit=${TRAFFIC_EXIT}):"
+    cat "$AZ_TRAFFIC_STDERR" >&2
+    rm -f "$AZ_TRAFFIC_STDERR"
+    END_EPOCH=$(epoch_seconds)
+    DURATION=$(( END_EPOCH - START_EPOCH ))
+    echo "ROLLBACK_RESULT status=FAIL duration_seconds=${DURATION} from=${CURRENT_REVISION} to=${TARGET_REVISION} reason=traffic_shift_failed"
+    exit 1
+  fi
+  rm -f "$AZ_TRAFFIC_STDERR"
 else
-  echo "ROLLBACK_TRAFFIC_SHIFT status=OK mode=single-revision (traffic auto-routes to active revision)"
+  # Single-revision mode: traffic auto-routes to the only active revision.
+  # Deactivate current and activate target to ensure correct routing.
+  if [[ "$CURRENT_REVISION" != "$TARGET_REVISION" ]]; then
+    echo "  Single-revision mode: deactivating ${CURRENT_REVISION}, traffic will route to ${TARGET_REVISION}."
+    az containerapp revision deactivate \
+      --name "$CONTAINER_APP" \
+      --resource-group "$RESOURCE_GROUP" \
+      --revision "$CURRENT_REVISION" \
+      -o none 2>/dev/null || true
+  fi
+  echo "ROLLBACK_TRAFFIC_SHIFT status=OK mode=single-revision"
 fi
 
 # --- 6. Smoke check --------------------------------------------------------

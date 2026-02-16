@@ -22,13 +22,13 @@ trap cleanup EXIT
 PRISM_PID=$!
 
 for _ in {1..90}; do
-  if curl -sS -o /dev/null "${BASE_URL}/v1/health"; then
+  if curl -fsS -o /dev/null "${BASE_URL}/v1/health"; then
     break
   fi
   sleep 1
 done
 
-if ! curl -sS -o /dev/null "${BASE_URL}/v1/health"; then
+if ! curl -fsS -o /dev/null "${BASE_URL}/v1/health"; then
   echo "Prism mock server failed to become ready on ${BASE_URL}." >&2
   if [[ -f /tmp/trade-nexus-prism.log ]]; then
     echo "--- prism log start ---" >&2

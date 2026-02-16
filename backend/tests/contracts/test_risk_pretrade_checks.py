@@ -210,6 +210,41 @@ def test_pretrade_advisory_mode_does_not_block_side_effects() -> None:
     asyncio.run(_run())
 
 
+def test_pretrade_advisory_mode_still_blocks_on_ml_anomaly_breach() -> None:
+    async def _run() -> None:
+        service, store, adapter = await _create_service_and_store()
+        store.risk_policy["mode"] = "advisory"
+        store.ml_signal_snapshots["__market__"] = {
+            "regime": "risk_off",
+            "regimeConfidence": 0.92,
+            "anomalyScore": 0.91,
+            "anomalyConfidence": 0.9,
+            "anomalyFlag": True,
+        }
+
+        try:
+            await service.create_order(
+                request=CreateOrderRequest(
+                    symbol="BTCUSDT",
+                    side="buy",
+                    type="limit",
+                    quantity=0.1,
+                    price=50_000,
+                    deploymentId="dep-001",
+                ),
+                idempotency_key="idem-risk-order-advisory-ml-001",
+                context=_context(),
+            )
+            raise AssertionError("Expected advisory mode to fail closed on ML anomaly breach.")
+        except PlatformAPIError as exc:
+            assert exc.status_code == 423
+            assert exc.code == "RISK_ML_ANOMALY_BREACH"
+
+        assert adapter.place_order_calls == 0
+
+    asyncio.run(_run())
+
+
 def test_pretrade_blocks_market_order_without_reference_price() -> None:
     async def _run() -> None:
         service, store, adapter = await _create_service_and_store()
@@ -435,5 +470,116 @@ def test_pretrade_uses_deterministic_fallback_when_volatility_confidence_is_nan(
         assert metadata["volatilitySizingMultiplier"] == 1.0
         assert metadata["volatilityFallbackUsed"] is True
         assert metadata["volatilityFallbackReason"] == "volatility_confidence_invalid"
+
+    asyncio.run(_run())
+
+
+def test_pretrade_blocks_order_when_ml_anomaly_breach_is_active() -> None:
+    async def _run() -> None:
+        service, store, adapter = await _create_service_and_store()
+        store.risk_policy["limits"]["maxNotionalUsd"] = 2_000_000
+        store.risk_policy["limits"]["maxPositionNotionalUsd"] = 500_000
+        store.ml_signal_snapshots["__market__"] = {
+            "regime": "risk_off",
+            "regimeConfidence": 0.86,
+            "anomalyScore": 0.92,
+            "anomalyConfidence": 0.9,
+            "anomalyFlag": True,
+        }
+
+        try:
+            await service.create_order(
+                request=CreateOrderRequest(
+                    symbol="BTCUSDT",
+                    side="buy",
+                    type="limit",
+                    quantity=0.1,
+                    price=50_000,
+                    deploymentId="dep-001",
+                ),
+                idempotency_key="idem-risk-order-ml-005",
+                context=_context(),
+            )
+            raise AssertionError("Expected anomaly breach to block order.")
+        except PlatformAPIError as exc:
+            assert exc.status_code == 423
+            assert exc.code == "RISK_ML_ANOMALY_BREACH"
+
+        assert adapter.place_order_calls == 0
+        assert store.risk_audit_trail
+        metadata = list(store.risk_audit_trail.values())[-1].metadata
+        assert metadata["mlAnomalyBreach"] is True
+        assert metadata["mlSignalFallbackUsed"] is False
+
+    asyncio.run(_run())
+
+
+def test_pretrade_applies_risk_off_regime_multiplier_to_limits() -> None:
+    async def _run() -> None:
+        service, store, adapter = await _create_service_and_store()
+        store.risk_policy["limits"]["maxNotionalUsd"] = 100_000
+        store.risk_policy["limits"]["maxPositionNotionalUsd"] = 100_000
+        store.ml_signal_snapshots["__market__"] = {
+            "regime": "risk_off",
+            "regimeConfidence": 0.84,
+            "anomalyScore": 0.2,
+            "anomalyConfidence": 0.8,
+            "anomalyFlag": False,
+        }
+
+        try:
+            await service.create_deployment(
+                request=CreateDeploymentRequest(strategyId="strat-001", mode="paper", capital=80_000),
+                idempotency_key="idem-risk-dep-ml-006",
+                context=_context(),
+            )
+            raise AssertionError("Expected regime-adjusted limit to block deployment.")
+        except PlatformAPIError as exc:
+            assert exc.status_code == 422
+            assert exc.code == "RISK_LIMIT_BREACH"
+
+        assert adapter.create_deployment_calls == 0
+        assert store.risk_audit_trail
+        metadata = list(store.risk_audit_trail.values())[-1].metadata
+        assert metadata["mlRegime"] == "risk_off"
+        assert metadata["mlRegimeSizingMultiplier"] == 0.7
+
+    asyncio.run(_run())
+
+
+def test_pretrade_uses_fallback_when_ml_regime_confidence_is_low() -> None:
+    async def _run() -> None:
+        service, store, adapter = await _create_service_and_store()
+        store.risk_policy["limits"]["maxNotionalUsd"] = 120_000
+        store.risk_policy["limits"]["maxPositionNotionalUsd"] = 120_000
+        store.ml_signal_snapshots["__market__"] = {
+            "regime": "risk_off",
+            "regimeConfidence": 0.2,
+            "anomalyScore": 0.2,
+            "anomalyConfidence": 0.8,
+            "anomalyFlag": False,
+        }
+
+        response = await service.create_order(
+            request=CreateOrderRequest(
+                symbol="BTCUSDT",
+                side="buy",
+                type="limit",
+                quantity=0.1,
+                price=50_000,
+                deploymentId="dep-001",
+            ),
+            idempotency_key="idem-risk-order-ml-006",
+            context=_context(),
+        )
+
+        assert response.order.id == "ord-risk-001"
+        assert adapter.place_order_calls == 1
+        assert store.risk_audit_trail
+        metadata = list(store.risk_audit_trail.values())[-1].metadata
+        assert metadata["mlRegime"] == "neutral"
+        assert metadata["mlRegimeSizingMultiplier"] == 1.0
+        assert metadata["mlSignalFallbackUsed"] is True
+        assert "regime_confidence_low" in str(metadata["mlSignalFallbackReason"])
 
     asyncio.run(_run())

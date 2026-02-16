@@ -111,6 +111,9 @@ def test_risk_audit_records_blocked_pretrade_decision() -> None:
         assert record.metadata["volatilitySizingMultiplier"] == 1.0
         assert record.metadata["volatilityFallbackUsed"] is True
         assert record.metadata["volatilityFallbackReason"] == "volatility_confidence_low"
+        assert record.metadata["mlSignalSource"] == "fallback"
+        assert record.metadata["mlSignalFallbackUsed"] is True
+        assert record.metadata["mlSignalFallbackReason"] == "ml_signal_snapshot_missing"
         assert adapter.place_order_calls == 0
 
     asyncio.run(_run())
@@ -146,6 +149,9 @@ def test_risk_audit_records_approved_pretrade_decision() -> None:
         assert record.metadata["volatilitySizingMultiplier"] == 1.0
         assert record.metadata["volatilityFallbackUsed"] is True
         assert record.metadata["volatilityFallbackReason"] == "volatility_forecast_missing"
+        assert record.metadata["mlSignalSource"] == "fallback"
+        assert record.metadata["mlSignalFallbackUsed"] is True
+        assert record.metadata["mlSignalFallbackReason"] == "ml_signal_snapshot_missing"
         assert adapter.place_order_calls == 1
 
     asyncio.run(_run())
@@ -167,6 +173,49 @@ def test_risk_audit_records_runtime_drawdown_breach() -> None:
         assert record.outcome_code == "RISK_DRAWDOWN_BREACH"
         assert record.resource_id == "dep-001"
         assert adapter.stop_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_risk_audit_records_ml_anomaly_breach_decision() -> None:
+    async def _run() -> None:
+        store = InMemoryStateStore()
+        store.risk_policy["limits"]["maxNotionalUsd"] = 2_000_000
+        store.risk_policy["limits"]["maxPositionNotionalUsd"] = 500_000
+        store.ml_signal_snapshots["__market__"] = {
+            "regime": "risk_off",
+            "regimeConfidence": 0.84,
+            "anomalyScore": 0.95,
+            "anomalyConfidence": 0.91,
+            "anomalyFlag": True,
+        }
+        adapter = _StubExecutionAdapter()
+        service = ExecutionService(store=store, execution_adapter=adapter)
+
+        try:
+            await service.create_order(
+                request=CreateOrderRequest(
+                    symbol="BTCUSDT",
+                    side="buy",
+                    type="limit",
+                    quantity=0.1,
+                    price=64000,
+                    deploymentId="dep-001",
+                ),
+                idempotency_key="idem-risk-audit-004",
+                context=_context(),
+            )
+            raise AssertionError("Expected ML anomaly breach to fail closed.")
+        except PlatformAPIError as exc:
+            assert exc.code == "RISK_ML_ANOMALY_BREACH"
+
+        record = _latest_audit_record(store)
+        assert record.decision == "blocked"
+        assert record.check_type == "pretrade_order"
+        assert record.outcome_code == "RISK_ML_ANOMALY_BREACH"
+        assert record.metadata["mlRegime"] == "risk_off"
+        assert record.metadata["mlAnomalyBreach"] is True
+        assert adapter.place_order_calls == 0
 
     asyncio.run(_run())
 

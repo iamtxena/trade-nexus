@@ -296,3 +296,51 @@ def test_market_context_merges_top_level_sentiment_metadata_with_existing_ml_sen
         assert "sentiment" not in payload
 
     asyncio.run(_run())
+
+
+def test_market_context_merges_top_level_regime_metadata_with_existing_ml_regime() -> None:
+    class _DualSourceRegimeAdapter(_StubMarketContextAdapter):
+        async def get_market_context(  # type: ignore[no-untyped-def]
+            self,
+            *,
+            asset_classes: list[str],
+            tenant_id: str,
+            user_id: str,
+            request_id: str,
+        ):
+            _ = (asset_classes, tenant_id, user_id, request_id)
+            self.calls += 1
+            return {
+                "regimeSummary": "Dual regime source payload.",
+                "signals": [{"name": "focus_assets", "value": "crypto"}],
+                "regime": {
+                    "label": "risk_off",
+                    "confidence": 91,
+                    "source": "macro-engine",
+                },
+                "mlSignals": {
+                    "prediction": {"direction": "neutral", "confidence": 0.7},
+                    "sentiment": {"score": 0.48, "confidence": 0.65},
+                    "volatility": {"predictedPct": 48.0, "confidence": 0.74},
+                    "anomaly": {"isAnomaly": False, "score": 0.08},
+                    "regime": {"label": "risk_on"},
+                },
+            }
+
+    async def _run() -> None:
+        inner = _DualSourceRegimeAdapter()
+        adapter = CachingDataKnowledgeAdapter(inner_adapter=inner, ttl_seconds=10)
+        payload = await adapter.get_market_context(
+            asset_classes=["crypto"],
+            tenant_id="tenant-a",
+            user_id="user-a",
+            request_id="req-cache-012",
+        )
+
+        regime = payload["mlSignals"]["regime"]
+        assert regime["label"] == "risk_on"
+        assert regime["confidence"] == 91.0
+        assert regime["source"] == "macro-engine"
+        assert "regime" not in payload
+
+    asyncio.run(_run())

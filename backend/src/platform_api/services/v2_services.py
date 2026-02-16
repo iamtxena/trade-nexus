@@ -22,6 +22,9 @@ from src.platform_api.schemas_v2 import (
 )
 from src.platform_api.services.ml_signal_service import MLSignalValidationService, ValidatedMLSignals
 from src.platform_api.services.strategy_backtest_service import StrategyBacktestService
+from src.platform_api.state_store import InMemoryStateStore, utc_now
+
+_MARKET_SIGNAL_KEY = "__market__"
 
 
 class KnowledgeV2Service:
@@ -140,11 +143,13 @@ class ResearchV2Service:
         query_service: KnowledgeQueryService,
         data_adapter: DataKnowledgeAdapter,
         ml_signal_service: MLSignalValidationService | None = None,
+        store: InMemoryStateStore | None = None,
     ) -> None:
         self._strategy_service = strategy_service
         self._query_service = query_service
         self._data_adapter = data_adapter
         self._ml_signal_service = ml_signal_service or MLSignalValidationService()
+        self._store = store
 
     async def market_scan(self, *, request: MarketScanRequest, context: RequestContext) -> MarketScanV2Response:
         base = await self._strategy_service.market_scan(request=request, context=context)
@@ -163,17 +168,19 @@ class ResearchV2Service:
             context_payload = {"regimeSummary": "Context unavailable.", "mlSignals": {}}
 
         signals = self._ml_signal_service.validate(context_payload)
+        self._persist_ml_signal_snapshot(signals=signals, context_payload=context_payload)
         ranked_ideas = self._rank_strategy_ideas(ideas=base.strategyIdeas, asset_classes=request.assetClasses, signals=signals)
 
         summary = str(context_payload.get("regimeSummary", "Context unavailable."))
         ml_summary = self._ml_signal_service.summarize(signals=signals)
         sentiment_summary = self._sentiment_context_summary(context_payload=context_payload, signals=signals)
+        regime_summary = self._regime_context_summary(signals=signals)
         return MarketScanV2Response(
             requestId=context.request_id,
             regimeSummary=base.regimeSummary,
             strategyIdeas=ranked_ideas,
             knowledgeEvidence=[KnowledgeSearchItem(**item) for item in evidence],
-            dataContextSummary=f"{summary} {ml_summary} {sentiment_summary}",
+            dataContextSummary=f"{summary} {ml_summary} {sentiment_summary} {regime_summary}",
         )
 
     def _rank_strategy_ideas(
@@ -184,13 +191,19 @@ class ResearchV2Service:
         signals: ValidatedMLSignals,
     ) -> list[MarketScanIdea]:
         indexed: list[tuple[float, int, MarketScanIdea]] = []
+        risk_flags: list[str] = []
+        if signals.anomaly_breach_active:
+            risk_flags.append("anomaly_breach")
+        if signals.regime_label == "risk_off" and signals.regime_confidence >= 0.55:
+            risk_flags.append("regime_risk_off")
+        flag_suffix = f" [{','.join(risk_flags)}]" if risk_flags else ""
         for idx, idea in enumerate(ideas):
             score = self._ml_signal_service.score_strategy(
                 asset_class=idea.assetClass if idea.assetClass else (asset_classes[idx] if idx < len(asset_classes) else ""),
                 idea_rank=idx,
                 signals=signals,
             )
-            rationale_prefix = f"ML score={score:.2f}"
+            rationale_prefix = f"ML score={score:.2f}{flag_suffix}"
             merged_rationale = (
                 f"{rationale_prefix}. {idea.rationale}"
                 if idea.rationale
@@ -236,3 +249,35 @@ class ResearchV2Service:
             "Sentiment context:"
             f" score={signals.sentiment_score:.2f}, confidence={signals.sentiment_confidence:.2f}, source={source}{lookback}."
         )
+
+    @staticmethod
+    def _regime_context_summary(*, signals: ValidatedMLSignals) -> str:
+        anomaly_state = "breach" if signals.anomaly_breach_active else ("active" if signals.anomaly_flag else "clear")
+        return (
+            "Regime context:"
+            f" regime={signals.regime_label}, confidence={signals.regime_confidence:.2f},"
+            f" anomalyState={anomaly_state}, anomalyConfidence={signals.anomaly_confidence:.2f}."
+        )
+
+    def _persist_ml_signal_snapshot(
+        self,
+        *,
+        signals: ValidatedMLSignals,
+        context_payload: dict[str, object],
+    ) -> None:
+        if self._store is None:
+            return
+        generated_at = context_payload.get("generatedAt")
+        snapshot: dict[str, object] = {
+            "regime": signals.regime_label,
+            "regimeConfidence": signals.regime_confidence,
+            "anomalyScore": signals.anomaly_score,
+            "anomalyFlag": signals.anomaly_flag,
+            "anomalyConfidence": signals.anomaly_confidence,
+            "anomalyBreach": signals.anomaly_breach_active,
+            "fallbackReasons": list(signals.fallback_reasons),
+            "validatedAt": utc_now(),
+        }
+        if isinstance(generated_at, str) and generated_at.strip() != "":
+            snapshot["sourceGeneratedAt"] = generated_at.strip()
+        self._store.ml_signal_snapshots[_MARKET_SIGNAL_KEY] = snapshot

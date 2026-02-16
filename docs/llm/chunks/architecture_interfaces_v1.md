@@ -304,11 +304,17 @@ export interface DataKnowledgeAdapter {
       sourceCount?: number;
       lookbackHours?: number;
     };
+    regime?: {
+      label?: string;
+      confidence?: number;
+      source?: string;
+    };
     mlSignals?: {
       prediction?: { direction?: 'bullish' | 'bearish' | 'neutral'; confidence?: number; timeframe?: string };
       sentiment?: { score?: number; confidence?: number; source?: string; sourceCount?: number; lookbackHours?: number };
       volatility?: { predictedPct?: number; confidence?: number };
       anomaly?: { isAnomaly?: boolean; score?: number };
+      regime?: { label?: string; confidence?: number };
     };
     generatedAt?: string;
   }>;
@@ -405,6 +411,9 @@ Version and validation rules:
 10. Volatility forecasts are optional risk inputs and may be resolved by symbol key or market fallback key (`__market__`).
 11. When forecast confidence is valid and high enough (`>= 0.55`), pre-trade sizing applies deterministic multipliers: `>=90% -> 0.35`, `>=70% -> 0.50`, `>=55% -> 0.70`, `>=40% -> 0.85`, else `1.0`.
 12. Missing/invalid/low-confidence volatility forecasts must fail open to deterministic multiplier `1.0` and record explicit fallback metadata.
+13. Regime and anomaly ML snapshots are optional risk inputs sourced from validated research-loop market context.
+14. Regime confidence below `0.55` must fail open to deterministic regime `neutral` and multiplier `1.0` with explicit fallback metadata.
+15. Anomaly breach (`isAnomaly=true`, `score>=0.8`, `confidence>=0.7`) must fail closed for execution side effects and persist auditable metadata.
 
 ## 7) Execution Command Boundary (AG-EXE-01)
 

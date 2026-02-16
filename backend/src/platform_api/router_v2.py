@@ -33,6 +33,7 @@ _research_service = ResearchV2Service(
     strategy_service=router_v1_module._strategy_service,
     query_service=router_v1_module._knowledge_query_service,
     data_adapter=router_v1_module._data_knowledge_adapter,
+    store=router_v1_module._store,
 )
 _conversation_service = ConversationService(store=router_v1_module._store)
 

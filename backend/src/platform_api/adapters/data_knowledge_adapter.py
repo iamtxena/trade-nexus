@@ -137,6 +137,41 @@ def _normalize_sentiment_candidate(payload: object) -> dict[str, object] | None:
     return normalized
 
 
+def _normalize_regime_candidate(payload: object) -> dict[str, object] | None:
+    if isinstance(payload, str):
+        regime = payload.strip()
+        if regime == "":
+            return None
+        return {"label": regime}
+    if not isinstance(payload, dict):
+        return None
+
+    normalized: dict[str, object] = {}
+    raw_label = payload.get("label")
+    if not isinstance(raw_label, str):
+        raw_label = payload.get("regime")
+    if not isinstance(raw_label, str):
+        raw_label = payload.get("state")
+    if isinstance(raw_label, str):
+        label = raw_label.strip()
+        if label != "":
+            normalized["label"] = label
+
+    confidence = _coerce_numeric(payload.get("confidence"))
+    if confidence is not None:
+        normalized["confidence"] = confidence
+
+    source = payload.get("source")
+    if isinstance(source, str):
+        source_value = source.strip()
+        if source_value != "":
+            normalized["source"] = source_value
+
+    if "label" not in normalized and "confidence" not in normalized:
+        return None
+    return normalized
+
+
 def _normalize_sentiment_from_signals(signals: list[dict[str, str]]) -> dict[str, object] | None:
     score: float | None = None
     confidence: float | None = None
@@ -180,6 +215,23 @@ def _merge_sentiment_candidates(
     return merged
 
 
+def _merge_regime_candidates(
+    *,
+    ml_regime: dict[str, object] | None,
+    top_level_regime: dict[str, object] | None,
+) -> dict[str, object] | None:
+    candidates = (ml_regime, top_level_regime)
+    merged: dict[str, object] = {}
+    for key in ("label", "confidence", "source"):
+        for candidate in candidates:
+            if isinstance(candidate, dict) and key in candidate:
+                merged[key] = candidate[key]
+                break
+    if "label" not in merged and "confidence" not in merged:
+        return None
+    return merged
+
+
 def _upsert_signal(signals: list[dict[str, str]], *, name: str, value: str) -> None:
     for signal in signals:
         if signal["name"].strip().lower() == name.lower():
@@ -210,6 +262,12 @@ def normalize_market_context_payload(payload: dict[str, object]) -> dict[str, ob
         top_level_sentiment=top_level_sentiment,
         signal_sentiment=signal_sentiment,
     )
+    ml_regime = _normalize_regime_candidate(ml_signals.get("regime"))
+    top_level_regime = _normalize_regime_candidate(normalized.get("regime"))
+    regime = _merge_regime_candidates(
+        ml_regime=ml_regime,
+        top_level_regime=top_level_regime,
+    )
 
     if sentiment is not None:
         ml_signals["sentiment"] = sentiment
@@ -226,6 +284,9 @@ def normalize_market_context_payload(payload: dict[str, object]) -> dict[str, ob
                 name="sentiment_confidence",
                 value=str(sentiment["confidence"]),
             )
+    if regime is not None:
+        ml_signals["regime"] = regime
+        normalized.pop("regime", None)
 
     if ml_signals:
         normalized["mlSignals"] = ml_signals
@@ -467,6 +528,11 @@ class InMemoryDataKnowledgeAdapter:
                 "anomaly": {
                     "isAnomaly": False,
                     "score": 0.08,
+                    "confidence": 0.74,
+                },
+                "regime": {
+                    "label": "risk_on",
+                    "confidence": 0.63,
                 },
             },
             "generatedAt": utc_now(),

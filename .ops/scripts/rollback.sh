@@ -102,6 +102,10 @@ echo ""
 # Current = the one receiving traffic (first active, newest)
 CURRENT_REVISION=$(echo "$SORTED_REVISIONS" | jq -r '[.[] | select(.active == true)] | .[0].name')
 
+if [[ -z "$CURRENT_REVISION" || "$CURRENT_REVISION" == "null" ]]; then
+  echo "WARNING: No active revision found. Proceeding with target activation only."
+fi
+
 if [[ -z "$TARGET_REVISION" || "$TARGET_REVISION" == "null" ]]; then
   # Target = the next revision after current (by creation time)
   TARGET_REVISION=$(echo "$SORTED_REVISIONS" | jq -r --arg current "$CURRENT_REVISION" '[.[] | select(.name != $current)] | .[0].name')
@@ -192,7 +196,7 @@ if [[ "$REVISION_MODE" == "multiple" || "$REVISION_MODE" == "Multiple" ]]; then
 else
   # Single-revision mode: traffic auto-routes to the only active revision.
   # Deactivate current and activate target to ensure correct routing.
-  if [[ "$CURRENT_REVISION" != "$TARGET_REVISION" ]]; then
+  if [[ -n "$CURRENT_REVISION" && "$CURRENT_REVISION" != "null" && "$CURRENT_REVISION" != "$TARGET_REVISION" ]]; then
     echo "  Single-revision mode: deactivating ${CURRENT_REVISION}, traffic will route to ${TARGET_REVISION}."
     AZ_DEACT_STDERR=$(mktemp)
     set +e
@@ -218,16 +222,29 @@ else
   fi
 
   # Post-action verification: confirm target is the active revision
+  # Split az and jq into separate steps so we capture az's exit code, not jq's
   echo "  Verifying active revision post-rollback..."
   AZ_VERIFY_STDERR=$(mktemp)
   set +e
-  POST_ACTIVE=$(az containerapp revision list \
+  VERIFY_JSON=$(az containerapp revision list \
     --name "$CONTAINER_APP" \
     --resource-group "$RESOURCE_GROUP" \
-    -o json 2>"$AZ_VERIFY_STDERR" | jq -r '[.[] | select(.properties.active == true)] | .[0].name')
+    -o json 2>"$AZ_VERIFY_STDERR")
   VERIFY_EXIT=$?
   set -e
+
+  if [[ $VERIFY_EXIT -ne 0 ]]; then
+    echo "  ERROR: Failed to verify post-rollback state (exit=${VERIFY_EXIT}):"
+    cat "$AZ_VERIFY_STDERR" >&2
+    rm -f "$AZ_VERIFY_STDERR"
+    END_EPOCH=$(epoch_seconds)
+    DURATION=$(( END_EPOCH - START_EPOCH ))
+    echo "ROLLBACK_RESULT status=FAIL duration_seconds=${DURATION} reason=post_verify_az_failed"
+    exit 1
+  fi
   rm -f "$AZ_VERIFY_STDERR"
+
+  POST_ACTIVE=$(echo "$VERIFY_JSON" | jq -r '[.[] | select(.properties.active == true)] | .[0].name')
 
   if [[ "$POST_ACTIVE" == "$TARGET_REVISION" ]]; then
     echo "  Verified: active revision is ${POST_ACTIVE}"

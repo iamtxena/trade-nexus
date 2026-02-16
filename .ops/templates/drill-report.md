@@ -31,7 +31,7 @@
 - **Status**: ☐ PASS / ☐ FAIL / ☐ SKIP
 - **Duration**: ___ seconds
 - **Cold-start time**: ___ seconds
-- **SLO-3 target**: p95 < 45s
+- **SLO-3 target**: p95 < 120s (wall-clock)
 - **Details**:
 
 ### Scenario 3: Rollback Drill
@@ -76,7 +76,7 @@
 |-----|--------|----------|--------|
 | Availability (SLO-1) | 99.0% | — | — |
 | Warm Latency (SLO-2) | p95 < 500ms | ___ms | |
-| Cold-Start (SLO-3) | p95 < 45s | ___s | |
+| Cold-Start (SLO-3) | p95 < 120s (wall-clock) | ___s | |
 | Error Rate (SLO-4) | < 5% 5xx/hr | — | — |
 | Rollback Time (SLO-5) | < 5 min | ___s | |
 

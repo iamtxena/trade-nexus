@@ -182,15 +182,43 @@ run_scenario_2() {
 
   # Deactivate ALL active revisions to force genuine scale-to-zero
   echo "Deactivating all active revisions to force scale-to-zero..."
+  local deactivation_failed=false
   for rev in $(echo "$active_revisions" | jq -r '.[]'); do
     echo "  Deactivating: ${rev}"
+    local deact_stderr
+    deact_stderr=$(mktemp)
+    set +e
     az containerapp revision deactivate \
       --name "$CONTAINER_APP" \
       --resource-group "$RESOURCE_GROUP" \
       --revision "$rev" \
-      -o none 2>/dev/null
+      -o none 2>"$deact_stderr"
+    local deact_exit=$?
+    set -e
+    if [[ $deact_exit -ne 0 ]]; then
+      echo "  ERROR: Failed to deactivate ${rev} (exit=${deact_exit}):"
+      cat "$deact_stderr" >&2
+      deactivation_failed=true
+    fi
+    rm -f "$deact_stderr"
     DEACTIVATED_REVISIONS+=("$rev")
   done
+
+  if [[ "$deactivation_failed" == "true" ]]; then
+    echo "  Deactivation failed — restoring and aborting scenario."
+    for rev in $(echo "$active_revisions" | jq -r '.[]'); do
+      az containerapp revision activate \
+        --name "$CONTAINER_APP" \
+        --resource-group "$RESOURCE_GROUP" \
+        --revision "$rev" \
+        -o none 2>/dev/null || true
+    done
+    DEACTIVATED_REVISIONS=()
+    local end
+    end=$(epoch_seconds)
+    record_result 2 "$name" "FAIL" "$(( end - start ))"
+    return 0
+  fi
 
   echo "Waiting 10s for scale-down..."
   sleep 10
@@ -362,15 +390,43 @@ run_scenario_4() {
   local shutdown_start
   shutdown_start=$(epoch_seconds)
 
+  local deactivation_failed=false
   for rev in $(echo "$active_revisions" | jq -r '.[]'); do
     echo "  Deactivating: ${rev}"
+    local deact_stderr
+    deact_stderr=$(mktemp)
+    set +e
     az containerapp revision deactivate \
       --name "$CONTAINER_APP" \
       --resource-group "$RESOURCE_GROUP" \
       --revision "$rev" \
-      -o none 2>/dev/null
+      -o none 2>"$deact_stderr"
+    local deact_exit=$?
+    set -e
+    if [[ $deact_exit -ne 0 ]]; then
+      echo "  ERROR: Failed to deactivate ${rev} (exit=${deact_exit}):"
+      cat "$deact_stderr" >&2
+      deactivation_failed=true
+    fi
+    rm -f "$deact_stderr"
     DEACTIVATED_REVISIONS+=("$rev")
   done
+
+  if [[ "$deactivation_failed" == "true" ]]; then
+    echo "  Deactivation failed — restoring and aborting scenario."
+    for rev in $(echo "$active_revisions" | jq -r '.[]'); do
+      az containerapp revision activate \
+        --name "$CONTAINER_APP" \
+        --resource-group "$RESOURCE_GROUP" \
+        --revision "$rev" \
+        -o none 2>/dev/null || true
+    done
+    DEACTIVATED_REVISIONS=()
+    local end
+    end=$(epoch_seconds)
+    record_result 4 "$name" "FAIL" "$(( end - start ))"
+    return 0
+  fi
 
   echo "Waiting 15s for shutdown..."
   sleep 15

@@ -288,3 +288,152 @@ def test_pretrade_blocks_buy_when_projected_symbol_position_exceeds_limit() -> N
         assert adapter.place_order_calls == 0
 
     asyncio.run(_run())
+
+
+def test_pretrade_blocks_deployment_when_volatility_adjusted_limit_is_breached() -> None:
+    async def _run() -> None:
+        service, store, adapter = await _create_service_and_store()
+        store.risk_policy["limits"]["maxNotionalUsd"] = 100_000
+        store.risk_policy["limits"]["maxPositionNotionalUsd"] = 100_000
+        store.volatility_forecasts["__market__"] = {"predictedPct": 80.0, "confidence": 0.9}
+
+        try:
+            await service.create_deployment(
+                request=CreateDeploymentRequest(strategyId="strat-001", mode="paper", capital=60_000),
+                idempotency_key="idem-risk-dep-ml-001",
+                context=_context(),
+            )
+            raise AssertionError("Expected volatility-adjusted deployment sizing to block.")
+        except PlatformAPIError as exc:
+            assert exc.status_code == 422
+            assert exc.code == "RISK_LIMIT_BREACH"
+            assert "volatility-adjusted risk maxNotionalUsd" in exc.message
+        assert adapter.create_deployment_calls == 0
+
+    asyncio.run(_run())
+
+
+def test_pretrade_blocks_order_when_volatility_adjusted_limit_is_breached() -> None:
+    async def _run() -> None:
+        service, store, adapter = await _create_service_and_store()
+        store.risk_policy["limits"]["maxNotionalUsd"] = 100_000
+        store.risk_policy["limits"]["maxPositionNotionalUsd"] = 100_000
+        store.volatility_forecasts["BTCUSDT"] = {"predictedPct": 95.0, "confidence": 0.9}
+
+        try:
+            await service.create_order(
+                request=CreateOrderRequest(
+                    symbol="BTCUSDT",
+                    side="buy",
+                    type="limit",
+                    quantity=1.0,
+                    price=50_000,
+                    deploymentId="dep-001",
+                ),
+                idempotency_key="idem-risk-order-ml-001",
+                context=_context(),
+            )
+            raise AssertionError("Expected volatility-adjusted order sizing to block.")
+        except PlatformAPIError as exc:
+            assert exc.status_code == 422
+            assert exc.code == "RISK_LIMIT_BREACH"
+            assert "volatility-adjusted risk maxPositionNotionalUsd" in exc.message
+        assert adapter.place_order_calls == 0
+
+    asyncio.run(_run())
+
+
+def test_pretrade_uses_market_forecast_when_symbol_forecast_is_malformed() -> None:
+    async def _run() -> None:
+        service, store, adapter = await _create_service_and_store()
+        store.risk_policy["limits"]["maxNotionalUsd"] = 100_000
+        store.risk_policy["limits"]["maxPositionNotionalUsd"] = 100_000
+        store.volatility_forecasts["BTCUSDT"] = {"predictedPct": "invalid", "confidence": 0.9}
+        store.volatility_forecasts["__market__"] = {"predictedPct": 95.0, "confidence": 0.9}
+
+        try:
+            await service.create_order(
+                request=CreateOrderRequest(
+                    symbol="BTCUSDT",
+                    side="buy",
+                    type="limit",
+                    quantity=1.0,
+                    price=50_000,
+                    deploymentId="dep-001",
+                ),
+                idempotency_key="idem-risk-order-ml-003",
+                context=_context(),
+            )
+            raise AssertionError("Expected market-level volatility sizing to block malformed symbol forecast.")
+        except PlatformAPIError as exc:
+            assert exc.status_code == 422
+            assert exc.code == "RISK_LIMIT_BREACH"
+            assert "volatility-adjusted risk maxPositionNotionalUsd" in exc.message
+
+        assert adapter.place_order_calls == 0
+        assert store.risk_audit_trail
+        metadata = list(store.risk_audit_trail.values())[-1].metadata
+        assert metadata["volatilityForecastSource"] == "__market__"
+        assert metadata["volatilitySizingMultiplier"] == 0.35
+        assert metadata["volatilityFallbackUsed"] is False
+
+    asyncio.run(_run())
+
+
+def test_pretrade_uses_deterministic_fallback_when_volatility_confidence_is_low() -> None:
+    async def _run() -> None:
+        service, store, adapter = await _create_service_and_store()
+        store.risk_policy["limits"]["maxNotionalUsd"] = 60_000
+        store.risk_policy["limits"]["maxPositionNotionalUsd"] = 60_000
+        store.volatility_forecasts["BTCUSDT"] = {"predictedPct": 95.0, "confidence": 0.2}
+
+        response = await service.create_order(
+            request=CreateOrderRequest(
+                symbol="BTCUSDT",
+                side="buy",
+                type="limit",
+                quantity=0.6,
+                price=50_000,
+                deploymentId="dep-001",
+            ),
+            idempotency_key="idem-risk-order-ml-002",
+            context=_context(),
+        )
+
+        assert response.order.id == "ord-risk-001"
+        assert adapter.place_order_calls == 1
+
+    asyncio.run(_run())
+
+
+def test_pretrade_uses_deterministic_fallback_when_volatility_confidence_is_nan() -> None:
+    async def _run() -> None:
+        service, store, adapter = await _create_service_and_store()
+        store.risk_policy["limits"]["maxNotionalUsd"] = 60_000
+        store.risk_policy["limits"]["maxPositionNotionalUsd"] = 60_000
+        store.volatility_forecasts["BTCUSDT"] = {"predictedPct": 95.0, "confidence": float("nan")}
+
+        response = await service.create_order(
+            request=CreateOrderRequest(
+                symbol="BTCUSDT",
+                side="buy",
+                type="limit",
+                quantity=0.6,
+                price=50_000,
+                deploymentId="dep-001",
+            ),
+            idempotency_key="idem-risk-order-ml-004",
+            context=_context(),
+        )
+
+        assert response.order.id == "ord-risk-001"
+        assert adapter.place_order_calls == 1
+        assert store.risk_audit_trail
+        metadata = list(store.risk_audit_trail.values())[-1].metadata
+        assert metadata["volatilityForecastPct"] == 50.0
+        assert metadata["volatilityForecastConfidence"] == 0.0
+        assert metadata["volatilitySizingMultiplier"] == 1.0
+        assert metadata["volatilityFallbackUsed"] is True
+        assert metadata["volatilityFallbackReason"] == "volatility_confidence_invalid"
+
+    asyncio.run(_run())

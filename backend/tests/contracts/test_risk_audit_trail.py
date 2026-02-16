@@ -80,6 +80,7 @@ def test_risk_audit_records_blocked_pretrade_decision() -> None:
     async def _run() -> None:
         store = InMemoryStateStore()
         store.risk_policy["killSwitch"] = {"enabled": True, "triggered": True}
+        store.volatility_forecasts["BTCUSDT"] = {"predictedPct": 120.0, "confidence": 0.2}
         adapter = _StubExecutionAdapter()
         service = ExecutionService(store=store, execution_adapter=adapter)
 
@@ -105,6 +106,11 @@ def test_risk_audit_records_blocked_pretrade_decision() -> None:
         assert record.check_type == "pretrade_order"
         assert record.outcome_code == "RISK_KILL_SWITCH_ACTIVE"
         assert record.request_id == "req-risk-audit-001"
+        assert record.metadata["volatilityForecastPct"] == 120.0
+        assert record.metadata["volatilityForecastConfidence"] == 0.2
+        assert record.metadata["volatilitySizingMultiplier"] == 1.0
+        assert record.metadata["volatilityFallbackUsed"] is True
+        assert record.metadata["volatilityFallbackReason"] == "volatility_confidence_low"
         assert adapter.place_order_calls == 0
 
     asyncio.run(_run())
@@ -135,6 +141,11 @@ def test_risk_audit_records_approved_pretrade_decision() -> None:
         assert record.decision == "approved"
         assert record.check_type == "pretrade_order"
         assert record.outcome_code is None
+        assert record.metadata["volatilityForecastPct"] == 50.0
+        assert record.metadata["volatilityForecastConfidence"] == 0.0
+        assert record.metadata["volatilitySizingMultiplier"] == 1.0
+        assert record.metadata["volatilityFallbackUsed"] is True
+        assert record.metadata["volatilityFallbackReason"] == "volatility_forecast_missing"
         assert adapter.place_order_calls == 1
 
     asyncio.run(_run())

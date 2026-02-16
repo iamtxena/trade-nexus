@@ -15,10 +15,10 @@
   },
   {
     "chunk": "docs/llm/chunks/architecture_interfaces_v1.md",
-    "chunk_hash": "373a46f7504f807a2ae12081110420ef211f20584e191f99cf0fc2340b78a4b1",
+    "chunk_hash": "726bdd2e64fed4b62dc7c8e2de8bb283774c83c8b555cf962c25178cd1e3ea13",
     "id": "architecture_interfaces_v1",
     "source": "docs/architecture/INTERFACES.md",
-    "source_hash": "ca8bb30e17545ec49bb2d5a7de5d170be6637e003ed40027f67e34784c5a555e"
+    "source_hash": "fa389e5623c3f6d20bb98fb03183bb9a6854b176132642cbe7c326589b172837"
   },
   {
     "chunk": "docs/llm/chunks/architecture_target_v2_v1.md",
@@ -78,9 +78,9 @@
   },
   {
     "chunk": "docs/llm/chunks/portal_gate4_risk_policy_controls_v1.md",
-    "chunk_hash": "84db0ab2cf37d1d23e0646ef2dc04c0ca06cc2d92f38a36ce14e8929032d806e",
+    "chunk_hash": "53c9a37fa23de67dc26106936ad369da0f4b6b3446c1bd34a6a6a0aa736bcf4f",
     "id": "portal_gate4_risk_policy_controls_v1",
     "source": "docs/portal/operations/gate4-risk-policy-controls.md",
-    "source_hash": "c011a25bfd10805e08aada6dfbfc519810dc38aab4c567070d45c73507206833"
+    "source_hash": "d1e553ac4d1850ef53a92be39baadcce07215a8b4ad06be0500a3af6989b7e72"
   }
 ]

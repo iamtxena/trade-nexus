@@ -377,6 +377,9 @@ Version and validation rules:
 7. Pre-trade execution side effects (`create_deployment`, `create_order`) must pass risk checks before adapter calls.
 8. Runtime drawdown breaches (`latestPnl` vs deployment capital) must trigger kill-switch and halt active deployments before further side effects.
 9. Every risk decision path (`approved` and `blocked`) must persist an audit record with request identity and outcome metadata.
+10. Volatility forecasts are optional risk inputs and may be resolved by symbol key or market fallback key (`__market__`).
+11. When forecast confidence is valid and high enough (`>= 0.55`), pre-trade sizing applies deterministic multipliers: `>=90% -> 0.35`, `>=70% -> 0.50`, `>=55% -> 0.70`, `>=40% -> 0.85`, else `1.0`.
+12. Missing/invalid/low-confidence volatility forecasts must fail open to deterministic multiplier `1.0` and record explicit fallback metadata.
 
 ## 7) Execution Command Boundary (AG-EXE-01)
 

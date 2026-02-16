@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+import math
+
 from src.platform_api.errors import PlatformAPIError
 from src.platform_api.schemas_v1 import CreateDeploymentRequest, CreateOrderRequest, RequestContext
 from src.platform_api.services.risk_audit_service import RiskAuditService
@@ -9,6 +12,20 @@ from src.platform_api.services.risk_policy import RiskPolicyValidationError, val
 from src.platform_api.state_store import InMemoryStateStore
 
 _ACTIVE_DEPLOYMENT_STATES = {"queued", "running", "paused"}
+_VOLATILITY_FORECAST_MARKET_KEY = "__market__"
+
+
+@dataclass(frozen=True)
+class VolatilitySizingContext:
+    predicted_pct: float
+    confidence: float
+    sizing_multiplier: float
+    source: str
+    fallback_reason: str | None = None
+
+    @property
+    def used_fallback(self) -> bool:
+        return self.fallback_reason is not None
 
 
 class RiskPreTradeService:
@@ -24,8 +41,11 @@ class RiskPreTradeService:
         request: CreateDeploymentRequest,
         context: RequestContext,
     ) -> None:
+        volatility = self._resolve_volatility_sizing(symbol=None)
+        volatility_metadata = self._volatility_metadata(volatility)
         try:
             policy = self._validated_policy(context=context)
+            effective_max_notional = policy.limits.maxNotionalUsd * volatility.sizing_multiplier
             if policy.mode == "advisory":
                 self._record_allow(
                     check_type="pretrade_deployment",
@@ -34,7 +54,13 @@ class RiskPreTradeService:
                     context=context,
                     policy_version=policy.version,
                     policy_mode=policy.mode,
-                    metadata={"capital": request.capital, "mode": request.mode, "reason": "advisory_mode"},
+                    metadata={
+                        "capital": request.capital,
+                        "mode": request.mode,
+                        "reason": "advisory_mode",
+                        "effectiveMaxNotionalUsd": effective_max_notional,
+                        **volatility_metadata,
+                    },
                 )
                 return
             self._ensure_kill_switch_not_triggered(context=context)
@@ -46,20 +72,22 @@ class RiskPreTradeService:
             )
             projected_total = active_deployment_capital + request.capital
 
-            if request.capital > policy.limits.maxNotionalUsd:
+            if request.capital > effective_max_notional:
                 raise self._limit_breach(
                     context=context,
                     message=(
-                        "Deployment capital exceeds risk maxNotionalUsd "
-                        f"({request.capital} > {policy.limits.maxNotionalUsd})."
+                        "Deployment capital exceeds volatility-adjusted risk maxNotionalUsd "
+                        f"({request.capital} > {effective_max_notional}; "
+                        f"base={policy.limits.maxNotionalUsd}, multiplier={volatility.sizing_multiplier})."
                     ),
                 )
-            if projected_total > policy.limits.maxNotionalUsd:
+            if projected_total > effective_max_notional:
                 raise self._limit_breach(
                     context=context,
                     message=(
-                        "Projected active deployment capital exceeds risk maxNotionalUsd "
-                        f"({projected_total} > {policy.limits.maxNotionalUsd})."
+                        "Projected active deployment capital exceeds volatility-adjusted risk maxNotionalUsd "
+                        f"({projected_total} > {effective_max_notional}; "
+                        f"base={policy.limits.maxNotionalUsd}, multiplier={volatility.sizing_multiplier})."
                     ),
                 )
 
@@ -74,6 +102,8 @@ class RiskPreTradeService:
                     "capital": request.capital,
                     "mode": request.mode,
                     "projectedCapital": projected_total,
+                    "effectiveMaxNotionalUsd": effective_max_notional,
+                    **volatility_metadata,
                 },
             )
         except PlatformAPIError as exc:
@@ -84,7 +114,11 @@ class RiskPreTradeService:
                 context=context,
                 outcome_code=exc.code,
                 reason=exc.message,
-                metadata={"capital": request.capital, "mode": request.mode},
+                metadata={
+                    "capital": request.capital,
+                    "mode": request.mode,
+                    **volatility_metadata,
+                },
             )
             raise
 
@@ -94,8 +128,12 @@ class RiskPreTradeService:
         request: CreateOrderRequest,
         context: RequestContext,
     ) -> None:
+        volatility = self._resolve_volatility_sizing(symbol=request.symbol)
+        volatility_metadata = self._volatility_metadata(volatility)
         try:
             policy = self._validated_policy(context=context)
+            effective_max_notional = policy.limits.maxNotionalUsd * volatility.sizing_multiplier
+            effective_max_position_notional = policy.limits.maxPositionNotionalUsd * volatility.sizing_multiplier
             if policy.mode == "advisory":
                 self._record_allow(
                     check_type="pretrade_order",
@@ -109,6 +147,9 @@ class RiskPreTradeService:
                         "side": request.side,
                         "quantity": request.quantity,
                         "reason": "advisory_mode",
+                        "effectiveMaxNotionalUsd": effective_max_notional,
+                        "effectiveMaxPositionNotionalUsd": effective_max_position_notional,
+                        **volatility_metadata,
                     },
                 )
                 return
@@ -138,21 +179,23 @@ class RiskPreTradeService:
             else:
                 projected_symbol_notional = existing_symbol_notional + order_notional
 
-            if projected_symbol_notional > policy.limits.maxPositionNotionalUsd:
+            if projected_symbol_notional > effective_max_position_notional:
                 raise self._limit_breach(
                     context=context,
                     message=(
-                        "Projected symbol notional exceeds risk maxPositionNotionalUsd "
-                        f"({projected_symbol_notional} > {policy.limits.maxPositionNotionalUsd})."
+                        "Projected symbol notional exceeds volatility-adjusted risk maxPositionNotionalUsd "
+                        f"({projected_symbol_notional} > {effective_max_position_notional}; "
+                        f"base={policy.limits.maxPositionNotionalUsd}, multiplier={volatility.sizing_multiplier})."
                     ),
                 )
 
-            if order_notional > policy.limits.maxNotionalUsd:
+            if order_notional > effective_max_notional:
                 raise self._limit_breach(
                     context=context,
                     message=(
-                        "Order notional exceeds risk maxNotionalUsd "
-                        f"({order_notional} > {policy.limits.maxNotionalUsd})."
+                        "Order notional exceeds volatility-adjusted risk maxNotionalUsd "
+                        f"({order_notional} > {effective_max_notional}; "
+                        f"base={policy.limits.maxNotionalUsd}, multiplier={volatility.sizing_multiplier})."
                     ),
                 )
 
@@ -165,12 +208,13 @@ class RiskPreTradeService:
                 projected_notional = max(0.0, estimated_portfolio_notional - order_notional)
             else:
                 projected_notional = estimated_portfolio_notional + order_notional
-            if projected_notional > policy.limits.maxNotionalUsd:
+            if projected_notional > effective_max_notional:
                 raise self._limit_breach(
                     context=context,
                     message=(
-                        "Projected total notional exceeds risk maxNotionalUsd "
-                        f"({projected_notional} > {policy.limits.maxNotionalUsd})."
+                        "Projected total notional exceeds volatility-adjusted risk maxNotionalUsd "
+                        f"({projected_notional} > {effective_max_notional}; "
+                        f"base={policy.limits.maxNotionalUsd}, multiplier={volatility.sizing_multiplier})."
                     ),
                 )
 
@@ -202,6 +246,9 @@ class RiskPreTradeService:
                     "orderNotional": order_notional,
                     "projectedSymbolNotional": projected_symbol_notional,
                     "projectedTotalNotional": projected_notional,
+                    "effectiveMaxNotionalUsd": effective_max_notional,
+                    "effectiveMaxPositionNotionalUsd": effective_max_position_notional,
+                    **volatility_metadata,
                 },
             )
         except PlatformAPIError as exc:
@@ -217,6 +264,7 @@ class RiskPreTradeService:
                     "side": request.side,
                     "quantity": request.quantity,
                     "price": request.price,
+                    **volatility_metadata,
                 },
             )
             raise
@@ -265,6 +313,113 @@ class RiskPreTradeService:
                 if position.symbol == request.symbol:
                     return position.current_price
         return None
+
+    def _resolve_volatility_sizing(self, *, symbol: str | None) -> VolatilitySizingContext:
+        forecasts = self._store.volatility_forecasts
+        if not isinstance(forecasts, dict):
+            return self._volatility_fallback(reason="volatility_forecast_missing")
+
+        candidate_keys: list[str] = []
+        if symbol:
+            candidate_keys.append(symbol.upper())
+            if symbol.upper() != symbol:
+                candidate_keys.append(symbol)
+        candidate_keys.append(_VOLATILITY_FORECAST_MARKET_KEY)
+
+        payload_seen = False
+        fallback_reason = "volatility_forecast_missing"
+        for key in candidate_keys:
+            candidate = forecasts.get(key)
+            if not isinstance(candidate, dict):
+                continue
+            payload_seen = True
+            source = key
+
+            raw_predicted_pct = candidate.get("predictedPct")
+            raw_confidence = candidate.get("confidence")
+            if not isinstance(raw_predicted_pct, (int, float)):
+                fallback_reason = "volatility_predicted_pct_missing"
+                continue
+            if not isinstance(raw_confidence, (int, float)):
+                fallback_reason = "volatility_confidence_missing"
+                continue
+
+            predicted_pct = float(raw_predicted_pct)
+            if not math.isfinite(predicted_pct):
+                fallback_reason = "volatility_predicted_pct_invalid"
+                continue
+            if predicted_pct < 0.0:
+                fallback_reason = "volatility_predicted_pct_negative"
+                continue
+            predicted_pct = self._clamp(predicted_pct, minimum=0.0, maximum=500.0)
+
+            confidence = float(raw_confidence)
+            if not math.isfinite(confidence):
+                fallback_reason = "volatility_confidence_invalid"
+                continue
+            if confidence > 1.0:
+                confidence = confidence / 100.0
+            if confidence < 0.0 or confidence > 1.0:
+                fallback_reason = "volatility_confidence_out_of_range"
+                continue
+
+            if confidence < 0.55:
+                return VolatilitySizingContext(
+                    predicted_pct=predicted_pct,
+                    confidence=confidence,
+                    sizing_multiplier=1.0,
+                    source=source,
+                    fallback_reason="volatility_confidence_low",
+                )
+
+            return VolatilitySizingContext(
+                predicted_pct=predicted_pct,
+                confidence=confidence,
+                sizing_multiplier=self._volatility_multiplier(predicted_pct=predicted_pct),
+                source=source,
+                fallback_reason=None,
+            )
+
+        if payload_seen:
+            return self._volatility_fallback(reason=fallback_reason)
+        return self._volatility_fallback(reason="volatility_forecast_missing")
+
+    @staticmethod
+    def _volatility_multiplier(*, predicted_pct: float) -> float:
+        if predicted_pct >= 90.0:
+            return 0.35
+        if predicted_pct >= 70.0:
+            return 0.5
+        if predicted_pct >= 55.0:
+            return 0.7
+        if predicted_pct >= 40.0:
+            return 0.85
+        return 1.0
+
+    @staticmethod
+    def _volatility_metadata(volatility: VolatilitySizingContext) -> dict[str, object]:
+        return {
+            "volatilityForecastPct": volatility.predicted_pct,
+            "volatilityForecastConfidence": volatility.confidence,
+            "volatilitySizingMultiplier": volatility.sizing_multiplier,
+            "volatilityForecastSource": volatility.source,
+            "volatilityFallbackReason": volatility.fallback_reason,
+            "volatilityFallbackUsed": volatility.used_fallback,
+        }
+
+    @staticmethod
+    def _volatility_fallback(*, reason: str) -> VolatilitySizingContext:
+        return VolatilitySizingContext(
+            predicted_pct=50.0,
+            confidence=0.0,
+            sizing_multiplier=1.0,
+            source="fallback",
+            fallback_reason=reason,
+        )
+
+    @staticmethod
+    def _clamp(value: float, *, minimum: float, maximum: float) -> float:
+        return max(minimum, min(value, maximum))
 
     def _record_allow(
         self,

@@ -311,6 +311,7 @@ class InMemoryStateStore:
         self.data_exports: dict[str, DataExportRecord] = {}
         self.drift_events: dict[str, DriftEventRecord] = {}
         self.risk_audit_trail: dict[str, RiskAuditRecord] = {}
+        self.volatility_forecasts: dict[str, dict[str, float]] = {}
         self.conversation_sessions: dict[str, ConversationSessionRecord] = {}
         self.conversation_turns: dict[str, list[ConversationTurnRecord]] = {}
         self.conversation_user_memory: dict[str, dict[str, Any]] = {}

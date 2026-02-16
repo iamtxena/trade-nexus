@@ -41,8 +41,9 @@ Pre-trade checks are mandatory gates before side effects:
 
 1. Deployment creation is blocked when policy limits would be exceeded.
 2. Order placement is blocked on max-position/max-notional breaches.
-3. Triggered kill-switch blocks deployment/order side effects.
-4. Invalid or unsupported policy fails closed (no side effects).
+3. Volatility forecasts adjust deployment/order sizing limits through deterministic multipliers.
+4. Triggered kill-switch blocks deployment/order side effects.
+5. Invalid or unsupported policy fails closed (no side effects).
 
 ## Active Drawdown Kill-Switch Runtime Handling (AG-RISK-03)
 
@@ -66,8 +67,8 @@ Risk decisions now persist to runtime audit storage for both allow and block out
 
 | Control Point | Behavior | Side-Effect Policy |
 | --- | --- | --- |
-| Deployment pre-trade check | Validate notional bounds + kill-switch state | Block on breach (`422/423`) before adapter call |
-| Order pre-trade check | Validate symbol/portfolio notional, daily loss, reference price | Block on breach (`422/423`) before adapter call |
+| Deployment pre-trade check | Validate notional bounds + kill-switch state + volatility-adjusted sizing | Block on breach (`422/423`) before adapter call |
+| Order pre-trade check | Validate symbol/portfolio notional, daily loss, reference price, volatility-adjusted sizing | Block on breach (`422/423`) before adapter call |
 | Runtime drawdown monitor | Evaluate `latestPnl` vs drawdown limit | Trigger kill-switch and halt deployment path |
 | Policy validation | Enforce schema/version compatibility | Fail closed on invalid policy (`500`) |
 
@@ -84,6 +85,15 @@ Audit entries capture deterministic decision metadata:
 | `outcome_code` | Deterministic failure/signal code (`RISK_LIMIT_BREACH`, `RISK_KILL_SWITCH_ACTIVE`, etc.) |
 | `reason` | Human-readable rationale |
 | `metadata` | Structured context (notional, drawdown, symbol, deployment references) |
+
+Volatility metadata keys (ML-03):
+
+1. `volatilityForecastPct`
+2. `volatilityForecastConfidence`
+3. `volatilitySizingMultiplier`
+4. `volatilityForecastSource`
+5. `volatilityFallbackReason`
+6. `volatilityFallbackUsed`
 
 ## Gate4 Scope Boundary
 

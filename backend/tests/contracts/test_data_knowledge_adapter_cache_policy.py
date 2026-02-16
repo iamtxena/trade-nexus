@@ -151,3 +151,97 @@ def test_market_context_cache_manual_invalidation_forces_refresh() -> None:
         assert refreshed["regimeSummary"] == "call-2"
 
     asyncio.run(_run())
+
+
+def test_market_context_normalizes_top_level_sentiment_into_ml_signals() -> None:
+    class _SentimentContextAdapter(_StubMarketContextAdapter):
+        async def get_market_context(  # type: ignore[no-untyped-def]
+            self,
+            *,
+            asset_classes: list[str],
+            tenant_id: str,
+            user_id: str,
+            request_id: str,
+        ):
+            _ = (asset_classes, tenant_id, user_id, request_id)
+            self.calls += 1
+            return {
+                "regimeSummary": "Sentiment-led recovery.",
+                "signals": [{"name": "focus_assets", "value": "crypto"}],
+                "sentiment": {
+                    "score": "68",
+                    "confidence": "81",
+                    "source": "curated-news",
+                    "sourceCount": 12,
+                    "lookbackHours": 24,
+                },
+                "mlSignals": {
+                    "prediction": {"direction": "bullish", "confidence": 0.8},
+                    "volatility": {"predictedPct": 32.0, "confidence": 0.66},
+                    "anomaly": {"isAnomaly": False, "score": 0.04},
+                },
+            }
+
+    async def _run() -> None:
+        inner = _SentimentContextAdapter()
+        adapter = CachingDataKnowledgeAdapter(inner_adapter=inner, ttl_seconds=10)
+        payload = await adapter.get_market_context(
+            asset_classes=["crypto"],
+            tenant_id="tenant-a",
+            user_id="user-a",
+            request_id="req-cache-009",
+        )
+
+        sentiment = payload["mlSignals"]["sentiment"]
+        assert sentiment["score"] == 68.0
+        assert sentiment["confidence"] == 81.0
+        assert sentiment["source"] == "curated-news"
+        assert sentiment["sourceCount"] == 12
+        assert sentiment["lookbackHours"] == 24
+
+        names = {entry["name"] for entry in payload["signals"]}
+        assert "sentiment_score" in names
+        assert "sentiment_confidence" in names
+
+    asyncio.run(_run())
+
+
+def test_market_context_invalid_top_level_sentiment_remains_optional_safe() -> None:
+    class _InvalidSentimentAdapter(_StubMarketContextAdapter):
+        async def get_market_context(  # type: ignore[no-untyped-def]
+            self,
+            *,
+            asset_classes: list[str],
+            tenant_id: str,
+            user_id: str,
+            request_id: str,
+        ):
+            _ = (asset_classes, tenant_id, user_id, request_id)
+            self.calls += 1
+            return {
+                "regimeSummary": "Context with malformed sentiment.",
+                "signals": [{"name": "focus_assets", "value": "crypto"}],
+                "sentiment": {"score": "bad-data", "confidence": "nan"},
+                "mlSignals": {
+                    "prediction": {"direction": "neutral", "confidence": 0.55},
+                    "volatility": {"predictedPct": 45.0, "confidence": 0.62},
+                    "anomaly": {"isAnomaly": False, "score": 0.03},
+                },
+            }
+
+    async def _run() -> None:
+        inner = _InvalidSentimentAdapter()
+        adapter = CachingDataKnowledgeAdapter(inner_adapter=inner, ttl_seconds=10)
+        payload = await adapter.get_market_context(
+            asset_classes=["crypto"],
+            tenant_id="tenant-a",
+            user_id="user-a",
+            request_id="req-cache-010",
+        )
+
+        assert "sentiment" not in payload["mlSignals"]
+        names = {entry["name"] for entry in payload["signals"]}
+        assert "sentiment_score" not in names
+        assert "sentiment_confidence" not in names
+
+    asyncio.run(_run())

@@ -167,12 +167,13 @@ class ResearchV2Service:
 
         summary = str(context_payload.get("regimeSummary", "Context unavailable."))
         ml_summary = self._ml_signal_service.summarize(signals=signals)
+        sentiment_summary = self._sentiment_context_summary(context_payload=context_payload, signals=signals)
         return MarketScanV2Response(
             requestId=context.request_id,
             regimeSummary=base.regimeSummary,
             strategyIdeas=ranked_ideas,
             knowledgeEvidence=[KnowledgeSearchItem(**item) for item in evidence],
-            dataContextSummary=f"{summary} {ml_summary}",
+            dataContextSummary=f"{summary} {ml_summary} {sentiment_summary}",
         )
 
     def _rank_strategy_ideas(
@@ -204,3 +205,34 @@ class ResearchV2Service:
             indexed.append((score, idx, ranked))
         indexed.sort(key=lambda item: (-item[0], item[1]))
         return [item[2] for item in indexed]
+
+    def _sentiment_context_summary(
+        self,
+        *,
+        context_payload: dict[str, object],
+        signals: ValidatedMLSignals,
+    ) -> str:
+        source = "unknown"
+        lookback_hours: int | None = None
+
+        raw_ml_signals = context_payload.get("mlSignals")
+        if isinstance(raw_ml_signals, dict):
+            raw_sentiment = raw_ml_signals.get("sentiment")
+            if isinstance(raw_sentiment, dict):
+                raw_source = raw_sentiment.get("source")
+                if isinstance(raw_source, str):
+                    normalized_source = raw_source.strip()
+                    if normalized_source != "":
+                        source = normalized_source
+
+                raw_lookback = raw_sentiment.get("lookbackHours")
+                if isinstance(raw_lookback, (int, float)) and not isinstance(raw_lookback, bool):
+                    as_int = int(raw_lookback)
+                    if as_int > 0 and float(as_int) == float(raw_lookback):
+                        lookback_hours = as_int
+
+        lookback = f", lookbackHours={lookback_hours}" if lookback_hours is not None else ""
+        return (
+            "Sentiment context:"
+            f" score={signals.sentiment_score:.2f}, confidence={signals.sentiment_confidence:.2f}, source={source}{lookback}."
+        )

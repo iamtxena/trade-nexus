@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import math
+from dataclasses import dataclass
 
 from src.platform_api.adapters.lona_adapter import AdapterError, LonaAdapter
 from src.platform_api.errors import PlatformAPIError
@@ -25,6 +27,15 @@ from src.platform_api.services.backtest_resolution_service import BacktestResolu
 from src.platform_api.state_store import BacktestRecord, InMemoryStateStore, StrategyRecord, utc_now
 
 
+@dataclass(frozen=True)
+class MarketScanBudgetReservation:
+    cost_usd: float
+    spent_before_usd: float
+    spent_after_usd: float
+    max_total_usd: float
+    max_per_request_usd: float
+
+
 class StrategyBacktestService:
     """Platform-facing service for research, strategy, and backtest flows."""
 
@@ -40,11 +51,12 @@ class StrategyBacktestService:
         self._lona_adapter = lona_adapter
         self._backtest_resolution_service = backtest_resolution_service
         self._knowledge_ingestion_pipeline = knowledge_ingestion_pipeline
+        self._research_budget_lock = asyncio.Lock()
 
     async def market_scan(self, *, request: MarketScanRequest, context: RequestContext) -> MarketScanResponse:
         symbol_snapshot: list[str] = []
         fallback_note: str | None = None
-        self._reserve_market_scan_budget(context=context)
+        reservation = await self._reserve_market_scan_budget(context=context)
         try:
             provider_symbols = await self._lona_adapter.list_symbols(
                 is_global=False,
@@ -60,6 +72,11 @@ class StrategyBacktestService:
             if len(symbol_snapshot) == 0:
                 fallback_note = "Lona symbol snapshot was empty; using deterministic fallback symbols."
         except AdapterError as exc:
+            await self._release_market_scan_budget(
+                reservation=reservation,
+                context=context,
+                reason=f"adapter_error:{exc.code}",
+            )
             fallback_note = f"Lona symbol snapshot unavailable ({exc.code}); using deterministic fallback symbols."
 
         ideas = [
@@ -82,105 +99,132 @@ class StrategyBacktestService:
             regime = f"{regime} {fallback_note}"
         return MarketScanResponse(requestId=context.request_id, regimeSummary=regime, strategyIdeas=ideas)
 
-    def _reserve_market_scan_budget(self, *, context: RequestContext) -> None:
-        policy = self._store.research_provider_budget
-        if not isinstance(policy, dict):
-            raise PlatformAPIError(
-                status_code=500,
-                code="RESEARCH_PROVIDER_BUDGET_INVALID",
-                message="Research provider budget policy is invalid.",
-                request_id=context.request_id,
-            )
+    async def _reserve_market_scan_budget(self, *, context: RequestContext) -> MarketScanBudgetReservation:
+        async with self._research_budget_lock:
+            policy = self._store.research_provider_budget
+            if not isinstance(policy, dict):
+                raise PlatformAPIError(
+                    status_code=500,
+                    code="RESEARCH_PROVIDER_BUDGET_INVALID",
+                    message="Research provider budget policy is invalid.",
+                    request_id=context.request_id,
+                )
 
-        max_total = self._read_budget_value(
-            policy=policy,
-            key="maxTotalCostUsd",
-            default=100.0,
-            context=context,
-        )
-        max_per_request = self._read_budget_value(
-            policy=policy,
-            key="maxPerRequestCostUsd",
-            default=5.0,
-            context=context,
-        )
-        estimated_cost = self._read_budget_value(
-            policy=policy,
-            key="estimatedMarketScanCostUsd",
-            default=0.25,
-            context=context,
-        )
-        spent_before = self._read_budget_value(
-            policy=policy,
-            key="spentCostUsd",
-            default=0.0,
-            context=context,
-        )
+            max_total = self._read_budget_value(policy=policy, key="maxTotalCostUsd", context=context)
+            max_per_request = self._read_budget_value(policy=policy, key="maxPerRequestCostUsd", context=context)
+            estimated_cost = self._read_budget_value(policy=policy, key="estimatedMarketScanCostUsd", context=context)
+            spent_before = self._read_budget_value(policy=policy, key="spentCostUsd", context=context)
 
-        if estimated_cost > max_per_request:
+            if estimated_cost > max_per_request:
+                self._record_research_budget_event(
+                    context=context,
+                    decision="blocked",
+                    reason="per_request_limit_breached",
+                    cost_usd=estimated_cost,
+                    spent_before_usd=spent_before,
+                    spent_after_usd=spent_before,
+                    max_total_usd=max_total,
+                    max_per_request_usd=max_per_request,
+                )
+                raise PlatformAPIError(
+                    status_code=429,
+                    code="RESEARCH_PROVIDER_BUDGET_EXCEEDED",
+                    message=(
+                        "Research provider budget exceeded: "
+                        f"estimated market-scan cost {estimated_cost} exceeds maxPerRequestCostUsd {max_per_request}."
+                    ),
+                    request_id=context.request_id,
+                )
+
+            spent_after = spent_before + estimated_cost
+            if spent_after > max_total:
+                self._record_research_budget_event(
+                    context=context,
+                    decision="blocked",
+                    reason="total_budget_exceeded",
+                    cost_usd=estimated_cost,
+                    spent_before_usd=spent_before,
+                    spent_after_usd=spent_after,
+                    max_total_usd=max_total,
+                    max_per_request_usd=max_per_request,
+                )
+                raise PlatformAPIError(
+                    status_code=429,
+                    code="RESEARCH_PROVIDER_BUDGET_EXCEEDED",
+                    message=(
+                        "Research provider budget exceeded: "
+                        f"projected spend {spent_after} exceeds maxTotalCostUsd {max_total}."
+                    ),
+                    request_id=context.request_id,
+                )
+
+            policy["spentCostUsd"] = spent_after
             self._record_research_budget_event(
                 context=context,
-                decision="blocked",
-                reason="per_request_limit_breached",
-                cost_usd=estimated_cost,
-                spent_before_usd=spent_before,
-                spent_after_usd=spent_before,
-                max_total_usd=max_total,
-                max_per_request_usd=max_per_request,
-            )
-            raise PlatformAPIError(
-                status_code=429,
-                code="RESEARCH_PROVIDER_BUDGET_EXCEEDED",
-                message=(
-                    "Research provider budget exceeded: "
-                    f"estimated market-scan cost {estimated_cost} exceeds maxPerRequestCostUsd {max_per_request}."
-                ),
-                request_id=context.request_id,
-            )
-
-        spent_after = spent_before + estimated_cost
-        if spent_after > max_total:
-            self._record_research_budget_event(
-                context=context,
-                decision="blocked",
-                reason="total_budget_exceeded",
+                decision="reserved",
+                reason="within_budget",
                 cost_usd=estimated_cost,
                 spent_before_usd=spent_before,
                 spent_after_usd=spent_after,
                 max_total_usd=max_total,
                 max_per_request_usd=max_per_request,
             )
-            raise PlatformAPIError(
-                status_code=429,
-                code="RESEARCH_PROVIDER_BUDGET_EXCEEDED",
-                message=(
-                    "Research provider budget exceeded: "
-                    f"projected spend {spent_after} exceeds maxTotalCostUsd {max_total}."
-                ),
-                request_id=context.request_id,
+            return MarketScanBudgetReservation(
+                cost_usd=estimated_cost,
+                spent_before_usd=spent_before,
+                spent_after_usd=spent_after,
+                max_total_usd=max_total,
+                max_per_request_usd=max_per_request,
             )
 
-        policy["spentCostUsd"] = spent_after
-        self._record_research_budget_event(
-            context=context,
-            decision="reserved",
-            reason="within_budget",
-            cost_usd=estimated_cost,
-            spent_before_usd=spent_before,
-            spent_after_usd=spent_after,
-            max_total_usd=max_total,
-            max_per_request_usd=max_per_request,
-        )
+    async def _release_market_scan_budget(
+        self,
+        *,
+        reservation: MarketScanBudgetReservation,
+        context: RequestContext,
+        reason: str,
+    ) -> None:
+        async with self._research_budget_lock:
+            policy = self._store.research_provider_budget
+            if not isinstance(policy, dict):
+                return
+
+            raw_spent = policy.get("spentCostUsd")
+            if isinstance(raw_spent, bool) or not isinstance(raw_spent, (int, float)):
+                return
+            spent_before = float(raw_spent)
+            if not math.isfinite(spent_before):
+                return
+
+            spent_after = max(0.0, spent_before - reservation.cost_usd)
+            policy["spentCostUsd"] = spent_after
+            self._record_research_budget_event(
+                context=context,
+                decision="released",
+                reason=reason,
+                cost_usd=reservation.cost_usd,
+                spent_before_usd=spent_before,
+                spent_after_usd=spent_after,
+                max_total_usd=reservation.max_total_usd,
+                max_per_request_usd=reservation.max_per_request_usd,
+            )
 
     def _read_budget_value(
         self,
         *,
         policy: dict[str, object],
         key: str,
-        default: float,
         context: RequestContext,
     ) -> float:
-        raw = policy.get(key, default)
+        if key not in policy:
+            raise PlatformAPIError(
+                status_code=500,
+                code="RESEARCH_PROVIDER_BUDGET_INVALID",
+                message=f"Research provider budget field {key} is required.",
+                request_id=context.request_id,
+            )
+
+        raw = policy[key]
         if isinstance(raw, bool) or not isinstance(raw, (int, float)):
             raise PlatformAPIError(
                 status_code=500,

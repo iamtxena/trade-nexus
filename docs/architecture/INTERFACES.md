@@ -166,10 +166,12 @@ Research workflow provider usage is bounded before adapter side effects:
    - `maxPerRequestCostUsd`
    - `estimatedMarketScanCostUsd`
    - `spentCostUsd`
+   - all fields are required and must be finite non-negative numbers
 2. If projected usage exceeds policy, runtime fails closed before calling `LonaAdapter.listSymbols`.
 3. Exceeded budget returns `RESEARCH_PROVIDER_BUDGET_EXCEEDED` (`429`) with request-scoped traceability.
 4. Invalid budget policy values fail closed with `RESEARCH_PROVIDER_BUDGET_INVALID` (`500`).
-5. Budget decisions are persisted as structured research budget events for auditability.
+5. Adapter failures in market-scan release the reserved budget before deterministic fallback response.
+6. Budget decisions are persisted as structured research budget events for auditability.
 
 ### ExecutionAdapter
 

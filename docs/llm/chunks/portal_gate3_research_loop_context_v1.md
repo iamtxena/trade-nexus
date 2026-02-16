@@ -44,4 +44,5 @@ Gate5 extends this flow with optional-safe ML enrichment while preserving determ
 4. Market context retrieval is cache-backed with explicit TTL and order-insensitive asset keying.
 5. Research responses expose fallback state in `dataContextSummary` for auditability.
 6. Provider-backed market-scan symbol retrieval is guarded by deterministic budget policy (`maxTotalCostUsd`, `maxPerRequestCostUsd`, `estimatedMarketScanCostUsd`, `spentCostUsd`).
-7. Budget breach or invalid policy fails closed before adapter side effects and emits auditable budget decision events.
+7. Budget breach or invalid policy fails closed before adapter side effects; adapter failures release reserved budget and still return deterministic fallback responses.
+8. Budget decision events are recorded for auditability.

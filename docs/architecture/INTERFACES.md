@@ -412,6 +412,34 @@ Transition rules:
 10. Retry-eligible failures transition to retry-wait semantics (`awaiting_tool`) with bounded backoff metadata.
 11. Budget exhaustion transitions to terminal `failed` with explicit exhaustion reason.
 
+## 5.1) Orchestrator Execution Trace Contract (AG-ORCH-04)
+
+Orchestrator lifecycle and retry behavior must persist auditable trace records in platform state:
+
+- state record type: `OrchestratorExecutionTraceRecord`
+- state collection: `InMemoryStateStore.orchestrator_execution_traces`
+
+Required fields per trace:
+
+- `id`
+- `run_id`
+- `event`
+- `step`
+- `from_state`
+- `to_state`
+- `request_id`
+- `tenant_id`
+- `user_id`
+- `metadata`
+- `created_at`
+
+Rules:
+
+1. Queue lifecycle transitions (`enqueue`, `dequeue`, `await_tool`, `await_user_confirmation`, `resume`, `cancel`, `complete`, `fail`) must emit trace records.
+2. Retry policy decisions (`retry_attempt_started`, `retry_failure_recorded`, `retry_scheduled`, `retry_terminal_decision`, `retry_success`) must emit trace records.
+3. Identity fields on traces must be deterministic and auditable even when runtime uses default orchestrator context.
+4. Trace events are append-only and must preserve chronological order for a given `run_id`.
+
 ## 6) Risk Policy Schema Contract (AG-RISK-01)
 
 Risk policy is defined as a machine-readable, versioned schema:

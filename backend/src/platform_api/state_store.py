@@ -200,6 +200,21 @@ class ConversationNotificationRecord:
     created_at: str = field(default_factory=utc_now)
 
 
+@dataclass
+class OrchestratorExecutionTraceRecord:
+    id: str
+    run_id: str
+    event: str
+    step: str
+    from_state: str | None
+    to_state: str | None
+    request_id: str
+    tenant_id: str
+    user_id: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: str = field(default_factory=utc_now)
+
+
 class InMemoryStateStore:
     """Simple in-process persistence for Gate2 thin-slice behavior."""
 
@@ -324,6 +339,7 @@ class InMemoryStateStore:
         self.conversation_turns: dict[str, list[ConversationTurnRecord]] = {}
         self.conversation_user_memory: dict[str, dict[str, Any]] = {}
         self.conversation_notifications: dict[str, ConversationNotificationRecord] = {}
+        self.orchestrator_execution_traces: list[OrchestratorExecutionTraceRecord] = []
         self.risk_policy: dict[str, Any] = {
             "version": "risk-policy.v1",
             "mode": "enforced",
@@ -362,6 +378,7 @@ class InMemoryStateStore:
             "conversation_session": 1,
             "conversation_turn": 1,
             "conversation_notification": 1,
+            "orchestrator_trace": 1,
         }
         self._idempotency: dict[str, dict[str, tuple[str, dict[str, Any]]]] = {
             "deployments": {},
@@ -405,6 +422,8 @@ class InMemoryStateStore:
             return f"turn-{idx:04d}"
         if scope == "conversation_notification":
             return f"note-{idx:04d}"
+        if scope == "orchestrator_trace":
+            return f"orch-trace-{idx:04d}"
         return f"{scope}-{idx:03d}"
 
     @staticmethod

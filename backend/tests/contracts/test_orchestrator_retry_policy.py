@@ -87,3 +87,15 @@ def test_success_marks_retry_state_terminal() -> None:
     assert snapshot.attempts == 1
     assert snapshot.failures == 0
     assert snapshot.terminal is True
+
+
+def test_record_failure_after_success_returns_completed_terminal_decision() -> None:
+    service = OrchestratorRetryPolicyService()
+    service.begin_attempt(item_id="orch-005")
+    service.record_success(item_id="orch-005")
+
+    decision = service.record_failure(item_id="orch-005")
+    assert decision.retry_allowed is False
+    assert decision.terminal is True
+    assert decision.next_state == "completed"
+    assert decision.reason == "retry_succeeded"

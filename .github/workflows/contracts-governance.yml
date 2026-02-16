@@ -80,6 +80,9 @@ jobs:
       - name: Validate mock server routes
         run: bash contracts/scripts/mock-smoke-test.sh
 
+      - name: Run consumer-driven mock contract checks
+        run: bash contracts/scripts/mock-consumer-contract-test.sh
+
       - name: Detect incompatible contract changes
         run: bash contracts/scripts/check-breaking-changes.sh
 

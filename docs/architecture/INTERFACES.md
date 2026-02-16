@@ -333,6 +333,22 @@ Every request crossing module boundaries must carry:
 
 No service is allowed to synthesize fallback identities for production flows.
 
+## 3.1) Consumer-Driven Mock Contract Gate (R-03)
+
+Consumer compatibility checks against the generated OpenAPI mock server are required for release gates.
+
+Required checks:
+
+1. Mock route smoke coverage for v1 Platform API operations (`contracts/scripts/mock-smoke-test.sh`).
+2. Consumer-driven shape checks for client-critical payloads (`contracts/scripts/mock-consumer-contract-test.sh`).
+3. Contract-governance CI must run both checks on every PR touching runtime, contracts, or interface docs.
+
+Validation rules:
+
+1. Missing required client fields (`requestId`, lane-specific payload envelopes) is a contract failure.
+2. v2 conversation lane checks must pass for OpenClaw-compatible session/turn flows.
+3. Failing consumer mock checks blocks merge regardless of OpenAPI baseline/freeze pass status.
+
 ## 4) Async Resource Contract
 
 Long-running operations use resource status:

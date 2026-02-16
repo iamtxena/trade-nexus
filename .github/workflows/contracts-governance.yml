@@ -82,3 +82,174 @@ jobs:
 
       - name: Detect incompatible contract changes
         run: bash contracts/scripts/check-breaking-changes.sh
+
+  review-governance:
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    steps:
+      - name: Enforce review gate sequencing
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prNumber = context.payload.pull_request.number;
+            const headSha = context.payload.pull_request.head.sha;
+
+            async function listAllChangedFiles() {
+              const files = [];
+              for await (const page of github.paginate.iterator(
+                github.rest.pulls.listFiles,
+                {
+                  owner,
+                  repo,
+                  pull_number: prNumber,
+                  per_page: 100,
+                },
+              )) {
+                files.push(...page.data.map((item) => item.filename));
+              }
+              return files;
+            }
+
+            async function getReviewThreads() {
+              const threads = [];
+              let cursor = null;
+              let hasNextPage = true;
+              while (hasNextPage) {
+                const response = await github.graphql(
+                  `
+                  query($owner: String!, $repo: String!, $prNumber: Int!, $cursor: String) {
+                    repository(owner: $owner, name: $repo) {
+                      pullRequest(number: $prNumber) {
+                        reviewThreads(first: 100, after: $cursor) {
+                          pageInfo {
+                            hasNextPage
+                            endCursor
+                          }
+                          nodes {
+                            isResolved
+                            comments(first: 10) {
+                              nodes {
+                                url
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  `,
+                  {
+                    owner,
+                    repo,
+                    prNumber,
+                    cursor,
+                  },
+                );
+                const threadConnection = response.repository.pullRequest.reviewThreads;
+                threads.push(...threadConnection.nodes);
+                hasNextPage = threadConnection.pageInfo.hasNextPage;
+                cursor = threadConnection.pageInfo.endCursor;
+              }
+              return threads;
+            }
+
+            async function getReviewActors() {
+              const response = await github.graphql(
+                `
+                query($owner: String!, $repo: String!, $prNumber: Int!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $prNumber) {
+                      reviews(first: 100) {
+                        nodes {
+                          author {
+                            login
+                          }
+                          state
+                        }
+                      }
+                    }
+                  }
+                }
+                `,
+                {
+                  owner,
+                  repo,
+                  prNumber,
+                },
+              );
+              return response.repository.pullRequest.reviews.nodes
+                .filter((review) => review.author && review.author.login && review.state !== "DISMISSED")
+                .map((review) => String(review.author.login).toLowerCase());
+            }
+
+            async function getCheckRuns() {
+              const runs = [];
+              for await (const page of github.paginate.iterator(
+                github.rest.checks.listForRef,
+                {
+                  owner,
+                  repo,
+                  ref: headSha,
+                  per_page: 100,
+                },
+              )) {
+                runs.push(...page.data.check_runs);
+              }
+              return runs;
+            }
+
+            const changedFiles = await listAllChangedFiles();
+            const requiresSequencingGate = changedFiles.some((filename) =>
+              filename.startsWith("backend/src/platform_api/") ||
+              filename.startsWith("backend/tests/contracts/") ||
+              filename.startsWith("docs/architecture/") ||
+              filename === ".github/workflows/contracts-governance.yml",
+            );
+
+            const reviewThreads = await getReviewThreads();
+            const unresolvedThreads = reviewThreads.filter((thread) => !thread.isResolved);
+            if (unresolvedThreads.length > 0) {
+              const unresolvedUrls = unresolvedThreads
+                .map((thread) => thread.comments.nodes[0]?.url)
+                .filter(Boolean)
+                .slice(0, 10);
+              core.setFailed(
+                `Unresolved review threads detected (${unresolvedThreads.length}). Resolve all threads before merge. ${unresolvedUrls.join(" ")}`,
+              );
+              return;
+            }
+
+            if (!requiresSequencingGate) {
+              core.info("Review sequencing gate not required for this PR scope.");
+              return;
+            }
+
+            const reviewActors = await getReviewActors();
+            if (!reviewActors.includes("greptile-apps")) {
+              core.setFailed("Missing required Greptile review submission.");
+              return;
+            }
+
+            const checkRuns = await getCheckRuns();
+            const cursorRuns = checkRuns.filter((run) => run.name.toLowerCase().includes("cursor"));
+            if (cursorRuns.length === 0) {
+              core.setFailed("Missing required Cursor check run.");
+              return;
+            }
+
+            const cursorPassed = cursorRuns.some((run) =>
+              run.status === "completed" && ["success", "neutral", "skipped"].includes(run.conclusion || ""),
+            );
+            if (!cursorPassed) {
+              const statuses = cursorRuns.map((run) => `${run.name}:${run.status}/${run.conclusion || "null"}`);
+              core.setFailed(`Cursor check has not passed yet. Current status: ${statuses.join(", ")}`);
+              return;
+            }
+
+            core.info("Review governance checks passed.");

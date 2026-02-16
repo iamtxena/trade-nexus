@@ -59,16 +59,31 @@ from src.platform_api.state_store import InMemoryStateStore
 router = APIRouter(prefix="/v1")
 
 _store = InMemoryStateStore()
+
+
+def _float_env(name: str, default: float, *, minimum: float | None = None) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        parsed = float(raw)
+    except (TypeError, ValueError):
+        return default
+    if minimum is not None and parsed < minimum:
+        return minimum
+    return parsed
+
+
 _use_remote_lona = os.getenv("PLATFORM_USE_REMOTE_LONA", "false").lower() in {"1", "true", "yes"}
 _use_remote_execution = os.getenv("PLATFORM_USE_REMOTE_EXECUTION", "false").lower() in {"1", "true", "yes"}
 _use_remote_trader_data = os.getenv("PLATFORM_USE_TRADER_DATA_REMOTE", "false").lower() in {"1", "true", "yes"}
-_market_context_cache_ttl_seconds = float(os.getenv("PLATFORM_MARKET_CONTEXT_CACHE_TTL_SECONDS", "120"))
+_market_context_cache_ttl_seconds = _float_env("PLATFORM_MARKET_CONTEXT_CACHE_TTL_SECONDS", 120.0, minimum=0.0)
 _lona_adapter = LonaAdapterBaseline(use_remote_provider=_use_remote_lona)
 if _use_remote_execution:
     _execution_adapter = LiveEngineExecutionAdapter(
         base_url=os.getenv("LIVE_ENGINE_URL", "https://live.lona.agency"),
         service_api_key=os.getenv("LIVE_ENGINE_SERVICE_API_KEY", ""),
-        timeout_seconds=float(os.getenv("LIVE_ENGINE_TIMEOUT_SECONDS", "8.0")),
+        timeout_seconds=_float_env("LIVE_ENGINE_TIMEOUT_SECONDS", 8.0, minimum=0.0),
     )
 else:
     _execution_adapter = InMemoryExecutionAdapter(_store)
@@ -77,7 +92,7 @@ if _use_remote_trader_data:
     _base_data_knowledge_adapter = TraderDataHTTPAdapter(
         base_url=os.getenv("TRADER_DATA_URL", "http://localhost:8100"),
         service_api_key=os.getenv("TRADER_DATA_SERVICE_API_KEY", ""),
-        timeout_seconds=float(os.getenv("TRADER_DATA_TIMEOUT_SECONDS", "8.0")),
+        timeout_seconds=_float_env("TRADER_DATA_TIMEOUT_SECONDS", 8.0, minimum=0.0),
     )
 else:
     _base_data_knowledge_adapter = InMemoryDataKnowledgeAdapter(_store)

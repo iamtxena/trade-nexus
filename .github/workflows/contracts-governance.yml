@@ -23,6 +23,8 @@ on:
 jobs:
   contract-governance:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: backend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,7 +48,16 @@ jobs:
           java-version: "21"
 
       - name: Install test tooling
-        run: python -m pip install --upgrade pip pytest
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            pytest \
+            pytest-asyncio \
+            fastapi \
+            httpx \
+            pydantic \
+            pydantic-settings \
+            python-dotenv
 
       - name: Lint OpenAPI contract
         run: npx --yes @redocly/cli@1.34.5 lint docs/architecture/specs/platform-api.openapi.yaml
@@ -56,6 +67,12 @@ jobs:
 
       - name: Run OpenAPI contract freeze tests
         run: pytest backend/tests/contracts/test_openapi_contract_freeze.py
+
+      - name: Run backend contract behavior tests
+        run: |
+          pytest backend/tests/contracts \
+            --ignore=backend/tests/contracts/test_openapi_contract_baseline.py \
+            --ignore=backend/tests/contracts/test_openapi_contract_freeze.py
 
       - name: Verify SDK generation drift
         run: bash contracts/scripts/verify-sdk-drift.sh

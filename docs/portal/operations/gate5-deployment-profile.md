@@ -29,13 +29,13 @@ Gate5 enforces one active deployment target profile with no contradictory runtim
 ## Release Readiness Checklist
 
 1. Contract governance checks are green.
-2. Docs governance checks are green.
-3. Deployment documentation and runbooks reference a single active profile.
-4. Parent `#81` status is updated with deployment evidence links.
+2. `contracts-governance` includes full backend contract behavior suite (`backend/tests/contracts` with OpenAPI baseline/freeze + behavior tests).
+3. Docs governance checks are green.
+4. Deployment documentation and runbooks reference a single active profile.
+5. Parent `#81` status is updated with deployment evidence links.
 
 ## Traceability
 
 - Deployment architecture source: `/docs/architecture/DEPLOYMENT.md`
 - Gate workflow process: `/docs/portal/operations/gate-workflow.md`
 - Reliability parent epic: `#81`
-

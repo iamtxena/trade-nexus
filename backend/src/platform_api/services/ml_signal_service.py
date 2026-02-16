@@ -142,6 +142,9 @@ class MLSignalValidationService:
         numeric = float(raw)
         if source == "sentiment" and numeric > 1.0:
             numeric = numeric / 100.0
+            if numeric > 1.0:
+                fallback_reasons.append("sentiment_score_clamped")
+                numeric = 1.0
         if numeric < 0.0 or numeric > 1.0:
             fallback_reasons.append(f"{source}_score_out_of_range")
             return 0.5 if source == "sentiment" else 0.0

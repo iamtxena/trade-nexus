@@ -8,28 +8,18 @@ import math
 from src.platform_api.errors import PlatformAPIError
 from src.platform_api.schemas_v1 import CreateDeploymentRequest, CreateOrderRequest, RequestContext
 from src.platform_api.services.risk_audit_service import RiskAuditService
+from src.platform_api.services.ml_signal_constants import (
+    ANOMALY_BREACH_CONFIDENCE,
+    ANOMALY_BREACH_SCORE,
+    ML_SIGNAL_MARKET_KEY,
+    REGIME_ALIASES,
+    REGIME_CONFIDENCE_MIN,
+)
 from src.platform_api.services.risk_policy import RiskPolicyValidationError, validate_risk_policy
 from src.platform_api.state_store import InMemoryStateStore
 
 _ACTIVE_DEPLOYMENT_STATES = {"queued", "running", "paused"}
 _VOLATILITY_FORECAST_MARKET_KEY = "__market__"
-_ML_SIGNAL_MARKET_KEY = "__market__"
-_REGIME_CONFIDENCE_MIN = 0.55
-_ANOMALY_BREACH_SCORE = 0.8
-_ANOMALY_BREACH_CONFIDENCE = 0.7
-_REGIME_ALIASES = {
-    "risk_on": "risk_on",
-    "risk-on": "risk_on",
-    "bullish": "risk_on",
-    "uptrend": "risk_on",
-    "neutral": "neutral",
-    "sideways": "neutral",
-    "range": "neutral",
-    "risk_off": "risk_off",
-    "risk-off": "risk_off",
-    "bearish": "risk_off",
-    "downtrend": "risk_off",
-}
 
 
 @dataclass(frozen=True)
@@ -486,7 +476,7 @@ class RiskPreTradeService:
             candidate_keys.append(upper)
             if upper != symbol:
                 candidate_keys.append(symbol)
-        candidate_keys.append(_ML_SIGNAL_MARKET_KEY)
+        candidate_keys.append(ML_SIGNAL_MARKET_KEY)
 
         for key in candidate_keys:
             payload = snapshots.get(key)
@@ -500,7 +490,7 @@ class RiskPreTradeService:
         fallback_reasons: list[str] = []
         regime = self._normalize_regime_label(payload.get("regime"), fallback_reasons)
         regime_confidence = self._coerce_confidence(payload.get("regimeConfidence"), fallback_reasons, source="regime")
-        if regime_confidence < _REGIME_CONFIDENCE_MIN:
+        if regime_confidence < REGIME_CONFIDENCE_MIN:
             fallback_reasons.append("regime_confidence_low")
             regime = "neutral"
 
@@ -515,8 +505,8 @@ class RiskPreTradeService:
             fallback_reasons.append("anomaly_flag_missing")
 
         anomaly_breach = False
-        if anomaly_flag and anomaly_score >= _ANOMALY_BREACH_SCORE:
-            if anomaly_confidence >= _ANOMALY_BREACH_CONFIDENCE:
+        if anomaly_flag and anomaly_score >= ANOMALY_BREACH_SCORE:
+            if anomaly_confidence >= ANOMALY_BREACH_CONFIDENCE:
                 anomaly_breach = True
             else:
                 fallback_reasons.append("anomaly_confidence_low")
@@ -546,7 +536,7 @@ class RiskPreTradeService:
         if normalized == "":
             fallback_reasons.append("regime_missing")
             return "neutral"
-        mapped = _REGIME_ALIASES.get(normalized, normalized.replace(" ", "_"))
+        mapped = REGIME_ALIASES.get(normalized, normalized.replace(" ", "_"))
         if mapped not in {"risk_on", "neutral", "risk_off"}:
             fallback_reasons.append("regime_invalid")
             return "neutral"
@@ -584,7 +574,7 @@ class RiskPreTradeService:
 
     @staticmethod
     def _regime_multiplier(*, regime: str, confidence: float) -> float:
-        if confidence < _REGIME_CONFIDENCE_MIN:
+        if confidence < REGIME_CONFIDENCE_MIN:
             return 1.0
         if regime == "risk_off":
             return 0.7

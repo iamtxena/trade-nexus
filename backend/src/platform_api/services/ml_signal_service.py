@@ -5,24 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from src.platform_api.services.ml_signal_constants import (
+    ANOMALY_BREACH_CONFIDENCE,
+    ANOMALY_BREACH_SCORE,
+    REGIME_ALIASES,
+    REGIME_CONFIDENCE_MIN,
+)
+
 _ALLOWED_PREDICTION_DIRECTIONS = {"bullish", "bearish", "neutral"}
 _ALLOWED_REGIME_LABELS = {"risk_on", "neutral", "risk_off"}
-_REGIME_ALIASES = {
-    "risk_on": "risk_on",
-    "risk-on": "risk_on",
-    "bullish": "risk_on",
-    "uptrend": "risk_on",
-    "neutral": "neutral",
-    "sideways": "neutral",
-    "range": "neutral",
-    "risk_off": "risk_off",
-    "risk-off": "risk_off",
-    "bearish": "risk_off",
-    "downtrend": "risk_off",
-}
-_REGIME_CONFIDENCE_MIN = 0.55
-_ANOMALY_BREACH_SCORE = 0.8
-_ANOMALY_BREACH_CONFIDENCE = 0.7
 
 
 def _clamp(value: float, *, minimum: float, maximum: float) -> float:
@@ -52,8 +43,8 @@ class ValidatedMLSignals:
     def anomaly_breach_active(self) -> bool:
         return (
             self.anomaly_flag
-            and self.anomaly_score >= _ANOMALY_BREACH_SCORE
-            and self.anomaly_confidence >= _ANOMALY_BREACH_CONFIDENCE
+            and self.anomaly_score >= ANOMALY_BREACH_SCORE
+            and self.anomaly_confidence >= ANOMALY_BREACH_CONFIDENCE
         )
 
 
@@ -84,7 +75,7 @@ class MLSignalValidationService:
         anomaly_confidence = self._normalized_confidence(raw_anomaly, fallback_reasons, source="anomaly")
         regime_label = self._regime_label(raw_regime, fallback_reasons)
         regime_confidence = self._normalized_confidence(raw_regime, fallback_reasons, source="regime")
-        if regime_confidence < _REGIME_CONFIDENCE_MIN:
+        if regime_confidence < REGIME_CONFIDENCE_MIN:
             fallback_reasons.append("regime_confidence_low")
             regime_label = "neutral"
 
@@ -124,7 +115,7 @@ class MLSignalValidationService:
             "risk_off": -0.12,
         }[signals.regime_label]
         anomaly_penalty = 0.0
-        if signals.anomaly_confidence >= _REGIME_CONFIDENCE_MIN:
+        if signals.anomaly_confidence >= REGIME_CONFIDENCE_MIN:
             anomaly_penalty = (0.15 if signals.anomaly_flag else 0.0) + (signals.anomaly_score * 0.12)
         if signals.anomaly_breach_active:
             anomaly_penalty += 0.2
@@ -243,7 +234,7 @@ class MLSignalValidationService:
             fallback_reasons.append("regime_label_missing")
             return "neutral"
 
-        mapped = _REGIME_ALIASES.get(normalized, normalized.replace(" ", "_"))
+        mapped = REGIME_ALIASES.get(normalized, normalized.replace(" ", "_"))
         if mapped not in _ALLOWED_REGIME_LABELS:
             fallback_reasons.append("regime_label_invalid")
             return "neutral"

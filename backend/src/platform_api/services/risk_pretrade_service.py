@@ -326,55 +326,63 @@ class RiskPreTradeService:
                 candidate_keys.append(symbol)
         candidate_keys.append(_VOLATILITY_FORECAST_MARKET_KEY)
 
-        payload: dict[str, object] | None = None
-        source = "fallback"
+        payload_seen = False
+        fallback_reason = "volatility_forecast_missing"
         for key in candidate_keys:
             candidate = forecasts.get(key)
-            if isinstance(candidate, dict):
-                payload = candidate
-                source = key
-                break
-        if payload is None:
-            return self._volatility_fallback(reason="volatility_forecast_missing")
+            if not isinstance(candidate, dict):
+                continue
+            payload_seen = True
+            source = key
 
-        raw_predicted_pct = payload.get("predictedPct")
-        raw_confidence = payload.get("confidence")
-        if not isinstance(raw_predicted_pct, (int, float)):
-            return self._volatility_fallback(reason="volatility_predicted_pct_missing")
-        if not isinstance(raw_confidence, (int, float)):
-            return self._volatility_fallback(reason="volatility_confidence_missing")
+            raw_predicted_pct = candidate.get("predictedPct")
+            raw_confidence = candidate.get("confidence")
+            if not isinstance(raw_predicted_pct, (int, float)):
+                fallback_reason = "volatility_predicted_pct_missing"
+                continue
+            if not isinstance(raw_confidence, (int, float)):
+                fallback_reason = "volatility_confidence_missing"
+                continue
 
-        predicted_pct = float(raw_predicted_pct)
-        if not math.isfinite(predicted_pct):
-            return self._volatility_fallback(reason="volatility_predicted_pct_invalid")
-        if predicted_pct < 0.0:
-            return self._volatility_fallback(reason="volatility_predicted_pct_negative")
-        predicted_pct = self._clamp(predicted_pct, minimum=0.0, maximum=500.0)
+            predicted_pct = float(raw_predicted_pct)
+            if not math.isfinite(predicted_pct):
+                fallback_reason = "volatility_predicted_pct_invalid"
+                continue
+            if predicted_pct < 0.0:
+                fallback_reason = "volatility_predicted_pct_negative"
+                continue
+            predicted_pct = self._clamp(predicted_pct, minimum=0.0, maximum=500.0)
 
-        confidence = float(raw_confidence)
-        if not math.isfinite(confidence):
-            return self._volatility_fallback(reason="volatility_confidence_invalid")
-        if confidence > 1.0:
-            confidence = confidence / 100.0
-        if confidence < 0.0 or confidence > 1.0:
-            return self._volatility_fallback(reason="volatility_confidence_out_of_range")
+            confidence = float(raw_confidence)
+            if not math.isfinite(confidence):
+                fallback_reason = "volatility_confidence_invalid"
+                continue
+            if confidence > 1.0:
+                confidence = confidence / 100.0
+            if confidence < 0.0 or confidence > 1.0:
+                fallback_reason = "volatility_confidence_out_of_range"
+                continue
 
-        if confidence < 0.55:
+            if confidence < 0.55:
+                return VolatilitySizingContext(
+                    predicted_pct=predicted_pct,
+                    confidence=confidence,
+                    sizing_multiplier=1.0,
+                    source=source,
+                    fallback_reason="volatility_confidence_low",
+                )
+
             return VolatilitySizingContext(
                 predicted_pct=predicted_pct,
                 confidence=confidence,
-                sizing_multiplier=1.0,
+                sizing_multiplier=self._volatility_multiplier(predicted_pct=predicted_pct),
                 source=source,
-                fallback_reason="volatility_confidence_low",
+                fallback_reason=None,
             )
 
-        return VolatilitySizingContext(
-            predicted_pct=predicted_pct,
-            confidence=confidence,
-            sizing_multiplier=self._volatility_multiplier(predicted_pct=predicted_pct),
-            source=source,
-            fallback_reason=None,
-        )
+        if payload_seen:
+            return self._volatility_fallback(reason=fallback_reason)
+        return self._volatility_fallback(reason="volatility_forecast_missing")
 
     @staticmethod
     def _volatility_multiplier(*, predicted_pct: float) -> float:

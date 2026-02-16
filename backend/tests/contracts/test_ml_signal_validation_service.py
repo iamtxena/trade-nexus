@@ -98,3 +98,25 @@ def test_ml_signal_validation_flags_anomaly_breach_state() -> None:
     assert signals.regime_label == "risk_off"
     assert signals.regime_confidence == 0.82
     assert "anomaly=breach" in service.summarize(signals=signals)
+
+
+def test_ml_signal_validation_treats_boolean_confidence_as_missing() -> None:
+    service = MLSignalValidationService()
+    signals = service.validate(
+        {
+            "mlSignals": {
+                "prediction": {"direction": "neutral", "confidence": 0.7},
+                "sentiment": {"score": 0.5, "confidence": 0.6},
+                "volatility": {"predictedPct": 70, "confidence": 0.8},
+                "anomaly": {"isAnomaly": True, "score": 0.92, "confidence": True},
+                "regime": {"label": "risk_off", "confidence": True},
+            }
+        }
+    )
+
+    assert signals.anomaly_confidence == 0.0
+    assert signals.regime_confidence == 0.0
+    assert signals.regime_label == "neutral"
+    assert signals.anomaly_breach_active is False
+    assert "anomaly_confidence_missing" in signals.fallback_reasons
+    assert "regime_confidence_missing" in signals.fallback_reasons

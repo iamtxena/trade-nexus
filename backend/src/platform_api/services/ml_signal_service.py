@@ -158,7 +158,7 @@ class MLSignalValidationService:
             fallback_reasons.append(f"{source}_confidence_missing")
             return 0.0
         raw = payload.get("confidence")
-        if not isinstance(raw, (int, float)):
+        if not isinstance(raw, (int, float)) or isinstance(raw, bool):
             fallback_reasons.append(f"{source}_confidence_missing")
             return 0.0
         numeric = float(raw)
@@ -175,7 +175,7 @@ class MLSignalValidationService:
             fallback_reasons.append(f"{source}_score_missing")
             return 0.5 if source == "sentiment" else 0.0
         raw = payload.get("score")
-        if not isinstance(raw, (int, float)):
+        if not isinstance(raw, (int, float)) or isinstance(raw, bool):
             fallback_reasons.append(f"{source}_score_missing")
             return 0.5 if source == "sentiment" else 0.0
         numeric = float(raw)
@@ -195,7 +195,7 @@ class MLSignalValidationService:
             fallback_reasons.append("volatility_missing")
             return 50.0
         raw = payload.get("predictedPct")
-        if not isinstance(raw, (int, float)):
+        if not isinstance(raw, (int, float)) or isinstance(raw, bool):
             fallback_reasons.append("volatility_predicted_pct_missing")
             return 50.0
         numeric = float(raw)

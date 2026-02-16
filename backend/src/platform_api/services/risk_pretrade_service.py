@@ -71,6 +71,7 @@ class RiskPreTradeService:
         ml_metadata = self._ml_risk_metadata(ml_context)
         try:
             policy = self._validated_policy(context=context)
+            self._ensure_ml_anomaly_not_breached(context=context, ml_context=ml_context)
             effective_max_notional = (
                 policy.limits.maxNotionalUsd
                 * volatility.sizing_multiplier
@@ -95,7 +96,6 @@ class RiskPreTradeService:
                 )
                 return
             self._ensure_kill_switch_not_triggered(context=context)
-            self._ensure_ml_anomaly_not_breached(context=context, ml_context=ml_context)
 
             active_deployment_capital = sum(
                 deployment.capital
@@ -168,6 +168,7 @@ class RiskPreTradeService:
         ml_metadata = self._ml_risk_metadata(ml_context)
         try:
             policy = self._validated_policy(context=context)
+            self._ensure_ml_anomaly_not_breached(context=context, ml_context=ml_context)
             effective_max_notional = (
                 policy.limits.maxNotionalUsd
                 * volatility.sizing_multiplier
@@ -199,7 +200,6 @@ class RiskPreTradeService:
                 )
                 return
             self._ensure_kill_switch_not_triggered(context=context)
-            self._ensure_ml_anomaly_not_breached(context=context, ml_context=ml_context)
 
             reference_price = self._resolve_reference_price(request=request)
             if reference_price is None:

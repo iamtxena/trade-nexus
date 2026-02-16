@@ -210,6 +210,41 @@ def test_pretrade_advisory_mode_does_not_block_side_effects() -> None:
     asyncio.run(_run())
 
 
+def test_pretrade_advisory_mode_still_blocks_on_ml_anomaly_breach() -> None:
+    async def _run() -> None:
+        service, store, adapter = await _create_service_and_store()
+        store.risk_policy["mode"] = "advisory"
+        store.ml_signal_snapshots["__market__"] = {
+            "regime": "risk_off",
+            "regimeConfidence": 0.92,
+            "anomalyScore": 0.91,
+            "anomalyConfidence": 0.9,
+            "anomalyFlag": True,
+        }
+
+        try:
+            await service.create_order(
+                request=CreateOrderRequest(
+                    symbol="BTCUSDT",
+                    side="buy",
+                    type="limit",
+                    quantity=0.1,
+                    price=50_000,
+                    deploymentId="dep-001",
+                ),
+                idempotency_key="idem-risk-order-advisory-ml-001",
+                context=_context(),
+            )
+            raise AssertionError("Expected advisory mode to fail closed on ML anomaly breach.")
+        except PlatformAPIError as exc:
+            assert exc.status_code == 423
+            assert exc.code == "RISK_ML_ANOMALY_BREACH"
+
+        assert adapter.place_order_calls == 0
+
+    asyncio.run(_run())
+
+
 def test_pretrade_blocks_market_order_without_reference_price() -> None:
     async def _run() -> None:
         service, store, adapter = await _create_service_and_store()

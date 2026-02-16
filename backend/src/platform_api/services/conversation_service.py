@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import copy
+import logging
 import re
 from typing import Any
 
 from src.platform_api.errors import PlatformAPIError
+from src.platform_api.observability import log_context_event
 from src.platform_api.schemas_v1 import RequestContext
 from src.platform_api.schemas_v2 import (
     ConversationSession,
@@ -29,6 +31,7 @@ _MEMORY_MAX_RECENT_MESSAGES = 5
 _MEMORY_MAX_LINKED_ARTIFACTS = 25
 _MEMORY_MAX_SYMBOLS = 25
 _MAX_SUGGESTIONS_PER_TURN = 8
+logger = logging.getLogger(__name__)
 
 
 class ConversationService:
@@ -61,6 +64,17 @@ class ConversationService:
         )
         self._store.conversation_sessions[session_id] = record
         self._store.conversation_turns.setdefault(session_id, [])
+        log_context_event(
+            logger,
+            level=logging.INFO,
+            message="Conversation session created.",
+            context=context,
+            component="conversation",
+            operation="create_session",
+            resource_type="conversation_session",
+            resource_id=session_id,
+            channel=request.channel,
+        )
         return ConversationSessionResponse(requestId=context.request_id, session=self._to_session(record))
 
     async def get_session(self, *, session_id: str, context: RequestContext) -> ConversationSessionResponse:
@@ -137,6 +151,18 @@ class ConversationService:
         session.updated_at = now
         session.last_turn_at = now
 
+        log_context_event(
+            logger,
+            level=logging.INFO,
+            message="Conversation turn created.",
+            context=context,
+            component="conversation",
+            operation="create_turn",
+            resource_type="conversation_turn",
+            resource_id=turn.id,
+            sessionId=session_id,
+            role=request.role,
+        )
         return ConversationTurnResponse(
             requestId=context.request_id,
             sessionId=session_id,

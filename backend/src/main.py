@@ -2,6 +2,7 @@
 
 import logging
 import os
+from uuid import uuid4
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
@@ -12,6 +13,7 @@ from src.platform_api.errors import (
     platform_api_error_handler,
     unhandled_error_handler,
 )
+from src.platform_api.observability import log_request_event, request_log_fields
 from src.platform_api.router_v1 import router as platform_api_v1_router
 from src.platform_api.router_v2 import router as platform_api_v2_router
 from src.config import get_settings
@@ -68,14 +70,66 @@ app.add_middleware(
 )
 
 
+def _is_platform_request(path: str) -> bool:
+    return path.startswith("/v1/") or path.startswith("/v2/")
+
+
+def _header_or_fallback(request: Request, *, header: str, fallback: str) -> str:
+    value = request.headers.get(header)
+    if isinstance(value, str) and value.strip():
+        return value
+    return fallback
+
+
+@app.middleware("http")
+async def platform_api_observability_context_middleware(request: Request, call_next):
+    """Attach request correlation identifiers and emit structured request logs."""
+    if _is_platform_request(request.url.path):
+        request.state.request_id = request.headers.get("X-Request-Id") or f"req-{uuid4()}"
+        request.state.tenant_id = _header_or_fallback(request, header="X-Tenant-Id", fallback="tenant-local")
+        request.state.user_id = _header_or_fallback(request, header="X-User-Id", fallback="user-local")
+        log_request_event(
+            logger,
+            level=logging.INFO,
+            message="Platform API request started.",
+            request=request,
+            component="api",
+            operation="request_started",
+            method=request.method,
+        )
+
+    response = await call_next(request)
+
+    if _is_platform_request(request.url.path):
+        log_request_event(
+            logger,
+            level=logging.INFO,
+            message="Platform API request completed.",
+            request=request,
+            component="api",
+            operation="request_completed",
+            status_code=response.status_code,
+            method=request.method,
+        )
+    return response
+
+
 @app.middleware("http")
 async def platform_api_unhandled_error_middleware(request: Request, call_next):
     """Apply fallback v1 error envelope only to Platform API routes."""
     try:
         return await call_next(request)
     except Exception as exc:
-        if request.url.path.startswith("/v1/") or request.url.path.startswith("/v2/"):
-            logger.exception("Unhandled exception for Platform API request %s", request.url.path)
+        if _is_platform_request(request.url.path):
+            logger.exception(
+                "Unhandled exception for Platform API request %s",
+                request.url.path,
+                extra=request_log_fields(
+                    request=request,
+                    component="api",
+                    operation="request_failed_unhandled",
+                ),
+            )
             return await unhandled_error_handler(request, exc)
         raise
 

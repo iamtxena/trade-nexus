@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from src.platform_api.adapters.data_knowledge_adapter import DataKnowledgeAdapter
 from src.platform_api.errors import PlatformAPIError
+from src.platform_api.observability import log_context_event
 from src.platform_api.knowledge.models import KnowledgePatternRecord, MarketRegimeRecord
 from src.platform_api.knowledge.query import KnowledgeQueryService
 from src.platform_api.schemas_v1 import MarketScanIdea, MarketScanRequest, RequestContext
@@ -25,6 +28,7 @@ from src.platform_api.services.strategy_backtest_service import StrategyBacktest
 from src.platform_api.state_store import InMemoryStateStore, utc_now
 
 _MARKET_SIGNAL_KEY = "__market__"
+logger = logging.getLogger(__name__)
 
 
 class KnowledgeV2Service:
@@ -175,6 +179,18 @@ class ResearchV2Service:
         ml_summary = self._ml_signal_service.summarize(signals=signals)
         sentiment_summary = self._sentiment_context_summary(context_payload=context_payload, signals=signals)
         regime_summary = self._regime_context_summary(signals=signals)
+        log_context_event(
+            logger,
+            level=logging.INFO,
+            message="Research market scan enriched with context.",
+            context=context,
+            component="research",
+            operation="market_scan",
+            resource_type="research",
+            resource_id="market-scan",
+            strategyIdeaCount=len(ranked_ideas),
+            knowledgeEvidenceCount=len(evidence),
+        )
         return MarketScanV2Response(
             requestId=context.request_id,
             regimeSummary=base.regimeSummary,

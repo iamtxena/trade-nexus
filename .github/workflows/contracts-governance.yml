@@ -189,19 +189,15 @@ jobs:
             }
 
             async function getCheckRuns() {
-              const runs = [];
-              for await (const page of github.paginate.iterator(
-                github.rest.checks.listForRef,
+              const response = await github.rest.checks.listForRef(
                 {
                   owner,
                   repo,
                   ref: headSha,
                   per_page: 100,
                 },
-              )) {
-                runs.push(...page.data.check_runs);
-              }
-              return runs;
+              );
+              return response.data.check_runs || [];
             }
 
             const changedFiles = await listAllChangedFiles();

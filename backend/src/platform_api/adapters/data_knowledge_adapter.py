@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import math
 from time import monotonic
 from typing import Protocol
 
@@ -43,6 +44,198 @@ class DataKnowledgeAdapter(Protocol):
         request_id: str,
     ) -> dict[str, object]:
         ...
+
+
+def _coerce_numeric(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        numeric = float(value)
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if stripped == "":
+            return None
+        try:
+            numeric = float(stripped)
+        except ValueError:
+            return None
+    else:
+        return None
+    if not math.isfinite(numeric):
+        return None
+    return numeric
+
+
+def _coerce_positive_int(value: object) -> int | None:
+    numeric = _coerce_numeric(value)
+    if numeric is None:
+        return None
+    as_int = int(numeric)
+    if float(as_int) != numeric or as_int <= 0:
+        return None
+    return as_int
+
+
+def _normalize_market_context_signals(payload: dict[str, object]) -> list[dict[str, str]]:
+    raw_signals = payload.get("signals")
+    if not isinstance(raw_signals, list):
+        return []
+
+    normalized: list[dict[str, str]] = []
+    for entry in raw_signals:
+        if not isinstance(entry, dict):
+            continue
+        raw_name = entry.get("name")
+        if not isinstance(raw_name, str):
+            continue
+        name = raw_name.strip()
+        if name == "":
+            continue
+        raw_value = entry.get("value")
+        value = ""
+        if isinstance(raw_value, str):
+            value = raw_value
+        elif raw_value is not None:
+            value = str(raw_value)
+        normalized.append({"name": name, "value": value})
+    return normalized
+
+
+def _normalize_sentiment_candidate(payload: object) -> dict[str, object] | None:
+    if not isinstance(payload, dict):
+        return None
+
+    normalized: dict[str, object] = {}
+    score = _coerce_numeric(payload.get("score"))
+    if score is None:
+        score = _coerce_numeric(payload.get("value"))
+    if score is not None:
+        normalized["score"] = score
+
+    confidence = _coerce_numeric(payload.get("confidence"))
+    if confidence is not None:
+        normalized["confidence"] = confidence
+
+    source = payload.get("source")
+    if isinstance(source, str):
+        source_value = source.strip()
+        if source_value != "":
+            normalized["source"] = source_value
+
+    source_count = _coerce_positive_int(payload.get("sourceCount"))
+    if source_count is not None:
+        normalized["sourceCount"] = source_count
+
+    lookback_hours = _coerce_positive_int(payload.get("lookbackHours"))
+    if lookback_hours is None:
+        lookback_hours = _coerce_positive_int(payload.get("windowHours"))
+    if lookback_hours is not None:
+        normalized["lookbackHours"] = lookback_hours
+
+    if "score" not in normalized and "confidence" not in normalized:
+        return None
+    return normalized
+
+
+def _normalize_sentiment_from_signals(signals: list[dict[str, str]]) -> dict[str, object] | None:
+    score: float | None = None
+    confidence: float | None = None
+    for signal in signals:
+        name = signal["name"].strip().lower()
+        value = _coerce_numeric(signal["value"])
+        if value is None:
+            continue
+        if name in {"sentiment", "sentiment_score"}:
+            score = value
+        elif name == "sentiment_confidence":
+            confidence = value
+
+    if score is None and confidence is None:
+        return None
+
+    result: dict[str, object] = {}
+    if score is not None:
+        result["score"] = score
+    if confidence is not None:
+        result["confidence"] = confidence
+    return result
+
+
+def _merge_sentiment_candidates(
+    *,
+    ml_sentiment: dict[str, object] | None,
+    top_level_sentiment: dict[str, object] | None,
+    signal_sentiment: dict[str, object] | None,
+) -> dict[str, object] | None:
+    # Canonical precedence: mlSignals.sentiment > top-level sentiment > signals-derived.
+    candidates = (ml_sentiment, top_level_sentiment, signal_sentiment)
+    merged: dict[str, object] = {}
+    for key in ("score", "confidence", "source", "sourceCount", "lookbackHours"):
+        for candidate in candidates:
+            if isinstance(candidate, dict) and key in candidate:
+                merged[key] = candidate[key]
+                break
+    if "score" not in merged and "confidence" not in merged:
+        return None
+    return merged
+
+
+def _upsert_signal(signals: list[dict[str, str]], *, name: str, value: str) -> None:
+    for signal in signals:
+        if signal["name"].strip().lower() == name.lower():
+            signal["value"] = value
+            return
+    signals.append({"name": name, "value": value})
+
+
+def normalize_market_context_payload(payload: dict[str, object]) -> dict[str, object]:
+    normalized = copy.deepcopy(payload)
+    if not isinstance(normalized.get("regimeSummary"), str):
+        normalized["regimeSummary"] = "Context unavailable."
+
+    normalized_signals = _normalize_market_context_signals(normalized)
+    if normalized_signals:
+        normalized["signals"] = normalized_signals
+    elif "signals" in normalized:
+        normalized["signals"] = []
+
+    raw_ml_signals = normalized.get("mlSignals")
+    ml_signals: dict[str, object] = copy.deepcopy(raw_ml_signals) if isinstance(raw_ml_signals, dict) else {}
+
+    ml_sentiment = _normalize_sentiment_candidate(ml_signals.get("sentiment"))
+    top_level_sentiment = _normalize_sentiment_candidate(normalized.get("sentiment"))
+    signal_sentiment = _normalize_sentiment_from_signals(normalized_signals)
+    sentiment = _merge_sentiment_candidates(
+        ml_sentiment=ml_sentiment,
+        top_level_sentiment=top_level_sentiment,
+        signal_sentiment=signal_sentiment,
+    )
+
+    if sentiment is not None:
+        ml_signals["sentiment"] = sentiment
+        normalized.pop("sentiment", None)
+        if "score" in sentiment:
+            _upsert_signal(
+                normalized_signals,
+                name="sentiment_score",
+                value=str(sentiment["score"]),
+            )
+        if "confidence" in sentiment:
+            _upsert_signal(
+                normalized_signals,
+                name="sentiment_confidence",
+                value=str(sentiment["confidence"]),
+            )
+
+    if ml_signals:
+        normalized["mlSignals"] = ml_signals
+    else:
+        normalized.pop("mlSignals", None)
+
+    if normalized_signals:
+        normalized["signals"] = normalized_signals
+
+    return normalized
 
 
 class CachingDataKnowledgeAdapter:
@@ -101,12 +294,15 @@ class CachingDataKnowledgeAdapter:
         request_id: str,
     ) -> dict[str, object]:
         if self._ttl_seconds <= 0:
-            return await self._inner_adapter.get_market_context(
+            payload = await self._inner_adapter.get_market_context(
                 asset_classes=asset_classes,
                 tenant_id=tenant_id,
                 user_id=user_id,
                 request_id=request_id,
             )
+            if not isinstance(payload, dict):
+                raise AdapterError("Trader-data market context response must be an object.", code="TRADER_DATA_BAD_RESPONSE")
+            return normalize_market_context_payload(payload)
 
         cache_key = self._market_context_key(
             asset_classes=asset_classes,
@@ -128,6 +324,7 @@ class CachingDataKnowledgeAdapter:
         )
         if not isinstance(payload, dict):
             raise AdapterError("Trader-data market context response must be an object.", code="TRADER_DATA_BAD_RESPONSE")
+        payload = normalize_market_context_payload(payload)
 
         store_time = monotonic()
         self._evict_expired(now=store_time)
@@ -246,6 +443,13 @@ class InMemoryDataKnowledgeAdapter:
                 {"name": "liquidity", "value": "stable"},
                 {"name": "focus_assets", "value": ",".join(classes) if classes else "crypto"},
             ],
+            "sentiment": {
+                "score": 0.58,
+                "confidence": 0.66,
+                "source": "curated-news+social",
+                "sourceCount": 124,
+                "lookbackHours": 24,
+            },
             "mlSignals": {
                 "prediction": {
                     "direction": "bullish",

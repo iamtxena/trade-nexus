@@ -41,11 +41,12 @@ After backtest completion, runtime feedback is ingested into KB as `LessonLearne
 Gate5 extends this flow with optional-safe ML enrichment while preserving deterministic behavior:
 
 1. Market context may include `mlSignals` (`prediction`, `sentiment`, `volatility`, `anomaly`).
-2. Research scoring validates signal shapes and confidence before use.
-3. Missing/invalid model output falls back to deterministic baseline scoring (no opaque execution side effects).
-4. Market context retrieval is cache-backed with explicit TTL and order-insensitive asset keying.
-5. Research responses expose fallback state in `dataContextSummary` for auditability.
-6. Provider-backed market-scan symbol retrieval is guarded by deterministic budget policy (`maxTotalCostUsd`, `maxPerRequestCostUsd`, `estimatedMarketScanCostUsd`, `spentCostUsd`).
-7. Budget breach or invalid policy fails closed before adapter side effects; typed adapter failures release reserved budget and return deterministic fallback responses.
-8. Unexpected adapter exceptions release reserved budget and fail closed with an explicit error code.
-9. Budget decision events are recorded for auditability.
+2. Runtime normalizes top-level `sentiment` context fields into canonical `mlSignals.sentiment` before validation/scoring.
+3. Research scoring validates signal shapes and confidence before use.
+4. Missing/invalid model output falls back to deterministic baseline scoring (no opaque execution side effects).
+5. Market context retrieval is cache-backed with explicit TTL and order-insensitive asset keying.
+6. Research responses expose fallback state in `dataContextSummary` for auditability.
+7. Provider-backed market-scan symbol retrieval is guarded by deterministic budget policy (`maxTotalCostUsd`, `maxPerRequestCostUsd`, `estimatedMarketScanCostUsd`, `spentCostUsd`).
+8. Budget breach or invalid policy fails closed before adapter side effects; typed adapter failures release reserved budget and return deterministic fallback responses.
+9. Unexpected adapter exceptions release reserved budget and fail closed with an explicit error code.
+10. Budget decision events are recorded for auditability.

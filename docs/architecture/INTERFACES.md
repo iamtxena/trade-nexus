@@ -291,9 +291,16 @@ export interface DataKnowledgeAdapter {
   }): Promise<{
     regimeSummary: string;
     signals: Array<{ name: string; value: string }>;
+    sentiment?: {
+      score?: number;
+      confidence?: number;
+      source?: string;
+      sourceCount?: number;
+      lookbackHours?: number;
+    };
     mlSignals?: {
       prediction?: { direction?: 'bullish' | 'bearish' | 'neutral'; confidence?: number; timeframe?: string };
-      sentiment?: { score?: number; confidence?: number };
+      sentiment?: { score?: number; confidence?: number; source?: string; sourceCount?: number; lookbackHours?: number };
       volatility?: { predictedPct?: number; confidence?: number };
       anomaly?: { isAnomaly?: boolean; score?: number };
     };
@@ -308,6 +315,7 @@ Market-context freshness and cache rules:
 2. Cache TTL must be explicit and deterministic (`PLATFORM_MARKET_CONTEXT_CACHE_TTL_SECONDS`).
 3. Cache keys are order-insensitive for `assetClasses`.
 4. Stale or missing model fields must not fail the request path; runtime must apply deterministic fallback.
+5. If top-level `sentiment` is present, runtime normalizes it into `mlSignals.sentiment` before ML validation/scoring.
 
 ## 3) Identity Contract
 

@@ -147,6 +147,110 @@ def test_research_v2_route_uses_deterministic_ml_fallback(monkeypatch) -> None:
     assert "fallback=none" not in payload["dataContextSummary"]
 
 
+def test_research_v2_route_normalizes_top_level_sentiment_context(monkeypatch) -> None:
+    async def _market_context_stub(**_: object) -> dict[str, object]:
+        return {
+            "regimeSummary": "Positive sentiment trend with moderate volatility.",
+            "signals": [{"name": "focus_assets", "value": "crypto"}],
+            "sentiment": {
+                "score": 68,
+                "confidence": 81,
+                "source": "curated-news",
+                "sourceCount": 12,
+                "lookbackHours": 24,
+            },
+            "mlSignals": {
+                "prediction": {"direction": "bullish", "confidence": 0.8, "timeframe": "24h"},
+                "volatility": {"predictedPct": 35.0, "confidence": 0.7},
+                "anomaly": {"isAnomaly": False, "score": 0.1},
+            },
+        }
+
+    router_v1_module._data_knowledge_adapter.clear_market_context_cache()
+    monkeypatch.setattr(router_v1_module._base_data_knowledge_adapter, "get_market_context", _market_context_stub)
+    client = _client()
+
+    response = client.post(
+        "/v2/research/market-scan",
+        headers=HEADERS,
+        json={"assetClasses": ["crypto"], "capital": 25000},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["strategyIdeas"][0]["rationale"].startswith("ML score=")
+    assert "sentiment=0.68:0.81" in payload["dataContextSummary"]
+    assert "fallback=none" in payload["dataContextSummary"]
+    assert "source=curated-news" in payload["dataContextSummary"]
+
+
+def test_research_v2_route_handles_invalid_top_level_sentiment_with_fallback(monkeypatch) -> None:
+    async def _market_context_stub(**_: object) -> dict[str, object]:
+        return {
+            "regimeSummary": "Sentiment pipeline degraded.",
+            "signals": [{"name": "focus_assets", "value": "crypto"}],
+            "sentiment": {"score": "bad", "confidence": "nan"},
+            "mlSignals": {
+                "prediction": {"direction": "neutral", "confidence": 0.6, "timeframe": "24h"},
+                "volatility": {"predictedPct": 40.0, "confidence": 0.65},
+                "anomaly": {"isAnomaly": False, "score": 0.1},
+            },
+        }
+
+    router_v1_module._data_knowledge_adapter.clear_market_context_cache()
+    monkeypatch.setattr(router_v1_module._base_data_knowledge_adapter, "get_market_context", _market_context_stub)
+    client = _client()
+
+    response = client.post(
+        "/v2/research/market-scan",
+        headers=HEADERS,
+        json={"assetClasses": ["crypto"], "capital": 25000},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["strategyIdeas"][0]["rationale"].startswith("ML score=")
+    assert "fallback=none" not in payload["dataContextSummary"]
+    assert "sentiment_score_missing" in payload["dataContextSummary"]
+    assert "source=unknown" in payload["dataContextSummary"]
+
+
+def test_research_v2_route_merges_dual_source_sentiment_metadata(monkeypatch) -> None:
+    async def _market_context_stub(**_: object) -> dict[str, object]:
+        return {
+            "regimeSummary": "Sentiment metadata requires merge across dual sources.",
+            "signals": [{"name": "focus_assets", "value": "crypto"}],
+            "sentiment": {
+                "score": 68,
+                "confidence": 81,
+                "source": "curated-news",
+                "sourceCount": 12,
+                "lookbackHours": 24,
+            },
+            "mlSignals": {
+                "prediction": {"direction": "bullish", "confidence": 0.8, "timeframe": "24h"},
+                "sentiment": {"score": 0.64, "confidence": 0.71},
+                "volatility": {"predictedPct": 35.0, "confidence": 0.7},
+                "anomaly": {"isAnomaly": False, "score": 0.1},
+            },
+        }
+
+    router_v1_module._data_knowledge_adapter.clear_market_context_cache()
+    monkeypatch.setattr(router_v1_module._base_data_knowledge_adapter, "get_market_context", _market_context_stub)
+    client = _client()
+
+    response = client.post(
+        "/v2/research/market-scan",
+        headers=HEADERS,
+        json={"assetClasses": ["crypto"], "capital": 25000},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["strategyIdeas"][0]["rationale"].startswith("ML score=")
+    assert "sentiment=0.64:0.71" in payload["dataContextSummary"]
+    assert "source=curated-news" in payload["dataContextSummary"]
+    assert "lookbackHours=24" in payload["dataContextSummary"]
+    assert "fallback=none" in payload["dataContextSummary"]
+
+
 def test_conversation_v2_routes() -> None:
     client = _client()
 

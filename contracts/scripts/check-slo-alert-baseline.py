@@ -41,8 +41,10 @@ def main() -> int:
 
     required_slo_keys = {"id", "service", "criticalPath", "sli", "target", "window", "ownerTeam"}
     required_alert_keys = {"id", "sloId", "condition", "severity", "ownerTeam"}
+    required_critical_paths = {"execution", "risk", "research", "reconciliation", "conversation"}
 
     slo_ids: set[str] = set()
+    covered_critical_paths: set[str] = set()
     owner_teams: set[str] = set()
     for index, slo in enumerate(slos):
         if not isinstance(slo, dict):
@@ -53,10 +55,26 @@ def main() -> int:
         slo_id = str(slo.get("id", "")).strip()
         _require(errors, bool(slo_id), f"SLO at index {index} must include non-empty `id`.")
         if slo_id:
+            _require(errors, slo_id not in slo_ids, f"SLO id `{slo_id}` is duplicated.")
             slo_ids.add(slo_id)
+        critical_path_raw = str(slo.get("criticalPath", "")).strip()
+        _require(errors, bool(critical_path_raw), f"SLO `{slo_id or index}` must include non-empty `criticalPath`.")
+        if critical_path_raw:
+            critical_paths = {token.strip() for token in critical_path_raw.split(",") if token.strip()}
+            _require(errors, bool(critical_paths), f"SLO `{slo_id or index}` has invalid `criticalPath` value.")
+            covered_critical_paths.update(critical_paths)
         owner = str(slo.get("ownerTeam", "")).strip()
+        _require(errors, bool(owner), f"SLO `{slo_id or index}` must include non-empty `ownerTeam`.")
         if owner:
             owner_teams.add(owner)
+
+    missing_critical_paths = sorted(required_critical_paths.difference(covered_critical_paths))
+    _require(
+        errors,
+        not missing_critical_paths,
+        "Missing critical path coverage in SLO baseline: "
+        + ", ".join(missing_critical_paths),
+    )
 
     alert_ids: set[str] = set()
     for index, alert in enumerate(alerts):
@@ -68,6 +86,7 @@ def main() -> int:
         alert_id = str(alert.get("id", "")).strip()
         _require(errors, bool(alert_id), f"Alert at index {index} must include non-empty `id`.")
         if alert_id:
+            _require(errors, alert_id not in alert_ids, f"Alert id `{alert_id}` is duplicated.")
             alert_ids.add(alert_id)
         slo_id = str(alert.get("sloId", "")).strip()
         _require(
@@ -76,6 +95,7 @@ def main() -> int:
             f"Alert `{alert_id or index}` references unknown SLO id `{slo_id}`.",
         )
         owner = str(alert.get("ownerTeam", "")).strip()
+        _require(errors, bool(owner), f"Alert `{alert_id or index}` must include non-empty `ownerTeam`.")
         if owner:
             owner_teams.add(owner)
 
@@ -112,4 +132,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

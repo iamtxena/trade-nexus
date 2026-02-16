@@ -24,6 +24,32 @@ def test_slo_alert_baseline_config_has_required_collections() -> None:
     assert len(payload["alerts"]) >= 5
 
 
+def test_slo_alert_baseline_config_covers_required_critical_paths_and_unique_ids() -> None:
+    config_path = _repo_root() / "contracts/config/slo-alert-baseline.v1.json"
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+
+    required_paths = {"execution", "risk", "research", "reconciliation", "conversation"}
+    covered_paths: set[str] = set()
+    slo_ids: set[str] = set()
+    alert_ids: set[str] = set()
+
+    for slo in payload["slos"]:
+        assert isinstance(slo["id"], str) and slo["id"].strip()
+        assert slo["id"] not in slo_ids
+        slo_ids.add(slo["id"])
+        assert isinstance(slo["ownerTeam"], str) and slo["ownerTeam"].strip()
+        critical_paths = {token.strip() for token in str(slo["criticalPath"]).split(",") if token.strip()}
+        covered_paths.update(critical_paths)
+
+    for alert in payload["alerts"]:
+        assert isinstance(alert["id"], str) and alert["id"].strip()
+        assert alert["id"] not in alert_ids
+        alert_ids.add(alert["id"])
+        assert isinstance(alert["ownerTeam"], str) and alert["ownerTeam"].strip()
+
+    assert required_paths.issubset(covered_paths)
+
+
 def test_slo_alert_baseline_docs_and_config_alignment_check_passes() -> None:
     script_path = _repo_root() / "contracts/scripts/check-slo-alert-baseline.py"
     completed = subprocess.run(
@@ -33,4 +59,3 @@ def test_slo_alert_baseline_docs_and_config_alignment_check_passes() -> None:
         check=False,
     )
     assert completed.returncode == 0, completed.stderr or completed.stdout
-

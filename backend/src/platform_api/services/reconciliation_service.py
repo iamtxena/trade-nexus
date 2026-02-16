@@ -3,15 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import logging
 
 from src.platform_api.adapters.execution_adapter import ExecutionAdapter
-from src.platform_api.observability import context_log_fields
-from src.platform_api.schemas_v1 import RequestContext
 from src.platform_api.services.execution_lifecycle_mapping import apply_deployment_transition, apply_order_transition
 from src.platform_api.state_store import DriftEventRecord, InMemoryStateStore, utc_now
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -146,22 +141,6 @@ class ReconciliationService:
             user_id=user_id,
             request_id=request_id,
         )
-        log_context = RequestContext(
-            request_id=request_id or "req-reconciliation-system",
-            tenant_id=tenant_id,
-            user_id=user_id,
-        )
-        logger.info(
-            "Reconciliation deployment drift checks completed.",
-            extra=context_log_fields(
-                context=log_context,
-                component="reconciliation",
-                operation="run_deployment_drift_checks",
-                resource_type="reconciliation",
-                resource_id="deployments",
-                driftCount=len(deployment_events),
-            ),
-        )
         return ReconciliationSummary(
             deployment_checks=len(self._store.deployments),
             order_checks=0,
@@ -179,22 +158,6 @@ class ReconciliationService:
             tenant_id=tenant_id,
             user_id=user_id,
             request_id=request_id,
-        )
-        log_context = RequestContext(
-            request_id=request_id or "req-reconciliation-system",
-            tenant_id=tenant_id,
-            user_id=user_id,
-        )
-        logger.info(
-            "Reconciliation order drift checks completed.",
-            extra=context_log_fields(
-                context=log_context,
-                component="reconciliation",
-                operation="run_order_drift_checks",
-                resource_type="reconciliation",
-                resource_id="orders",
-                driftCount=len(order_events),
-            ),
         )
         return ReconciliationSummary(
             deployment_checks=0,

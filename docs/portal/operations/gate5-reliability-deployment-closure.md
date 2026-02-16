@@ -58,7 +58,7 @@ See:
 - `/docs/portal/operations/gate5-consumer-mock-contracts.md`
 - `/docs/portal/operations/gate5-slo-alerting-baseline.md`
 - `/docs/portal/operations/gate5-orchestrator-execution-traces.md`
+- `/docs/portal/operations/gate5-release-runbooks-and-client-validation.md`
 - `/docs/architecture/INTERFACES.md`
 - `.github/workflows/contracts-governance.yml`
 - Parent epics: `#81`, `#106`
-

@@ -114,3 +114,24 @@ def test_trace_identity_is_propagated_for_auditability() -> None:
     assert all(trace.user_id == "user-trace" for trace in traces)
     assert traces[-1].metadata["reason"] == "manual_abort"
 
+
+def test_retry_terminal_trace_after_success_preserves_completed_reason() -> None:
+    store = InMemoryStateStore()
+    retry = OrchestratorRetryPolicyService(store=store)
+
+    retry.begin_attempt(item_id="orch-retry-success-001")
+    retry.record_success(item_id="orch-retry-success-001")
+    decision = retry.record_failure(item_id="orch-retry-success-001")
+
+    assert decision.next_state == "completed"
+    assert decision.reason == "retry_succeeded"
+
+    traces = [trace for trace in store.orchestrator_execution_traces if trace.run_id == "orch-retry-success-001"]
+    assert [trace.event for trace in traces] == [
+        "retry_attempt_started",
+        "retry_success",
+        "retry_terminal_decision",
+    ]
+    terminal_trace = traces[-1]
+    assert terminal_trace.to_state == "completed"
+    assert terminal_trace.metadata["reason"] == "retry_succeeded"

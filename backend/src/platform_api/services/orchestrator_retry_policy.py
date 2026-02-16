@@ -24,6 +24,8 @@ class RetryRuntimeState:
     attempts: int = 0
     failures: int = 0
     terminal: bool = False
+    terminal_reason: str | None = None
+    terminal_state: str | None = None
 
 
 @dataclass(frozen=True)
@@ -78,7 +80,9 @@ class OrchestratorRetryPolicyService:
     def record_failure(self, *, item_id: str) -> RetryDecision:
         state = self._state_for(item_id)
         if state.terminal:
-            decision = self._terminal_decision(state=state, reason="failure_budget_exhausted")
+            reason = state.terminal_reason or "retry_state_terminal"
+            next_state = state.terminal_state or "failed"
+            decision = self._terminal_decision(state=state, reason=reason, next_state=next_state)
             self._record_trace(
                 run_id=item_id,
                 event="retry_terminal_decision",
@@ -111,7 +115,9 @@ class OrchestratorRetryPolicyService:
         if attempts_exhausted or failures_exhausted:
             state.terminal = True
             reason = "attempt_budget_exhausted" if attempts_exhausted else "failure_budget_exhausted"
-            decision = self._terminal_decision(state=state, reason=reason)
+            state.terminal_reason = reason
+            state.terminal_state = "failed"
+            decision = self._terminal_decision(state=state, reason=reason, next_state="failed")
             self._record_trace(
                 run_id=item_id,
                 event="retry_terminal_decision",
@@ -163,6 +169,8 @@ class OrchestratorRetryPolicyService:
     def record_success(self, *, item_id: str) -> RetryRuntimeState:
         state = self._state_for(item_id)
         state.terminal = True
+        state.terminal_reason = "retry_succeeded"
+        state.terminal_state = "completed"
         self._record_trace(
             run_id=item_id,
             event="retry_success",
@@ -182,6 +190,8 @@ class OrchestratorRetryPolicyService:
             attempts=state.attempts,
             failures=state.failures,
             terminal=state.terminal,
+            terminal_reason=state.terminal_reason,
+            terminal_state=state.terminal_state,
         )
 
     def _state_for(self, item_id: str) -> RetryRuntimeState:
@@ -191,11 +201,11 @@ class OrchestratorRetryPolicyService:
             self._state_by_item[item_id] = state
         return state
 
-    def _terminal_decision(self, *, state: RetryRuntimeState, reason: str) -> RetryDecision:
+    def _terminal_decision(self, *, state: RetryRuntimeState, reason: str, next_state: str) -> RetryDecision:
         return RetryDecision(
             retry_allowed=False,
             terminal=True,
-            next_state="failed",
+            next_state=next_state,
             reason=reason,
             retry_after_seconds=None,
             attempts=state.attempts,

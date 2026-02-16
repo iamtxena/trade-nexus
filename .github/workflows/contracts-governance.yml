@@ -200,6 +200,10 @@ jobs:
               return response.data.check_runs || [];
             }
 
+            async function sleep(ms) {
+              await new Promise((resolve) => setTimeout(resolve, ms));
+            }
+
             const changedFiles = await listAllChangedFiles();
             const requiresSequencingGate = changedFiles.some((filename) =>
               filename.startsWith("backend/src/platform_api/") ||
@@ -232,24 +236,42 @@ jobs:
               return;
             }
 
-            const checkRuns = await getCheckRuns();
-            const cursorRuns = checkRuns.filter((run) => run.name.toLowerCase().includes("cursor"));
-            if (cursorRuns.length > 0) {
-              const cursorCompleted = cursorRuns.some((run) => run.status === "completed");
-              if (!cursorCompleted) {
-                core.info("Cursor check is still pending; final pass/fail is enforced by the Cursor check itself.");
-                return;
+            const maxWaitMs = 5 * 60 * 1000;
+            const pollIntervalMs = 15 * 1000;
+            const waitUntil = Date.now() + maxWaitMs;
+            let cursorRuns = [];
+            let cursorPassed = false;
+
+            while (Date.now() <= waitUntil) {
+              const checkRuns = await getCheckRuns();
+              cursorRuns = checkRuns.filter((run) => run.name.toLowerCase().includes("cursor"));
+              if (cursorRuns.length === 0) {
+                await sleep(pollIntervalMs);
+                continue;
               }
-              const cursorPassed = cursorRuns.some((run) =>
-                run.status === "completed" && ["success", "neutral", "skipped"].includes(run.conclusion || ""),
+
+              const completedRuns = cursorRuns.filter((run) => run.status === "completed");
+              cursorPassed = completedRuns.some((run) =>
+                ["success", "neutral", "skipped"].includes(run.conclusion || ""),
               );
-              if (!cursorPassed) {
-                const statuses = cursorRuns.map((run) => `${run.name}:${run.status}/${run.conclusion || "null"}`);
-                core.setFailed(`Cursor check has not passed yet. Current status: ${statuses.join(", ")}`);
-                return;
+              if (cursorPassed) {
+                break;
               }
-            } else {
-              core.info("Cursor check run not visible yet; final merge gate should still require Cursor to be green.");
+
+              const hasCompletedButFailing = completedRuns.some((run) =>
+                !["success", "neutral", "skipped"].includes(run.conclusion || ""),
+              );
+              if (hasCompletedButFailing) {
+                break;
+              }
+              await sleep(pollIntervalMs);
+            }
+
+            if (!cursorPassed) {
+              const statuses = cursorRuns.length
+                ? cursorRuns.map((run) => `${run.name}:${run.status}/${run.conclusion || "null"}`).join(", ")
+                : "no-cursor-check-runs";
+              core.setFailed(`Cursor check has not reached a passing conclusion within timeout. Current status: ${statuses}`);
               return;
             }
 

@@ -1,0 +1,89 @@
+{
+  "baselineVersion": "gate5-slo-alert-baseline.v1",
+  "effectiveDate": "2026-02-16",
+  "ownerTeam": "Team F",
+  "slos": [
+    {
+      "id": "platform_api_request_success_rate",
+      "service": "platform-api",
+      "criticalPath": "execution,risk,research,reconciliation,conversation",
+      "sli": "2xx_or_contractual_4xx_rate",
+      "target": ">=99.5%",
+      "window": "30d",
+      "ownerTeam": "Team F"
+    },
+    {
+      "id": "risk_pretrade_latency_p95_ms",
+      "service": "risk-pretrade",
+      "criticalPath": "risk,execution",
+      "sli": "p95_latency_ms",
+      "target": "<=200",
+      "window": "7d",
+      "ownerTeam": "Team F"
+    },
+    {
+      "id": "research_market_scan_latency_p95_ms",
+      "service": "research",
+      "criticalPath": "research",
+      "sli": "p95_latency_ms",
+      "target": "<=2500",
+      "window": "7d",
+      "ownerTeam": "Team F"
+    },
+    {
+      "id": "reconciliation_cycle_success_rate",
+      "service": "reconciliation",
+      "criticalPath": "reconciliation",
+      "sli": "successful_cycle_rate",
+      "target": ">=99.0%",
+      "window": "30d",
+      "ownerTeam": "Team F"
+    },
+    {
+      "id": "conversation_turn_latency_p95_ms",
+      "service": "conversation",
+      "criticalPath": "conversation",
+      "sli": "p95_latency_ms",
+      "target": "<=1200",
+      "window": "7d",
+      "ownerTeam": "Team F"
+    }
+  ],
+  "alerts": [
+    {
+      "id": "alert_platform_api_success_rate_burn",
+      "sloId": "platform_api_request_success_rate",
+      "condition": "error_budget_burn_2h>=5%",
+      "severity": "SEV-2",
+      "ownerTeam": "Team F"
+    },
+    {
+      "id": "alert_risk_pretrade_latency",
+      "sloId": "risk_pretrade_latency_p95_ms",
+      "condition": "p95_latency_ms>200_for_15m",
+      "severity": "SEV-2",
+      "ownerTeam": "Team F"
+    },
+    {
+      "id": "alert_research_latency",
+      "sloId": "research_market_scan_latency_p95_ms",
+      "condition": "p95_latency_ms>2500_for_15m",
+      "severity": "SEV-3",
+      "ownerTeam": "Team F"
+    },
+    {
+      "id": "alert_reconciliation_success_rate",
+      "sloId": "reconciliation_cycle_success_rate",
+      "condition": "successful_cycle_rate<99.0_for_15m",
+      "severity": "SEV-2",
+      "ownerTeam": "Team F"
+    },
+    {
+      "id": "alert_conversation_turn_latency",
+      "sloId": "conversation_turn_latency_p95_ms",
+      "condition": "p95_latency_ms>1200_for_15m",
+      "severity": "SEV-3",
+      "ownerTeam": "Team F"
+    }
+  ]
+}

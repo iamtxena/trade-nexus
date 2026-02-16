@@ -74,6 +74,9 @@ jobs:
             --ignore=backend/tests/contracts/test_openapi_contract_baseline.py \
             --ignore=backend/tests/contracts/test_openapi_contract_freeze.py
 
+      - name: Validate SLO and alert baseline alignment
+        run: python3 contracts/scripts/check-slo-alert-baseline.py
+
       - name: Verify SDK generation drift
         run: bash contracts/scripts/verify-sdk-drift.sh
 

@@ -232,7 +232,7 @@ def test_market_scan_releases_budget_on_adapter_failure() -> None:
     asyncio.run(_run())
 
 
-def test_market_scan_releases_budget_on_unexpected_adapter_exception() -> None:
+def test_market_scan_fails_closed_and_releases_budget_on_unexpected_adapter_exception() -> None:
     class _UnexpectedFailureLonaAdapter(_RecordingLonaAdapter):
         async def list_symbols(
             self,
@@ -263,13 +263,17 @@ def test_market_scan_releases_budget_on_unexpected_adapter_exception() -> None:
             "spentCostUsd": 0.0,
         }
 
-        response = await service.market_scan(
-            request=MarketScanRequest(assetClasses=["crypto"], capital=25_000),
-            context=_context(),
-        )
+        try:
+            await service.market_scan(
+                request=MarketScanRequest(assetClasses=["crypto"], capital=25_000),
+                context=_context(),
+            )
+            raise AssertionError("Expected unexpected adapter exceptions to fail closed.")
+        except PlatformAPIError as exc:
+            assert exc.status_code == 500
+            assert exc.code == "RESEARCH_PROVIDER_UNEXPECTED_ERROR"
 
         assert adapter.list_symbols_calls == 1
-        assert len(response.strategyIdeas) == 1
         assert store.research_provider_budget["spentCostUsd"] == 0.0
         assert len(store.research_budget_events) >= 2
         assert store.research_budget_events[-2]["decision"] == "reserved"

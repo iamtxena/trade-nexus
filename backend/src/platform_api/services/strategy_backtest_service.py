@@ -58,6 +58,7 @@ class StrategyBacktestService:
         symbol_snapshot: list[str] = []
         fallback_note: str | None = None
         reservation = await self._reserve_market_scan_budget(context=context)
+        provider_symbols: list[dict[str, str]]
         try:
             provider_symbols = await self._lona_adapter.list_symbols(
                 is_global=False,
@@ -65,13 +66,6 @@ class StrategyBacktestService:
                 tenant_id=context.tenant_id,
                 user_id=context.user_id,
             )
-            symbol_snapshot = [
-                str(entry.get("name", "")).upper()
-                for entry in provider_symbols
-                if isinstance(entry, dict) and entry.get("name")
-            ]
-            if len(symbol_snapshot) == 0:
-                fallback_note = "Lona symbol snapshot was empty; using deterministic fallback symbols."
         except AdapterError as exc:
             await self._release_market_scan_budget(
                 reservation=reservation,
@@ -92,10 +86,23 @@ class StrategyBacktestService:
                 context=context,
                 reason=f"adapter_error_unexpected:{type(exc).__name__}",
             )
-            fallback_note = (
-                "Lona symbol snapshot unavailable (adapter_unexpected_error); "
-                "using deterministic fallback symbols."
+            raise PlatformAPIError(
+                status_code=500,
+                code="RESEARCH_PROVIDER_UNEXPECTED_ERROR",
+                message=(
+                    "Research provider symbol snapshot failed unexpectedly; "
+                    "request was blocked to preserve deterministic behavior."
+                ),
+                request_id=context.request_id,
             )
+
+        symbol_snapshot = [
+            str(entry.get("name", "")).upper()
+            for entry in provider_symbols
+            if isinstance(entry, dict) and entry.get("name")
+        ]
+        if len(symbol_snapshot) == 0:
+            fallback_note = "Lona symbol snapshot was empty; using deterministic fallback symbols."
 
         ideas = [
             MarketScanIdea(

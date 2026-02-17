@@ -16,6 +16,8 @@ This index is the canonical navigation entry point for Gate-based documentation 
 - Documentation IA and governance: `/docs/architecture/DOCUMENTATION_IA_AND_GOVERNANCE.md`
 - Gate execution playbook: `/docs/architecture/GATE_TEAM_EXECUTION_PLAYBOOK.md`
 - Contract governance: `/docs/architecture/API_CONTRACT_GOVERNANCE.md`
+- Validation architecture (JSON-first + review gates): `/docs/architecture/STRATEGY_VALIDATION_AND_REVIEW_LAYER.md`
+- Validation planning capture: `/docs/plan-and-questions.md`
 
 ## Parent Epic Delivery Mapping
 

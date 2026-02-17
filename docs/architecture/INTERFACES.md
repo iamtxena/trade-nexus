@@ -38,6 +38,7 @@ Public endpoints exposed to clients (CLI, web, OpenClaw, and other agents):
 - orders
 - datasets
 - data exports/context (v2)
+- validation runs/reviews/baselines (planned additive v2 surface)
 
 ### Contract shape
 
@@ -575,3 +576,71 @@ Examples of migration direction:
 - direct CLI calls to provider APIs -> replace with Platform API SDK calls,
 - provider-specific response payloads -> normalize to API schemas,
 - ad-hoc error payloads -> replace with `ErrorResponse`.
+
+## 11) Validation and Review Contract (planned additive v2)
+
+Validation is JSON-first and policy-driven so merge/release gates are deterministic.
+
+### 11.1 Proposed API surface
+
+Additive endpoints to include in OpenAPI before implementation:
+
+1. `POST /v2/validation-runs`
+2. `GET /v2/validation-runs/{runId}`
+3. `GET /v2/validation-runs/{runId}/artifact`
+4. `POST /v2/validation-runs/{runId}/review`
+5. `POST /v2/validation-runs/{runId}/render` (html/pdf optional)
+6. `POST /v2/validation-baselines`
+7. `POST /v2/validation-regressions/replay`
+
+### 11.2 Canonical artifact contract
+
+`validation_run.json` is canonical. It must include:
+
+1. run metadata (`runId`, `schemaVersion`, `createdAt`, `requestId`, `tenantId`, `userId`),
+2. strategy/backtest references (`strategyId`, `providerRefId`, `backtestReportRef`),
+3. data lineage references (`datasetIds`, transform lineage),
+4. evidence references (`tradesRef`, `executionLogsRef`, `chartPayloadRef`),
+5. deterministic check results,
+6. agent review decision and findings,
+7. optional trader review state and comments,
+8. policy snapshot and final decision.
+
+`validation_llm_snapshot.json` is a compact derivative for agent review:
+
+1. excludes heavy raw payloads,
+2. includes stable references to evidence blobs,
+3. preserves deterministic check outcomes and policy fields.
+
+### 11.3 Validation profile contract
+
+Runtime supports policy-driven validation profiles:
+
+1. `FAST`:
+   - deterministic checks required,
+   - minimal agent checks,
+   - intended for PR merge gating.
+2. `STANDARD`:
+   - deterministic checks required,
+   - full compact agent review,
+   - default production run profile.
+3. `EXPERT`:
+   - deterministic checks required,
+   - deep agent review,
+   - optional human trader review package.
+
+### 11.4 Blocking policy contract
+
+Required policy behavior:
+
+1. deterministic validation failures must block merge and release,
+2. missing required indicator render is always hard fail,
+3. profile policy controls whether agent-review failure blocks merge/release,
+4. trader review is optional by request and must not be globally mandatory,
+5. production runs must fail closed if required validation adapters or evidence sources are unavailable.
+
+### 11.5 Storage contract
+
+1. Supabase stores workflow metadata, review states, baselines, policy decisions.
+2. Blob storage stores heavy artifacts (logs, trades, chart payload, rendered html/pdf).
+3. Vector store keeps indicator expertise memory and accumulated review lessons.

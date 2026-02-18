@@ -113,6 +113,36 @@ def test_trade_coherence_check_does_not_fuzzily_map_unrelated_state_substrings()
     assert "execution_log_unknown_state:ord-001" in result.violations
 
 
+def test_trade_coherence_check_treats_pending_states_as_unknown() -> None:
+    engine = DeterministicValidationEngine()
+    evidence = replace(
+        _base_evidence(),
+        execution_logs=(
+            {"orderId": "ord-001", "status": "created"},
+            {"orderId": "ord-001", "status": "pending_cancel"},
+            {"orderId": "ord-001", "status": "filled"},
+        ),
+    )
+    result = engine.check_trade_coherence(evidence=evidence, policy=_policy())
+    assert result.status == "fail"
+    assert "execution_log_unknown_state:ord-001" in result.violations
+
+
+def test_trade_coherence_check_uses_state_when_status_is_whitespace() -> None:
+    engine = DeterministicValidationEngine()
+    evidence = replace(
+        _base_evidence(),
+        execution_logs=(
+            {"orderId": "ord-001", "status": "   ", "state": "created"},
+            {"orderId": "ord-001", "status": "accepted"},
+            {"orderId": "ord-001", "status": "filled"},
+        ),
+    )
+    result = engine.check_trade_coherence(evidence=evidence, policy=_policy())
+    assert result.status == "pass"
+    assert result.violations == ()
+
+
 def test_metric_consistency_check_passes_within_policy_tolerance() -> None:
     engine = DeterministicValidationEngine()
     result = engine.check_metric_consistency(evidence=_base_evidence(), policy=_policy(tolerance_pct=1.0))
@@ -146,7 +176,7 @@ def test_metric_consistency_check_fails_closed_on_non_finite_values() -> None:
     assert result.status == "fail"
     assert "metric_non_numeric:maxDrawdownPct" in result.mismatches
     assert "metric_non_numeric:sharpeRatio" in result.mismatches
-    assert result.drift_pct == 0.0
+    assert result.drift_pct > 0.0
 
 
 def test_metric_consistency_zero_baseline_nonzero_reported_always_fails() -> None:
@@ -276,3 +306,27 @@ def test_canonical_artifact_contains_deterministic_output_and_blocks_on_fail() -
 
     schema = _load_schema(VALIDATION_RUN_SCHEMA_PATH)
     _validate_against_schema(artifact, schema)
+
+
+def test_block_reasons_include_trade_coherence_when_combined_trade_status_fails() -> None:
+    engine = DeterministicValidationEngine()
+    evidence = replace(
+        _base_evidence(),
+        lineage={"datasets": [{"datasetId": "dataset-btc-1h-2025"}]},
+    )
+    result = engine.evaluate(evidence=evidence, policy=_policy(tolerance_pct=1.0))
+    assert result.trade_coherence.status == "fail"
+    assert "trade_coherence_failed" in result.block_reasons
+
+
+def test_indicator_collection_uses_fallback_key_when_primary_is_whitespace() -> None:
+    engine = DeterministicValidationEngine()
+    evidence = replace(
+        _base_evidence(),
+        requested_indicators=("ema",),
+        rendered_indicators=(),
+        chart_payload={"indicators": [{"name": "  ", "indicator": "ema"}]},
+    )
+    result = engine.check_indicator_fidelity(evidence=evidence, policy=_policy())
+    assert result.status == "pass"
+    assert result.missing_indicators == ()

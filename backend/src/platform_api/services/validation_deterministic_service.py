@@ -58,6 +58,22 @@ def _is_number(value: object) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
 
 
+def _first_non_empty_string(*values: object) -> str:
+    for value in values:
+        text = _as_string(value)
+        if text != "":
+            return text
+    return ""
+
+
+def _first_non_empty_from_mapping(record: dict[str, Any], keys: tuple[str, ...]) -> str:
+    for key in keys:
+        text = _as_string(record.get(key))
+        if text != "":
+            return text
+    return ""
+
+
 def _unique_sorted(values: list[str] | set[str] | tuple[str, ...]) -> tuple[str, ...]:
     normalized = {_as_string(item) for item in values}
     return tuple(sorted(item for item in normalized if item != ""))
@@ -83,6 +99,8 @@ def _normalize_lifecycle_state(value: object) -> str:
         return _LIFECYCLE_ALIASES[raw]
     tokens = tuple(token for token in raw.split("_") if token != "")
     if not tokens:
+        return ""
+    if any(token.startswith("pending") for token in tokens):
         return ""
 
     def _has_any(*allowed: str) -> bool:
@@ -309,7 +327,7 @@ class DeterministicValidationEngine:
         block_reasons: list[str] = []
         if indicator_result.status == "fail":
             block_reasons.append("missing_indicator_hard_fail")
-        if trade_result.status == "fail":
+        if combined_trade_result.status == "fail":
             block_reasons.append("trade_coherence_failed")
         if metric_result.status == "fail":
             block_reasons.append("metric_consistency_failed")
@@ -371,7 +389,13 @@ class DeterministicValidationEngine:
 
         for entry in evidence.execution_logs:
             order_id = _extract_order_id(entry)
-            state = _normalize_lifecycle_state(entry.get("status") or entry.get("state") or entry.get("event"))
+            state = _normalize_lifecycle_state(
+                _first_non_empty_string(
+                    entry.get("status"),
+                    entry.get("state"),
+                    entry.get("event"),
+                )
+            )
             if order_id == "":
                 violations.append("execution_log_missing_order_id")
                 continue
@@ -437,6 +461,7 @@ class DeterministicValidationEngine:
         tolerance_pct = policy.resolved_metric_tolerance_pct()
         mismatches: list[str] = []
         max_drift = 0.0
+        has_structural_mismatch = False
 
         if not evidence.reported_metrics or not evidence.recomputed_metrics:
             if policy.fail_closed_on_evidence_unavailable:
@@ -457,15 +482,18 @@ class DeterministicValidationEngine:
         for metric_name in metric_keys:
             if metric_name not in evidence.reported_metrics:
                 mismatches.append(f"metric_missing_in_reported:{metric_name}")
+                has_structural_mismatch = True
                 continue
             if metric_name not in evidence.recomputed_metrics:
                 mismatches.append(f"metric_missing_in_recomputed:{metric_name}")
+                has_structural_mismatch = True
                 continue
 
             reported_value = evidence.reported_metrics[metric_name]
             recomputed_value = evidence.recomputed_metrics[metric_name]
             if not _is_number(reported_value) or not _is_number(recomputed_value):
                 mismatches.append(f"metric_non_numeric:{metric_name}")
+                has_structural_mismatch = True
                 continue
 
             drift_pct = _percent_drift(
@@ -473,6 +501,9 @@ class DeterministicValidationEngine:
                 recomputed=float(recomputed_value),
             )
             max_drift = max(max_drift, drift_pct)
+
+        if has_structural_mismatch:
+            max_drift = max(max_drift, _ZERO_BASELINE_DRIFT_SENTINEL_PCT)
 
         if max_drift > tolerance_pct:
             mismatches.append(
@@ -618,7 +649,7 @@ class DeterministicValidationEngine:
                     rendered.append(item)
                     continue
                 if isinstance(item, dict):
-                    name = _as_string(item.get("name") or item.get("indicator") or item.get("id"))
+                    name = _first_non_empty_from_mapping(item, ("name", "indicator", "id"))
                     if name != "":
                         rendered.append(name)
 
@@ -634,7 +665,7 @@ class DeterministicValidationEngine:
                     if isinstance(item, str):
                         rendered.append(item)
                     elif isinstance(item, dict):
-                        name = _as_string(item.get("name") or item.get("indicator") or item.get("id"))
+                        name = _first_non_empty_from_mapping(item, ("name", "indicator", "id"))
                         if name != "":
                             rendered.append(name)
         return tuple(rendered)

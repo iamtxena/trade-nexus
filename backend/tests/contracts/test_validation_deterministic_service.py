@@ -114,6 +114,39 @@ def test_metric_consistency_check_fails_when_drift_exceeds_policy_tolerance() ->
     assert any(item.startswith("metric_drift_exceeds_tolerance") for item in result.mismatches)
 
 
+def test_metric_consistency_check_fails_closed_on_non_finite_values() -> None:
+    engine = DeterministicValidationEngine()
+    evidence = replace(
+        _base_evidence(),
+        reported_metrics={
+            "sharpeRatio": float("nan"),
+            "maxDrawdownPct": 9.00,
+        },
+        recomputed_metrics={
+            "sharpeRatio": 1.49,
+            "maxDrawdownPct": float("inf"),
+        },
+    )
+    result = engine.check_metric_consistency(evidence=evidence, policy=_policy(tolerance_pct=1.0))
+    assert result.status == "fail"
+    assert "metric_non_numeric:maxDrawdownPct" in result.mismatches
+    assert "metric_non_numeric:sharpeRatio" in result.mismatches
+    assert result.drift_pct == 0.0
+
+
+def test_metric_consistency_zero_baseline_nonzero_reported_always_fails() -> None:
+    engine = DeterministicValidationEngine()
+    evidence = replace(
+        _base_evidence(),
+        reported_metrics={"sharpeRatio": 0.05},
+        recomputed_metrics={"sharpeRatio": 0.0},
+    )
+    result = engine.check_metric_consistency(evidence=evidence, policy=_policy(tolerance_pct=10_000.0))
+    assert result.status == "fail"
+    assert result.drift_pct > 10_000.0
+    assert any(item.startswith("metric_drift_exceeds_tolerance") for item in result.mismatches)
+
+
 def test_lineage_completeness_check_passes_when_dataset_refs_and_sources_exist() -> None:
     engine = DeterministicValidationEngine()
     result = engine.check_lineage_completeness(evidence=_base_evidence(), policy=_policy())
@@ -217,6 +250,10 @@ def test_canonical_artifact_contains_deterministic_output_and_blocks_on_fail() -
     assert checks["tradeCoherence"]["status"] == "fail"
     assert checks["metricConsistency"]["status"] == "pass"
     assert any(item.startswith("lineage:") for item in checks["tradeCoherence"]["violations"])
+    assert any(
+        finding.check == "trade_coherence" and finding.code == "lineage"
+        for finding in result.findings
+    )
 
     schema = _load_schema(VALIDATION_RUN_SCHEMA_PATH)
     _validate_against_schema(artifact, schema)

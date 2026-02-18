@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -19,6 +20,7 @@ _PROFILE_METRIC_TOLERANCE_PCT: dict[ValidationProfile, float] = {
 }
 
 _LIFECYCLE_ALIASES: dict[str, str] = {
+    "created": "created",
     "submitted": "created",
     "submit": "created",
     "open": "accepted",
@@ -43,6 +45,8 @@ _ALLOWED_LIFECYCLE_TRANSITIONS: dict[str, set[str]] = {
     "rejected": set(),
 }
 
+_ZERO_BASELINE_DRIFT_SENTINEL_PCT = 1_000_000_000.0
+
 
 def _as_string(value: object) -> str:
     if not isinstance(value, str):
@@ -51,7 +55,7 @@ def _as_string(value: object) -> str:
 
 
 def _is_number(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
 
 
 def _unique_sorted(values: list[str] | set[str] | tuple[str, ...]) -> tuple[str, ...]:
@@ -67,7 +71,7 @@ def _normalize_indicator(value: str) -> str:
 def _percent_drift(*, reported: float, recomputed: float) -> float:
     delta = abs(reported - recomputed)
     if recomputed == 0:
-        return 0.0 if reported == 0 else delta * 100.0
+        return 0.0 if reported == 0 else _ZERO_BASELINE_DRIFT_SENTINEL_PCT
     return (delta / abs(recomputed)) * 100.0
 
 
@@ -303,7 +307,7 @@ class DeterministicValidationEngine:
         final_decision: ValidationDecision = "fail" if block_reasons else "pass"
         findings = self._build_findings(
             indicator_result=indicator_result,
-            trade_result=trade_result,
+            trade_result=combined_trade_result,
             metric_result=metric_result,
             lineage_result=lineage_result,
         )

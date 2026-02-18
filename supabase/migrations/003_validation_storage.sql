@@ -42,6 +42,7 @@ create index if not exists idx_validation_runs_user_created on validation_runs (
 
 alter table validation_runs enable row level security;
 -- Users can read own runs; mutations restricted to service role (governance table)
+drop policy if exists "Users can read own rows" on validation_runs;
 create policy "Users can read own rows" on validation_runs
   for select using (auth.jwt() ->> 'sub' = user_id);
 
@@ -66,10 +67,13 @@ create index if not exists idx_validation_reviews_run on validation_reviews (run
 create index if not exists idx_validation_reviews_user on validation_reviews (user_id);
 
 alter table validation_reviews enable row level security;
--- Reviewers can manage their own reviews
-create policy "Reviewers can manage own rows" on validation_reviews
-  for all using (auth.jwt() ->> 'sub' = user_id);
+-- Reviewers can read their own reviews; mutations via service role (governance table)
+drop policy if exists "Reviewers can read own rows" on validation_reviews;
+drop policy if exists "Reviewers can manage own rows" on validation_reviews;
+create policy "Reviewers can read own rows" on validation_reviews
+  for select using (auth.jwt() ->> 'sub' = user_id);
 -- Run owners can read all reviews on their validation runs
+drop policy if exists "Run owners can read reviews" on validation_reviews;
 create policy "Run owners can read reviews" on validation_reviews
   for select using (
     exists (
@@ -101,6 +105,7 @@ create unique index if not exists idx_validation_baselines_active on validation_
 
 alter table validation_baselines enable row level security;
 -- Users can read own baselines; promotions restricted to service role (governance table)
+drop policy if exists "Users can read own rows" on validation_baselines;
 create policy "Users can read own rows" on validation_baselines
   for select using (auth.jwt() ->> 'sub' = user_id);
 
@@ -127,5 +132,6 @@ create index if not exists idx_validation_regression_user on validation_regressi
 
 alter table validation_regression_results enable row level security;
 -- Users can read own results; mutations restricted to service role (governance table)
+drop policy if exists "Users can read own rows" on validation_regression_results;
 create policy "Users can read own rows" on validation_regression_results
   for select using (auth.jwt() ->> 'sub' = user_id);

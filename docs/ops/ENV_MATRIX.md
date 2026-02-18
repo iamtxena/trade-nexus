@@ -27,6 +27,8 @@
 | LONA_AGENT_TOKEN | secretRef | Yes | `<token>` | Lona auth (30-day TTL) |
 | LIVE_ENGINE_URL | plain | Yes | `https://live.lona.agency` | Live engine endpoint |
 
+> **Note**: This table covers *deployed* Container App variables only. Local development requires additional variables (e.g., `LONA_AGENT_REGISTRATION_SECRET`, `LIVE_ENGINE_SERVICE_API_KEY`, `INITIAL_CAPITAL`, `MAX_POSITION_PCT`, `MAX_DRAWDOWN_PCT`, `TRADER_DATA_*`). See `backend/.env.example` for the full local dev set.
+
 ## Frontend (Vercel)
 
 | Env Var | Visibility | Required | Purpose |

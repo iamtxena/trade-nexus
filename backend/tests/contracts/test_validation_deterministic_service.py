@@ -130,6 +130,22 @@ def test_trade_coherence_check_treats_pending_states_as_unknown() -> None:
     assert "execution_log_unknown_state:ord-001" in result.violations
 
 
+@pytest.mark.parametrize("state", ["not_filled", "not_accepted"])
+def test_trade_coherence_check_treats_negated_states_as_unknown(state: str) -> None:
+    engine = DeterministicValidationEngine()
+    evidence = replace(
+        _base_evidence(),
+        execution_logs=(
+            {"orderId": "ord-001", "status": "created"},
+            {"orderId": "ord-001", "status": state},
+            {"orderId": "ord-001", "status": "filled"},
+        ),
+    )
+    result = engine.check_trade_coherence(evidence=evidence, policy=_policy())
+    assert result.status == "fail"
+    assert "execution_log_unknown_state:ord-001" in result.violations
+
+
 def test_trade_coherence_check_uses_state_when_status_is_whitespace() -> None:
     engine = DeterministicValidationEngine()
     evidence = replace(
@@ -218,6 +234,19 @@ def test_lineage_completeness_check_fails_when_source_link_is_missing() -> None:
     assert result.status == "fail"
     assert result.missing_source_links == ("dataset-btc-1h-2025",)
     assert "lineage_source_missing:dataset-btc-1h-2025" in result.violations
+
+
+def test_lineage_completeness_normalizes_requested_dataset_ids() -> None:
+    engine = DeterministicValidationEngine()
+    evidence = replace(
+        _base_evidence(),
+        dataset_ids=(" dataset-btc-1h-2025 ",),
+        lineage={"datasets": [{"datasetId": "dataset-btc-1h-2025", "sourceRef": "blob://datasets/raw/btc.csv"}]},
+    )
+    result = engine.check_lineage_completeness(evidence=evidence, policy=_policy())
+    assert result.status == "pass"
+    assert result.missing_dataset_ids == ()
+    assert result.violations == ()
 
 
 def test_deterministic_failure_blocks_final_decision_and_is_repeatable() -> None:

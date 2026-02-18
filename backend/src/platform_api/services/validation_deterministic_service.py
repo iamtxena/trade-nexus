@@ -102,6 +102,8 @@ def _normalize_lifecycle_state(value: object) -> str:
         return ""
     if any(token.startswith("pending") for token in tokens):
         return ""
+    if any(token in {"not", "no", "never", "un"} for token in tokens):
+        return ""
 
     def _has_any(*allowed: str) -> bool:
         return any(token in allowed for token in tokens)
@@ -535,7 +537,11 @@ class DeterministicValidationEngine:
         missing_dataset_ids: list[str] = []
         missing_source_links: list[str] = []
 
-        requested_dataset_ids = {dataset_id for dataset_id in evidence.dataset_ids if _as_string(dataset_id) != ""}
+        requested_dataset_ids: set[str] = set()
+        for dataset_id in evidence.dataset_ids:
+            normalized_dataset_id = _as_string(dataset_id)
+            if normalized_dataset_id != "":
+                requested_dataset_ids.add(normalized_dataset_id)
         if not requested_dataset_ids and policy.fail_closed_on_evidence_unavailable:
             violations.append("dataset_references_missing")
 

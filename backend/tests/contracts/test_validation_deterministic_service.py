@@ -98,6 +98,21 @@ def test_trade_coherence_check_fails_for_invalid_lifecycle_transition() -> None:
     assert any(item.startswith("invalid_lifecycle_transition:ord-001") for item in result.violations)
 
 
+def test_trade_coherence_check_does_not_fuzzily_map_unrelated_state_substrings() -> None:
+    engine = DeterministicValidationEngine()
+    evidence = replace(
+        _base_evidence(),
+        execution_logs=(
+            {"orderId": "ord-001", "status": "created"},
+            {"orderId": "ord-001", "status": "unfilled"},
+            {"orderId": "ord-001", "status": "filled"},
+        ),
+    )
+    result = engine.check_trade_coherence(evidence=evidence, policy=_policy())
+    assert result.status == "fail"
+    assert "execution_log_unknown_state:ord-001" in result.violations
+
+
 def test_metric_consistency_check_passes_within_policy_tolerance() -> None:
     engine = DeterministicValidationEngine()
     result = engine.check_metric_consistency(evidence=_base_evidence(), policy=_policy(tolerance_pct=1.0))
@@ -252,6 +267,10 @@ def test_canonical_artifact_contains_deterministic_output_and_blocks_on_fail() -
     assert any(item.startswith("lineage:") for item in checks["tradeCoherence"]["violations"])
     assert any(
         finding.check == "trade_coherence" and finding.code == "lineage"
+        for finding in result.findings
+    )
+    assert not any(
+        finding.check == "lineage_completeness" and finding.code == "lineage_source_missing"
         for finding in result.findings
     )
 

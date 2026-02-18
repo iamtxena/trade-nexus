@@ -81,17 +81,29 @@ def _normalize_lifecycle_state(value: object) -> str:
         return ""
     if raw in _LIFECYCLE_ALIASES:
         return _LIFECYCLE_ALIASES[raw]
-    if "partial" in raw and "fill" in raw:
+    tokens = tuple(token for token in raw.split("_") if token != "")
+    if not tokens:
+        return ""
+
+    def _has_any(*allowed: str) -> bool:
+        return any(token in allowed for token in tokens)
+
+    def _has_prefix(prefix: str) -> bool:
+        return any(token.startswith(prefix) for token in tokens)
+
+    if (_has_any("partial", "partially") or _has_prefix("partial")) and (
+        _has_any("fill", "filled") or _has_prefix("fill")
+    ):
         return "partially_filled"
-    if "fill" in raw:
+    if _has_any("fill", "filled") or _has_prefix("fill"):
         return "filled"
-    if "cancel" in raw:
+    if _has_any("cancel", "cancelled", "canceled") or _has_prefix("cancel"):
         return "cancelled"
-    if "reject" in raw:
+    if _has_any("reject", "rejected") or _has_prefix("reject"):
         return "rejected"
-    if "accept" in raw or "ack" in raw or "open" in raw:
+    if _has_any("accept", "accepted", "open", "ack", "acknowledged") or _has_prefix("ack"):
         return "accepted"
-    if "create" in raw or "submit" in raw or "place" in raw:
+    if _has_any("create", "created", "submit", "submitted", "place", "placed") or _has_prefix("create"):
         return "created"
     return ""
 
@@ -636,6 +648,7 @@ class DeterministicValidationEngine:
         lineage_result: LineageCompletenessCheckResult,
     ) -> tuple[ValidationFinding, ...]:
         findings: list[ValidationFinding] = []
+        lineage_from_trade: set[str] = set()
         for indicator in indicator_result.missing_indicators:
             findings.append(
                 ValidationFinding(
@@ -646,6 +659,8 @@ class DeterministicValidationEngine:
             )
         for violation in trade_result.violations:
             code, _, detail = violation.partition(":")
+            if code == "lineage" and detail != "":
+                lineage_from_trade.add(detail)
             findings.append(
                 ValidationFinding(
                     code=code,
@@ -663,6 +678,8 @@ class DeterministicValidationEngine:
                 )
             )
         for violation in lineage_result.violations:
+            if violation in lineage_from_trade:
+                continue
             code, _, detail = violation.partition(":")
             findings.append(
                 ValidationFinding(

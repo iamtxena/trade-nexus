@@ -1,7 +1,7 @@
 [
   {
     "chunk": "docs/llm/chunks/architecture_delivery_plan_v1.md",
-    "chunk_hash": "572c9841b04ede56434ec71a87c75c4b0be03bdf889378a99660185445306b27",
+    "chunk_hash": "b4fac75b7cee070934aea9fda8cff903f5ec631f5d2deae5f96e5aecf9a1ca3f",
     "concepts": [
       "team_topology",
       "gates",
@@ -14,7 +14,7 @@
       "Gate1 Docs Team"
     ],
     "source": "docs/architecture/DELIVERY_PLAN_AND_TEAM_TOPOLOGY.md",
-    "source_hash": "644bdd9cff849d81b043653a2f8fa39169bbfc991b223fd252a745813cf419a8",
+    "source_hash": "b631486fa461e9da65e099232e7c8274c20967838524dc56c88ef6d17fed2192",
     "title": "Delivery Plan and Team Topology",
     "topic": "delivery",
     "workflows": [
@@ -45,7 +45,7 @@
   },
   {
     "chunk": "docs/llm/chunks/architecture_interfaces_v1.md",
-    "chunk_hash": "ae764d1a08b454af56d44ec98550afc6d98dc4ca4c6272306d712ef9d733f11c",
+    "chunk_hash": "ec1c3c033905128b28b098524298f14ff79eb47ebbedae06490c8860698dd717",
     "concepts": [
       "interfaces",
       "public_api",
@@ -65,7 +65,7 @@
       "Architecture/Contracts lead"
     ],
     "source": "docs/architecture/INTERFACES.md",
-    "source_hash": "f822f28829251915007d6a14c465137b5c2da598053109191b20f64e490a9d98",
+    "source_hash": "d998cf74ef0fa7153a9f951d40e82d8db89d33da549b8fba72ab61ce72e467b5",
     "title": "Architecture Interfaces",
     "topic": "architecture",
     "workflows": [
@@ -74,7 +74,7 @@
   },
   {
     "chunk": "docs/llm/chunks/architecture_target_v2_v1.md",
-    "chunk_hash": "54e1a35091d66f7be63b83bae62438ab55143362aa391766748aa69cfa88ebf3",
+    "chunk_hash": "fe8d7dc32f4c5ea503e852dafc5bbb9c55576eb665f516b7161167bdf600936e",
     "concepts": [
       "target_architecture",
       "boundaries",
@@ -87,7 +87,7 @@
       "Architecture/Contracts lead"
     ],
     "source": "docs/architecture/TARGET_ARCHITECTURE_V2.md",
-    "source_hash": "39f48820a0140e2268a4abd2bea3642df9b167d98493e4e3e08d444010ac87b3",
+    "source_hash": "0be4f6b495ea0ea9803f16920275ee2fa7c09fdda884b775dd520678bde7ca10",
     "title": "Target Architecture V2",
     "topic": "architecture",
     "workflows": [

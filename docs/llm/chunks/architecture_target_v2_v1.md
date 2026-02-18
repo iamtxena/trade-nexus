@@ -31,6 +31,7 @@ It is designed to:
 4. Strong tenancy boundaries in every service call.
 5. Idempotent write operations.
 6. Explicit versioning (`/v1`) and backwards compatibility policy.
+7. JSON-first validation artifacts with policy-driven merge/release gates.
 
 ## System Context
 
@@ -38,6 +39,7 @@ It is designed to:
 Clients
   - trading-cli (external repo)
   - Web UI
+  - OpenClaw client lane
   - API consumers / agent clients
         |
         v
@@ -55,8 +57,14 @@ Trade Nexus Platform API (single public entrypoint)
         |      - future engines
         |
         +--> Data/Knowledge Adapter
-               - market/news context
-               - portfolio and analytics store
+        |      - market/news context
+        |      - portfolio and analytics store
+        |
+        +--> Validation Adapter
+               - deterministic validation lane
+               - agent review lane
+               - optional trader review lane
+               - JSON artifact + optional html/pdf rendering
 ```
 
 ## Bounded Contexts
@@ -113,6 +121,19 @@ Responsibilities:
 
 Ownership: Data/Knowledge team.
 
+### 6) Validation and Trader Review
+
+Responsibilities:
+
+- create JSON-first validation artifacts for strategy runs,
+- verify indicator fidelity (declared vs rendered),
+- validate trade/log coherence and metric consistency,
+- run AI review with evidence-backed findings,
+- support optional human trader approval workflow,
+- maintain baselines for regression and block merge/release on policy failure.
+
+Ownership: Validation team (Platform + AI review + Web review lanes).
+
 ## Public Interface Contract
 
 Canonical file:
@@ -155,6 +176,17 @@ Each external dependency is wrapped behind an internal interface.
 - `getDataset(...)`
 - `listDatasets(...)`
 
+### Validation Adapter (portable validation module boundary)
+
+- `createValidationRun(...)`
+- `getValidationRun(...)`
+- `evaluateValidationRun(...)`
+- `requestTraderReview(...)`
+- `recordTraderReview(...)`
+- `renderValidationArtifact(...)` (html/pdf optional)
+- `promoteValidationBaseline(...)`
+- `replayBaselineRegression(...)`
+
 This allows replacing live-engine without breaking API consumers.
 
 ## Data Ownership
@@ -165,6 +197,9 @@ This allows replacing live-engine without breaking API consumers.
    - deployments
    - orders
    - portfolio snapshots
+   - validation runs
+   - validation artifacts metadata
+   - validation baselines and regression decisions
 2. External systems own execution internals and strategy runtime internals.
 3. Platform persists provider references (`provider_ref_id`) but never leaks provider-specific shapes directly.
 
@@ -200,6 +235,8 @@ Required cross-cutting controls:
 3. Timeouts/retries/circuit breakers in adapters.
 4. Idempotency for `POST /orders` and `POST /deployments`.
 5. Error envelope standardized in API contract.
+6. Validation-gate policy evaluation recorded per run (`merge`, `release` decisions).
+7. No prod fallback to in-memory validation adapters.
 
 ## Repository Strategy
 
@@ -248,10 +285,18 @@ Required cross-cutting controls:
 - event stream/webhooks,
 - multi-region and disaster recovery.
 
+### Phase 5: Validation and review hardening
+
+- JSON-first strategy validation artifact pipeline,
+- deterministic + agent review lanes,
+- optional trader-in-the-loop workflow,
+- baseline replay regression gates for merge and release.
+
 For detailed data-plane implementation and gate execution, see:
 
 - `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/DATA_LIFECYCLE_AND_LONA_CONNECTOR_V2.md`
 - `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/GATE_TEAM_EXECUTION_PLAYBOOK.md`
+- `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/STRATEGY_VALIDATION_AND_REVIEW_LAYER.md`
 
 ## Acceptance Criteria
 
@@ -259,3 +304,4 @@ For detailed data-plane implementation and gate execution, see:
 2. Replacing execution engine does not require CLI or web changes.
 3. A single request trace links API -> adapter -> provider logs.
 4. No public endpoint bypasses Platform API boundary.
+5. Validation-gated runs produce JSON artifacts suitable for deterministic, agent, and optional human review.

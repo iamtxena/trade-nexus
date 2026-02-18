@@ -577,13 +577,13 @@ Examples of migration direction:
 - provider-specific response payloads -> normalize to API schemas,
 - ad-hoc error payloads -> replace with `ErrorResponse`.
 
-## 11) Validation and Review Contract (planned additive v2)
+## 11) Validation and Review Contract (frozen additive v2 contract)
 
 Validation is JSON-first and policy-driven so merge/release gates are deterministic.
 
-### 11.1 Proposed API surface
+### 11.1 Frozen API surface
 
-Additive endpoints to include in OpenAPI before implementation:
+Frozen additive endpoints in OpenAPI:
 
 1. `POST /v2/validation-runs`
 2. `GET /v2/validation-runs/{runId}`
@@ -611,6 +611,12 @@ Additive endpoints to include in OpenAPI before implementation:
 1. excludes heavy raw payloads,
 2. includes stable references to evidence blobs,
 3. preserves deterministic check outcomes and policy fields.
+
+Frozen schema files:
+
+1. `/Users/txena/sandbox/16.enjoy/trading/trade-nexus-validation/contracts/schemas/validation_run.json`
+2. `/Users/txena/sandbox/16.enjoy/trading/trade-nexus-validation/contracts/schemas/validation_llm_snapshot.json`
+3. `/Users/txena/sandbox/16.enjoy/trading/trade-nexus-validation/contracts/schemas/validation_policy_profile.json`
 
 ### 11.3 Validation profile contract
 

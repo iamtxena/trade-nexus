@@ -620,9 +620,9 @@ Frozen additive endpoints in OpenAPI:
 
 Frozen schema files:
 
-1. `/Users/txena/sandbox/16.enjoy/trading/trade-nexus-validation/contracts/schemas/validation_run.json`
-2. `/Users/txena/sandbox/16.enjoy/trading/trade-nexus-validation/contracts/schemas/validation_llm_snapshot.json`
-3. `/Users/txena/sandbox/16.enjoy/trading/trade-nexus-validation/contracts/schemas/validation_policy_profile.json`
+1. `contracts/schemas/validation_run.json`
+2. `contracts/schemas/validation_llm_snapshot.json`
+3. `contracts/schemas/validation_policy_profile.json`
 
 ### 11.3 Validation profile contract
 

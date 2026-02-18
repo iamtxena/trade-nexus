@@ -82,6 +82,9 @@ class _FakeSupabaseQuery:
         return selected
 
     def _execute_upsert(self) -> list[dict[str, object]]:
+        if self._table in self._client.fail_upsert_once_tables:
+            self._client.fail_upsert_once_tables.remove(self._table)
+            raise RuntimeError(f"forced-upsert-failure:{self._table}")
         if self._table in self._client.fail_upsert_tables:
             raise RuntimeError(f"forced-upsert-failure:{self._table}")
         rows = self._tables.setdefault(self._table, [])
@@ -125,6 +128,7 @@ class _FakeSupabaseClient:
     def __init__(self) -> None:
         self._tables: dict[str, list[dict[str, object]]] = {}
         self.fail_upsert_tables: set[str] = set()
+        self.fail_upsert_once_tables: set[str] = set()
         self.non_dict_select_tables: set[str] = set()
 
     def table(self, table_name: str) -> _FakeSupabaseQuery:
@@ -403,8 +407,8 @@ def test_supabase_store_rolls_back_on_partial_upsert_failure() -> None:
             blob_refs=original_refs,
         )
 
-        client.fail_upsert_tables.add("validation_review_states")
-        with pytest.raises(RuntimeError, match="forced-upsert-failure:validation_review_states"):
+        client.fail_upsert_once_tables.add("validation_blob_refs")
+        with pytest.raises(RuntimeError, match="forced-upsert-failure:validation_blob_refs"):
             await service.persist_run(
                 metadata=replace(
                     original_run,
@@ -420,7 +424,7 @@ def test_supabase_store_rolls_back_on_partial_upsert_failure() -> None:
                 blob_refs=_blob_refs(chart_payload=b'{"chart":"mutated"}'),
             )
 
-        client.fail_upsert_tables.clear()
+        assert client.fail_upsert_once_tables == set()
         restored = await service.get_run(
             run_id=original_run.run_id,
             tenant_id=original_run.tenant_id,

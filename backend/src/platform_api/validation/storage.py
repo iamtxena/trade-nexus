@@ -653,38 +653,63 @@ class SupabaseValidationMetadataStore:
         review_row = snapshot.get("review_row")
         blob_rows = snapshot.get("blob_rows")
 
-        if run_row is None:
-            await self._delete_where(table=self._runs_table, filters={"run_id": run_id})
-            return
+        rollback_errors: list[str] = []
 
-        if not isinstance(run_row, dict):
-            raise ValidationMetadataStoreError("Rollback snapshot for run_row must be a dict.")
-        await self._upsert(table=self._runs_table, payload=run_row, on_conflict="run_id")
+        if run_row is None:
+            try:
+                await self._delete_where(table=self._runs_table, filters={"run_id": run_id})
+            except Exception as exc:
+                rollback_errors.append(f"{self._runs_table}: {exc!r}")
+        else:
+            if not isinstance(run_row, dict):
+                raise ValidationMetadataStoreError("Rollback snapshot for run_row must be a dict.")
+            try:
+                await self._upsert(table=self._runs_table, payload=run_row, on_conflict="run_id")
+            except Exception as exc:
+                rollback_errors.append(f"{self._runs_table}: {exc!r}")
 
         if review_row is None:
-            await self._delete_where(table=self._review_table, filters={"run_id": run_id})
+            try:
+                await self._delete_where(table=self._review_table, filters={"run_id": run_id})
+            except Exception as exc:
+                rollback_errors.append(f"{self._review_table}: {exc!r}")
         else:
             if not isinstance(review_row, dict):
                 raise ValidationMetadataStoreError("Rollback snapshot for review_row must be a dict.")
-            await self._upsert(table=self._review_table, payload=review_row, on_conflict="run_id")
+            try:
+                await self._upsert(table=self._review_table, payload=review_row, on_conflict="run_id")
+            except Exception as exc:
+                rollback_errors.append(f"{self._review_table}: {exc!r}")
 
-        await self._delete_where(table=self._blob_refs_table, filters={"run_id": run_id})
-        if blob_rows is None:
-            return
-        if not isinstance(blob_rows, list):
-            raise ValidationMetadataStoreError("Rollback snapshot for blob_rows must be a list.")
         restored_blobs: list[dict[str, object]] = []
-        for item in blob_rows:
-            if not isinstance(item, dict):
-                raise ValidationMetadataStoreError(
-                    f"Rollback snapshot blob_rows contains non-dict item: {type(item).__name__}."
-                )
-            restored_blobs.append(item)
+        if blob_rows is not None:
+            if not isinstance(blob_rows, list):
+                raise ValidationMetadataStoreError("Rollback snapshot for blob_rows must be a list.")
+            for item in blob_rows:
+                if not isinstance(item, dict):
+                    raise ValidationMetadataStoreError(
+                        f"Rollback snapshot blob_rows contains non-dict item: {type(item).__name__}."
+                    )
+                restored_blobs.append(item)
+
+        try:
+            await self._delete_where(table=self._blob_refs_table, filters={"run_id": run_id})
+        except Exception as exc:
+            rollback_errors.append(f"{self._blob_refs_table}: {exc!r}")
+
         if restored_blobs:
-            await self._upsert(
-                table=self._blob_refs_table,
-                payload=restored_blobs,
-                on_conflict="run_id,kind",
+            try:
+                await self._upsert(
+                    table=self._blob_refs_table,
+                    payload=restored_blobs,
+                    on_conflict="run_id,kind",
+                )
+            except Exception as exc:
+                rollback_errors.append(f"{self._blob_refs_table}: {exc!r}")
+
+        if rollback_errors:
+            raise ValidationMetadataStoreError(
+                f"Rollback could not fully restore run {run_id}: {'; '.join(rollback_errors)}"
             )
 
 

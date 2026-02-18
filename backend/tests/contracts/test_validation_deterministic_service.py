@@ -130,7 +130,7 @@ def test_trade_coherence_check_treats_pending_states_as_unknown() -> None:
     assert "execution_log_unknown_state:ord-001" in result.violations
 
 
-@pytest.mark.parametrize("state", ["not_filled", "not_accepted"])
+@pytest.mark.parametrize("state", ["not_filled", "not_accepted", "non_filled"])
 def test_trade_coherence_check_treats_negated_states_as_unknown(state: str) -> None:
     engine = DeterministicValidationEngine()
     evidence = replace(
@@ -381,3 +381,10 @@ def test_from_contract_payload_rejects_non_blocking_const_policy_flags() -> None
                 "failClosedOnEvidenceUnavailable": False,
             }
         )
+
+
+@pytest.mark.parametrize("invalid_tolerance", [float("nan"), float("inf"), float("-inf")])
+def test_resolved_metric_tolerance_rejects_non_finite_values(invalid_tolerance: float) -> None:
+    policy = ValidationPolicyConfig(metric_drift_tolerance_pct=invalid_tolerance)
+    with pytest.raises(ValueError):
+        policy.resolved_metric_tolerance_pct()

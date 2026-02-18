@@ -102,7 +102,7 @@ def _normalize_lifecycle_state(value: object) -> str:
         return ""
     if any(token.startswith("pending") for token in tokens):
         return ""
-    if any(token in {"not", "no", "never", "un"} for token in tokens):
+    if any(token in {"not", "no", "never", "un", "non"} for token in tokens):
         return ""
 
     def _has_any(*allowed: str) -> bool:
@@ -168,6 +168,8 @@ class ValidationPolicyConfig:
         if self.metric_drift_tolerance_pct is None:
             return _PROFILE_METRIC_TOLERANCE_PCT[self.profile]
         tolerance = float(self.metric_drift_tolerance_pct)
+        if not math.isfinite(tolerance):
+            raise ValueError("metric_drift_tolerance_pct must be finite.")
         if tolerance < 0:
             raise ValueError("metric_drift_tolerance_pct must be >= 0.")
         return tolerance

@@ -149,5 +149,38 @@ if not isinstance(turn, dict):
 assert_non_empty_str(turn, "id")
 assert_non_empty_str(turn, "sessionId")
 
+# Validation consumer expectations: run creation + artifact retrieval.
+validation_run_request = json.loads(
+    (FIXTURES_DIR / "create-validation-run.request.json").read_text(encoding="utf-8"),
+)
+status, create_validation_run_payload = request(
+    "POST",
+    "/v2/validation-runs",
+    body=validation_run_request,
+)
+if status != 202:
+    raise AssertionError(
+        f"/v2/validation-runs expected 202, got {status}: {create_validation_run_payload}"
+    )
+assert_non_empty_str(create_validation_run_payload, "requestId")
+run = create_validation_run_payload.get("run")
+if not isinstance(run, dict):
+    raise AssertionError(f"Expected run object, got: {run!r}")
+run_id = assert_non_empty_str(run, "id")
+
+status, artifact_payload = request("GET", f"/v2/validation-runs/{run_id}/artifact")
+if status != 200:
+    raise AssertionError(
+        f"/v2/validation-runs/{{runId}}/artifact expected 200, got {status}: {artifact_payload}"
+    )
+assert_non_empty_str(artifact_payload, "requestId")
+artifact_type = artifact_payload.get("artifactType")
+if not isinstance(artifact_type, str):
+    raise AssertionError(f"Expected artifactType string, got: {artifact_type!r}")
+artifact = artifact_payload.get("artifact")
+if not isinstance(artifact, dict):
+    raise AssertionError(f"Expected artifact object, got: {artifact!r}")
+assert_non_empty_str(artifact, "schemaVersion")
+
 print("Consumer mock contract checks passed.")
 PY

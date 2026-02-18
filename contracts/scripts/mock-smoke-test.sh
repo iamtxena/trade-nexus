@@ -171,5 +171,21 @@ request_and_assert "POST" "/v1/datasets/${dataset_id}/publish/lona" "202" "${FIX
 request_and_assert "GET" "/v1/datasets" "200"
 request_and_assert "GET" "/v1/datasets/${dataset_id}" "200"
 request_and_assert "GET" "/v1/datasets/${dataset_id}/quality-report" "200"
+request_and_assert "POST" "/v2/validation-runs" "202" "${FIXTURES_DIR}/create-validation-run.request.json"
+request_and_assert "GET" "/v2/validation-runs/valrun-20260217-0001" "200"
+request_and_assert "GET" "/v2/validation-runs/valrun-20260217-0001/artifact" "200"
+request_and_assert "POST" \
+  "/v2/validation-runs/valrun-20260217-0001/review" \
+  "202" \
+  "${FIXTURES_DIR}/submit-validation-review.request.json"
+request_and_assert "POST" \
+  "/v2/validation-runs/valrun-20260217-0001/render" \
+  "202" \
+  "${FIXTURES_DIR}/create-validation-render.request.json"
+request_and_assert "POST" "/v2/validation-baselines" "201" "${FIXTURES_DIR}/create-validation-baseline.request.json"
+request_and_assert "POST" \
+  "/v2/validation-regressions/replay" \
+  "202" \
+  "${FIXTURES_DIR}/replay-validation-regression.request.json"
 
-echo "Mock smoke tests passed for all v1 operations."
+echo "Mock smoke tests passed for v1 and validation v2 contract operations."

@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-SUBSCRIPTION="42bd545b-deb0-4381-80b1-6186dfb9f3b8"
+SUBSCRIPTION="${AZURE_SUBSCRIPTION_ID:-42bd545b-deb0-4381-80b1-6186dfb9f3b8}"
 RESOURCE_GROUP="trade-nexus"
 VAULT_NAME="trade-nexus-kv"
 ROLE="Key Vault Secrets User"

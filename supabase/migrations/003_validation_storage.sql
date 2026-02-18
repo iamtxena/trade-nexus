@@ -23,6 +23,19 @@ create table if not exists validation_runs (
   updated_at timestamptz not null default now()
 );
 
+-- Auto-update updated_at on row modification
+create or replace function update_validation_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger trg_validation_runs_updated_at
+  before update on validation_runs
+  for each row execute function update_validation_updated_at();
+
 create index if not exists idx_validation_runs_user on validation_runs (user_id);
 create index if not exists idx_validation_runs_strategy on validation_runs (strategy_id);
 create index if not exists idx_validation_runs_user_created on validation_runs (user_id, created_at desc);
@@ -52,8 +65,18 @@ create index if not exists idx_validation_reviews_run on validation_reviews (run
 create index if not exists idx_validation_reviews_user on validation_reviews (user_id);
 
 alter table validation_reviews enable row level security;
-create policy "Users can manage own rows" on validation_reviews
+-- Reviewers can manage their own reviews
+create policy "Reviewers can manage own rows" on validation_reviews
   for all using (auth.jwt() ->> 'sub' = user_id);
+-- Run owners can read all reviews on their validation runs
+create policy "Run owners can read reviews" on validation_reviews
+  for select using (
+    exists (
+      select 1 from validation_runs
+      where validation_runs.id = validation_reviews.run_id
+        and validation_runs.user_id = auth.jwt() ->> 'sub'
+    )
+  );
 
 -- =============================================================
 -- validation_baselines — approved baselines for regression
@@ -73,7 +96,7 @@ create table if not exists validation_baselines (
 
 create index if not exists idx_validation_baselines_user on validation_baselines (user_id);
 create index if not exists idx_validation_baselines_strategy on validation_baselines (strategy_id);
-create index if not exists idx_validation_baselines_active on validation_baselines (user_id, strategy_id) where is_active = true;
+create unique index if not exists idx_validation_baselines_active on validation_baselines (user_id, strategy_id) where is_active = true;
 
 alter table validation_baselines enable row level security;
 create policy "Users can manage own rows" on validation_baselines

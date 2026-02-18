@@ -22,10 +22,10 @@
   },
   {
     "chunk": "docs/llm/chunks/architecture_target_v2_v1.md",
-    "chunk_hash": "fe8d7dc32f4c5ea503e852dafc5bbb9c55576eb665f516b7161167bdf600936e",
+    "chunk_hash": "5fcda2b361c9edc07360d4d062dbedaae3274498c2c807de30fb3668dff1c448",
     "id": "architecture_target_v2_v1",
     "source": "docs/architecture/TARGET_ARCHITECTURE_V2.md",
-    "source_hash": "0be4f6b495ea0ea9803f16920275ee2fa7c09fdda884b775dd520678bde7ca10"
+    "source_hash": "e7377258a9d7d44a6982770d51ea7370f4abe2bcf2c6a60dc8ab425443a5f217"
   },
   {
     "chunk": "docs/llm/chunks/portal_gate3_execution_hardening_v1.md",

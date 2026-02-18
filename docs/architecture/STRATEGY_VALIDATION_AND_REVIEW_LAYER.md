@@ -91,6 +91,10 @@ Profiles are policy-configurable and explicitly recorded in each run artifact.
 {
   "schemaVersion": "validation-run.v1",
   "runId": "valrun-20260217-0001",
+  "createdAt": "2026-02-17T10:30:00Z",
+  "requestId": "req-validation-run-001",
+  "tenantId": "tenant-001",
+  "userId": "user-001",
   "strategyRef": {
     "strategyId": "strat-001",
     "provider": "lona",
@@ -99,9 +103,8 @@ Profiles are policy-configurable and explicitly recorded in each run artifact.
   "inputs": {
     "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
     "requestedIndicators": ["zigzag", "ema"],
-    "datasets": [
-      { "datasetId": "dataset-btc-1h-2025", "range": "2025-01-01..2025-12-31" }
-    ]
+    "datasetIds": ["dataset-btc-1h-2025"],
+    "backtestReportRef": "blob://validation/valrun-20260217-0001/backtest-report.json"
   },
   "outputs": {
     "strategyCodeRef": "blob://validation/valrun-20260217-0001/strategy.py",
@@ -128,7 +131,12 @@ Profiles are policy-configurable and explicitly recorded in each run artifact.
   "policy": {
     "profile": "STANDARD",
     "blockMergeOnFail": true,
-    "blockReleaseOnFail": true
+    "blockReleaseOnFail": true,
+    "blockMergeOnAgentFail": true,
+    "blockReleaseOnAgentFail": false,
+    "requireTraderReview": false,
+    "hardFailOnMissingIndicators": true,
+    "failClosedOnEvidenceUnavailable": true
   },
   "finalDecision": "pass"
 }

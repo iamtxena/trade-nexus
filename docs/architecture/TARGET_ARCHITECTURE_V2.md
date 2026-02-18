@@ -290,7 +290,7 @@ For detailed data-plane implementation and gate execution, see:
 
 - `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/DATA_LIFECYCLE_AND_LONA_CONNECTOR_V2.md`
 - `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/GATE_TEAM_EXECUTION_PLAYBOOK.md`
-- `/Users/txena/sandbox/16.enjoy/trading/trade-nexus/docs/architecture/STRATEGY_VALIDATION_AND_REVIEW_LAYER.md`
+- `docs/architecture/STRATEGY_VALIDATION_AND_REVIEW_LAYER.md`
 
 ## Acceptance Criteria
 

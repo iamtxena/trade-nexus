@@ -144,7 +144,13 @@ Profiles are policy-configurable and explicitly recorded in each run artifact.
 
 `validation_llm_snapshot.json` (token-optimized) includes only minimal fields needed for agent reasoning and references to heavy evidence blobs.
 
-## Interface Additions (Proposed)
+Frozen schema files:
+
+1. `/Users/txena/sandbox/16.enjoy/trading/trade-nexus-validation/contracts/schemas/validation_run.json`
+2. `/Users/txena/sandbox/16.enjoy/trading/trade-nexus-validation/contracts/schemas/validation_llm_snapshot.json`
+3. `/Users/txena/sandbox/16.enjoy/trading/trade-nexus-validation/contracts/schemas/validation_policy_profile.json`
+
+## Interface Additions (Frozen v2 Contract for #224)
 
 Additive endpoints (to be added to OpenAPI before implementation):
 

@@ -15,10 +15,10 @@
   },
   {
     "chunk": "docs/llm/chunks/architecture_interfaces_v1.md",
-    "chunk_hash": "ec1c3c033905128b28b098524298f14ff79eb47ebbedae06490c8860698dd717",
+    "chunk_hash": "21dbbd3adcf2175e4da6787894e34525d430325ac560419e7c8b82ff6add1128",
     "id": "architecture_interfaces_v1",
     "source": "docs/architecture/INTERFACES.md",
-    "source_hash": "d998cf74ef0fa7153a9f951d40e82d8db89d33da549b8fba72ab61ce72e467b5"
+    "source_hash": "34c8e70e5a38c6809ce84434961356c0e9f0e8c961d696d44a6bdd487466e2dd"
   },
   {
     "chunk": "docs/llm/chunks/architecture_target_v2_v1.md",

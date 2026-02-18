@@ -144,7 +144,13 @@ Profiles are policy-configurable and explicitly recorded in each run artifact.
 
 `validation_llm_snapshot.json` (token-optimized) includes only minimal fields needed for agent reasoning and references to heavy evidence blobs.
 
-## Interface Additions (Proposed)
+Frozen schema files:
+
+1. `contracts/schemas/validation_run.json`
+2. `contracts/schemas/validation_llm_snapshot.json`
+3. `contracts/schemas/validation_policy_profile.json`
+
+## Interface Additions (Frozen v2 Contract for #224)
 
 Additive endpoints (to be added to OpenAPI before implementation):
 

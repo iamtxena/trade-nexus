@@ -13,6 +13,7 @@ import asyncio
 import copy
 import hashlib
 import inspect
+import logging
 import os
 import re
 from collections.abc import Sequence
@@ -57,6 +58,7 @@ _VALID_BLOB_KINDS: set[str] = {
 _PRODUCTION_PROFILE_ALIASES = {"prod", "production", "live"}
 _BLOB_REF_PATTERN = re.compile(r"^blob://[A-Za-z0-9._~!$&'()*+,;=:@/-]+$")
 _SHA256_HEX_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_LOG = logging.getLogger(__name__)
 
 
 class ValidationMetadataStoreError(RuntimeError):
@@ -408,11 +410,19 @@ class ValidationStorageService:
             review_state=review_state,
             blob_refs=blob_refs,
         )
-        await self._vector_hook.on_validation_run_persisted(
-            run=metadata,
-            review_state=review_state,
-            blob_refs=blob_refs,
-        )
+        try:
+            await self._vector_hook.on_validation_run_persisted(
+                run=metadata,
+                review_state=review_state,
+                blob_refs=blob_refs,
+            )
+        except Exception:
+            # Metadata persistence is authoritative; vector ingest is best-effort.
+            _LOG.warning(
+                "Validation vector hook failed after metadata persistence for run %s.",
+                metadata.run_id,
+                exc_info=True,
+            )
 
     async def get_run(self, *, run_id: str, tenant_id: str, user_id: str) -> PersistedValidationRun | None:
         return await self._metadata_store.get_run(run_id=run_id, tenant_id=tenant_id, user_id=user_id)
@@ -904,7 +914,11 @@ async def create_validation_metadata_store(
     if supabase_key is not None:
         resolved_key = supabase_key
     else:
-        resolved_key = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        primary_key = os.getenv("SUPABASE_KEY")
+        if primary_key is not None:
+            resolved_key = primary_key
+        else:
+            resolved_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     if resolved_url and resolved_key:
         try:
             from supabase import create_async_client

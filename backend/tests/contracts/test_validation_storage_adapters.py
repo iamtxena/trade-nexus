@@ -156,6 +156,22 @@ class _RecordingVectorHook(ValidationVectorHook):
         )
 
 
+class _FailingVectorHook(ValidationVectorHook):
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def on_validation_run_persisted(
+        self,
+        *,
+        run: ValidationRunMetadata,
+        review_state: ValidationReviewStateMetadata | None,
+        blob_refs: Sequence[ValidationBlobReferenceMetadata],
+    ) -> None:
+        _ = (run, review_state, blob_refs)
+        self.calls += 1
+        raise RuntimeError("vector-hook-failed")
+
+
 def _run_metadata(
     *,
     status: ValidationRunStatus = "queued",
@@ -334,6 +350,25 @@ def test_blob_reference_integrity_and_checksum_contract() -> None:
         validate_blob_payload_integrity(ref, payload + b"tamper")
 
 
+def test_validation_storage_service_treats_vector_hook_as_best_effort() -> None:
+    async def _run() -> None:
+        metadata_store = InMemoryValidationMetadataStore()
+        failing_hook = _FailingVectorHook()
+        service = ValidationStorageService(metadata_store=metadata_store, vector_hook=failing_hook)
+
+        run = _run_metadata(status="queued", final_decision="pending")
+        review = _review_metadata()
+        refs = _blob_refs(chart_payload=b'{"chart":"hook-best-effort"}')
+        await service.persist_run(metadata=run, review_state=review, blob_refs=refs)
+
+        persisted = await service.get_run(run_id=run.run_id, tenant_id=run.tenant_id, user_id=run.user_id)
+        assert persisted is not None
+        assert persisted.metadata.run_id == run.run_id
+        assert failing_hook.calls == 1
+
+    asyncio.run(_run())
+
+
 def test_validation_storage_factory_fails_closed_in_production_without_supabase() -> None:
     async def _run() -> None:
         with pytest.raises(ValidationStorageFailClosedError) as exc_info:
@@ -387,6 +422,68 @@ def test_validation_storage_factory_explicit_empty_args_do_not_fallback_to_env(
         )
         assert isinstance(store, InMemoryValidationMetadataStore)
         assert create_calls == []
+
+    asyncio.run(_run())
+
+
+def test_validation_storage_factory_empty_supabase_key_env_does_not_use_service_role_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _run() -> None:
+        create_calls: list[tuple[str, str]] = []
+
+        async def _fake_create_async_client(url: str, key: str) -> _FakeSupabaseClient:
+            create_calls.append((url, key))
+            return _FakeSupabaseClient()
+
+        monkeypatch.setenv("SUPABASE_URL", "https://env.supabase.test")
+        monkeypatch.setenv("SUPABASE_KEY", "")
+        monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
+        monkeypatch.setitem(
+            sys.modules,
+            "supabase",
+            SimpleNamespace(create_async_client=_fake_create_async_client),
+        )
+
+        store = await create_validation_metadata_store(
+            runtime_profile="development",
+            supabase_url=None,
+            supabase_key=None,
+            allow_in_memory_fallback=True,
+        )
+        assert isinstance(store, InMemoryValidationMetadataStore)
+        assert create_calls == []
+
+    asyncio.run(_run())
+
+
+def test_validation_storage_factory_uses_service_role_key_when_primary_key_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _run() -> None:
+        create_calls: list[tuple[str, str]] = []
+
+        async def _fake_create_async_client(url: str, key: str) -> _FakeSupabaseClient:
+            create_calls.append((url, key))
+            return _FakeSupabaseClient()
+
+        monkeypatch.setenv("SUPABASE_URL", "https://env.supabase.test")
+        monkeypatch.delenv("SUPABASE_KEY", raising=False)
+        monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
+        monkeypatch.setitem(
+            sys.modules,
+            "supabase",
+            SimpleNamespace(create_async_client=_fake_create_async_client),
+        )
+
+        store = await create_validation_metadata_store(
+            runtime_profile="development",
+            supabase_url=None,
+            supabase_key=None,
+            allow_in_memory_fallback=True,
+        )
+        assert isinstance(store, SupabaseValidationMetadataStore)
+        assert create_calls == [("https://env.supabase.test", "service-role-key")]
 
     asyncio.run(_run())
 

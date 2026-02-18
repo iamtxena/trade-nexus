@@ -180,6 +180,12 @@ class ValidationPolicyConfig:
         profile = payload.get("profile", "STANDARD")
         if profile not in _PROFILE_METRIC_TOLERANCE_PCT:
             raise ValueError(f"Unsupported validation profile: {profile!r}")
+        hard_fail_on_missing = payload.get("hardFailOnMissingIndicators", True)
+        if hard_fail_on_missing is not True:
+            raise ValueError("hardFailOnMissingIndicators must be true.")
+        fail_closed_on_missing_evidence = payload.get("failClosedOnEvidenceUnavailable", True)
+        if fail_closed_on_missing_evidence is not True:
+            raise ValueError("failClosedOnEvidenceUnavailable must be true.")
         return cls(
             profile=profile,
             block_merge_on_fail=bool(payload.get("blockMergeOnFail", True)),
@@ -187,8 +193,8 @@ class ValidationPolicyConfig:
             block_merge_on_agent_fail=bool(payload.get("blockMergeOnAgentFail", True)),
             block_release_on_agent_fail=bool(payload.get("blockReleaseOnAgentFail", False)),
             require_trader_review=bool(payload.get("requireTraderReview", False)),
-            hard_fail_on_missing_indicators=bool(payload.get("hardFailOnMissingIndicators", True)),
-            fail_closed_on_evidence_unavailable=bool(payload.get("failClosedOnEvidenceUnavailable", True)),
+            hard_fail_on_missing_indicators=True,
+            fail_closed_on_evidence_unavailable=True,
             metric_drift_tolerance_pct=metric_drift_tolerance_pct,
         )
 

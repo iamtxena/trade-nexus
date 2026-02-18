@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import pytest
+
 from src.platform_api.services.validation_deterministic_service import (
     DeterministicValidationEngine,
     DeterministicValidationEvidence,
@@ -330,3 +332,23 @@ def test_indicator_collection_uses_fallback_key_when_primary_is_whitespace() -> 
     result = engine.check_indicator_fidelity(evidence=evidence, policy=_policy())
     assert result.status == "pass"
     assert result.missing_indicators == ()
+
+
+def test_from_contract_payload_rejects_non_blocking_const_policy_flags() -> None:
+    with pytest.raises(ValueError):
+        ValidationPolicyConfig.from_contract_payload(
+            {
+                "profile": "STANDARD",
+                "hardFailOnMissingIndicators": False,
+                "failClosedOnEvidenceUnavailable": True,
+            }
+        )
+
+    with pytest.raises(ValueError):
+        ValidationPolicyConfig.from_contract_payload(
+            {
+                "profile": "STANDARD",
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": False,
+            }
+        )

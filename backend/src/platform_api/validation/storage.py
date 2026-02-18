@@ -9,6 +9,7 @@ This module provides:
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import hashlib
 import inspect
@@ -487,23 +488,33 @@ class SupabaseValidationMetadataStore:
         review_state: ValidationReviewStateMetadata | None,
         blob_refs: Sequence[ValidationBlobReferenceMetadata],
     ) -> None:
-        await self._upsert(
-            table=self._runs_table,
-            payload=_run_row_from_metadata(metadata),
-            on_conflict="run_id",
-        )
-        if review_state is not None:
+        snapshot = await self._capture_run_bundle(run_id=metadata.run_id)
+        try:
             await self._upsert(
-                table=self._review_table,
-                payload=_review_row_from_metadata(review_state),
+                table=self._runs_table,
+                payload=_run_row_from_metadata(metadata),
                 on_conflict="run_id",
             )
-        if blob_refs:
-            await self._upsert(
-                table=self._blob_refs_table,
-                payload=[_blob_ref_row_from_metadata(item) for item in blob_refs],
-                on_conflict="run_id,kind",
-            )
+            if review_state is not None:
+                await self._upsert(
+                    table=self._review_table,
+                    payload=_review_row_from_metadata(review_state),
+                    on_conflict="run_id",
+                )
+            if blob_refs:
+                await self._upsert(
+                    table=self._blob_refs_table,
+                    payload=[_blob_ref_row_from_metadata(item) for item in blob_refs],
+                    on_conflict="run_id,kind",
+                )
+        except Exception as exc:
+            try:
+                await self._restore_run_bundle(run_id=metadata.run_id, snapshot=snapshot)
+            except Exception as rollback_exc:
+                raise ValidationMetadataStoreError(
+                    f"Validation metadata upsert failed and rollback failed: {rollback_exc}"
+                ) from exc
+            raise
 
     async def get_run(self, *, run_id: str, tenant_id: str, user_id: str) -> PersistedValidationRun | None:
         run_row = await self._select_one(
@@ -568,6 +579,12 @@ class SupabaseValidationMetadataStore:
         query = self._table(table).upsert(payload, on_conflict=on_conflict)
         await self._execute(query)
 
+    async def _delete_where(self, *, table: str, filters: dict[str, object]) -> None:
+        query = self._table(table).delete()
+        for key, value in filters.items():
+            query = query.eq(key, value)
+        await self._execute(query)
+
     async def _select_one(self, *, table: str, filters: dict[str, object]) -> dict[str, Any] | None:
         rows = await self._select_many(table=table, filters=filters)
         if not rows:
@@ -591,6 +608,10 @@ class SupabaseValidationMetadataStore:
         for item in data:
             if isinstance(item, dict):
                 rows.append(item)
+            else:
+                raise ValidationMetadataStoreError(
+                    f"Supabase response for table {table} contained non-dict item: {type(item).__name__}."
+                )
         return rows
 
     def _table(self, table: str) -> Any:
@@ -605,10 +626,63 @@ class SupabaseValidationMetadataStore:
     async def _execute(self, query: Any) -> Any:
         if not hasattr(query, "execute"):
             raise ValidationMetadataStoreError("Supabase query object does not expose execute().")
-        result = query.execute()
-        if inspect.isawaitable(result):
-            result = await result
+        execute = query.execute
+        if inspect.iscoroutinefunction(execute):
+            result = await execute()
+        else:
+            result = await asyncio.to_thread(execute)
+            if inspect.isawaitable(result):
+                result = await result
         return _extract_supabase_data(result)
+
+    async def _capture_run_bundle(self, *, run_id: str) -> dict[str, object]:
+        run_row = await self._select_one(table=self._runs_table, filters={"run_id": run_id})
+        review_row = await self._select_one(table=self._review_table, filters={"run_id": run_id})
+        blob_rows = await self._select_many(table=self._blob_refs_table, filters={"run_id": run_id})
+        return {
+            "run_row": run_row,
+            "review_row": review_row,
+            "blob_rows": blob_rows,
+        }
+
+    async def _restore_run_bundle(self, *, run_id: str, snapshot: dict[str, object]) -> None:
+        run_row = snapshot.get("run_row")
+        review_row = snapshot.get("review_row")
+        blob_rows = snapshot.get("blob_rows")
+
+        if run_row is None:
+            await self._delete_where(table=self._runs_table, filters={"run_id": run_id})
+            return
+
+        if not isinstance(run_row, dict):
+            raise ValidationMetadataStoreError("Rollback snapshot for run_row must be a dict.")
+        await self._upsert(table=self._runs_table, payload=run_row, on_conflict="run_id")
+
+        if review_row is None:
+            await self._delete_where(table=self._review_table, filters={"run_id": run_id})
+        else:
+            if not isinstance(review_row, dict):
+                raise ValidationMetadataStoreError("Rollback snapshot for review_row must be a dict.")
+            await self._upsert(table=self._review_table, payload=review_row, on_conflict="run_id")
+
+        await self._delete_where(table=self._blob_refs_table, filters={"run_id": run_id})
+        if blob_rows is None:
+            return
+        if not isinstance(blob_rows, list):
+            raise ValidationMetadataStoreError("Rollback snapshot for blob_rows must be a list.")
+        restored_blobs: list[dict[str, object]] = []
+        for item in blob_rows:
+            if not isinstance(item, dict):
+                raise ValidationMetadataStoreError(
+                    f"Rollback snapshot blob_rows contains non-dict item: {type(item).__name__}."
+                )
+            restored_blobs.append(item)
+        if restored_blobs:
+            await self._upsert(
+                table=self._blob_refs_table,
+                payload=restored_blobs,
+                on_conflict="run_id,kind",
+            )
 
 
 def _extract_supabase_data(result: object) -> object:
@@ -739,7 +813,7 @@ def _baseline_metadata_from_row(row: dict[str, Any]) -> ValidationBaselineMetada
     )
 
 
-def create_validation_metadata_store(
+async def create_validation_metadata_store(
     *,
     runtime_profile: str | None = None,
     supabase_url: str | None = None,
@@ -759,7 +833,7 @@ def create_validation_metadata_store(
     resolved_key = supabase_key or os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     if resolved_url and resolved_key:
         try:
-            from supabase import create_client
+            from supabase import create_async_client
         except Exception as exc:  # pragma: no cover - import path depends on runtime package availability
             if _is_production_profile(profile):
                 raise ValidationStorageFailClosedError(
@@ -770,7 +844,19 @@ def create_validation_metadata_store(
             raise ValidationStorageFailClosedError(
                 "Validation metadata storage unavailable and in-memory fallback disabled."
             ) from exc
-        return SupabaseValidationMetadataStore(create_client(resolved_url, resolved_key))
+        try:
+            async_client = await create_async_client(resolved_url, resolved_key)
+        except Exception as exc:
+            if _is_production_profile(profile):
+                raise ValidationStorageFailClosedError(
+                    "Validation metadata storage failed closed: Supabase async client creation failed in production profile."
+                ) from exc
+            if allow_in_memory_fallback:
+                return InMemoryValidationMetadataStore()
+            raise ValidationStorageFailClosedError(
+                "Validation metadata storage unavailable and in-memory fallback disabled."
+            ) from exc
+        return SupabaseValidationMetadataStore(async_client)
 
     if _is_production_profile(profile):
         raise ValidationStorageFailClosedError(

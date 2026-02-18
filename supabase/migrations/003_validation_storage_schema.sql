@@ -73,3 +73,60 @@ create index if not exists idx_validation_baselines_tenant_user_created
 
 create unique index if not exists idx_validation_baselines_unique_name_per_scope
   on validation_baselines (tenant_id, user_id, name);
+
+alter table validation_runs enable row level security;
+alter table validation_review_states enable row level security;
+alter table validation_blob_refs enable row level security;
+alter table validation_baselines enable row level security;
+
+drop policy if exists "Users can manage own validation runs" on validation_runs;
+create policy "Users can manage own validation runs" on validation_runs
+  for all
+  using (auth.jwt() ->> 'sub' = user_id)
+  with check (auth.jwt() ->> 'sub' = user_id);
+
+drop policy if exists "Users can manage own validation review states" on validation_review_states;
+create policy "Users can manage own validation review states" on validation_review_states
+  for all
+  using (
+    exists (
+      select 1
+      from validation_runs runs
+      where runs.run_id = validation_review_states.run_id
+        and auth.jwt() ->> 'sub' = runs.user_id
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from validation_runs runs
+      where runs.run_id = validation_review_states.run_id
+        and auth.jwt() ->> 'sub' = runs.user_id
+    )
+  );
+
+drop policy if exists "Users can manage own validation blob refs" on validation_blob_refs;
+create policy "Users can manage own validation blob refs" on validation_blob_refs
+  for all
+  using (
+    exists (
+      select 1
+      from validation_runs runs
+      where runs.run_id = validation_blob_refs.run_id
+        and auth.jwt() ->> 'sub' = runs.user_id
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from validation_runs runs
+      where runs.run_id = validation_blob_refs.run_id
+        and auth.jwt() ->> 'sub' = runs.user_id
+    )
+  );
+
+drop policy if exists "Users can manage own validation baselines" on validation_baselines;
+create policy "Users can manage own validation baselines" on validation_baselines
+  for all
+  using (auth.jwt() ->> 'sub' = user_id)
+  with check (auth.jwt() ->> 'sub' = user_id);

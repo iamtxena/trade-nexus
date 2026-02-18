@@ -14,6 +14,7 @@ from src.platform_api.validation.storage import (
     SupabaseValidationMetadataStore,
     ValidationBaselineMetadata,
     ValidationBlobReferenceMetadata,
+    ValidationMetadataStoreError,
     ValidationReviewStateMetadata,
     ValidationRunDecision,
     ValidationRunMetadata,
@@ -34,8 +35,9 @@ class _FakeSupabaseResult:
 
 
 class _FakeSupabaseQuery:
-    def __init__(self, tables: dict[str, list[dict[str, object]]], table: str) -> None:
-        self._tables = tables
+    def __init__(self, client: _FakeSupabaseClient, table: str) -> None:
+        self._client = client
+        self._tables = client._tables
         self._table = table
         self._operation = "select"
         self._filters: list[tuple[str, object]] = []
@@ -56,20 +58,30 @@ class _FakeSupabaseQuery:
         self._on_conflict = on_conflict
         return self
 
+    def delete(self) -> _FakeSupabaseQuery:
+        self._operation = "delete"
+        return self
+
     def execute(self) -> _FakeSupabaseResult:
         if self._operation == "upsert":
             return _FakeSupabaseResult(self._execute_upsert())
+        if self._operation == "delete":
+            return _FakeSupabaseResult(self._execute_delete())
         return _FakeSupabaseResult(self._execute_select())
 
-    def _execute_select(self) -> list[dict[str, object]]:
+    def _execute_select(self) -> list[object]:
         rows = self._tables.setdefault(self._table, [])
-        selected: list[dict[str, object]] = []
+        selected: list[object] = []
         for row in rows:
             if all(row.get(key) == value for key, value in self._filters):
                 selected.append(copy.deepcopy(row))
+        if self._table in self._client.non_dict_select_tables and selected:
+            selected.append("non-dict-row")
         return selected
 
     def _execute_upsert(self) -> list[dict[str, object]]:
+        if self._table in self._client.fail_upsert_tables:
+            raise RuntimeError(f"forced-upsert-failure:{self._table}")
         rows = self._tables.setdefault(self._table, [])
         conflict_keys = [key.strip() for key in (self._on_conflict or "").split(",") if key.strip()]
         payload_items = self._payload if isinstance(self._payload, list) else [self._payload]
@@ -94,13 +106,27 @@ class _FakeSupabaseQuery:
             stored.append(copy.deepcopy(row))
         return stored
 
+    def _execute_delete(self) -> list[dict[str, object]]:
+        rows = self._tables.setdefault(self._table, [])
+        kept: list[dict[str, object]] = []
+        removed: list[dict[str, object]] = []
+        for row in rows:
+            if all(row.get(key) == value for key, value in self._filters):
+                removed.append(copy.deepcopy(row))
+            else:
+                kept.append(row)
+        self._tables[self._table] = kept
+        return removed
+
 
 class _FakeSupabaseClient:
     def __init__(self) -> None:
         self._tables: dict[str, list[dict[str, object]]] = {}
+        self.fail_upsert_tables: set[str] = set()
+        self.non_dict_select_tables: set[str] = set()
 
     def table(self, table_name: str) -> _FakeSupabaseQuery:
-        return _FakeSupabaseQuery(self._tables, table_name)
+        return _FakeSupabaseQuery(self, table_name)
 
 
 class _RecordingVectorHook(ValidationVectorHook):
@@ -303,21 +329,97 @@ def test_blob_reference_integrity_and_checksum_contract() -> None:
 
 
 def test_validation_storage_factory_fails_closed_in_production_without_supabase() -> None:
-    with pytest.raises(ValidationStorageFailClosedError) as exc_info:
-        create_validation_metadata_store(
-            runtime_profile="production",
+    async def _run() -> None:
+        with pytest.raises(ValidationStorageFailClosedError) as exc_info:
+            await create_validation_metadata_store(
+                runtime_profile="production",
+                supabase_url="",
+                supabase_key="",
+                allow_in_memory_fallback=True,
+            )
+        assert exc_info.value.code == "VALIDATION_STORAGE_FAIL_CLOSED"
+
+    asyncio.run(_run())
+
+
+def test_validation_storage_factory_uses_in_memory_in_non_production() -> None:
+    async def _run() -> None:
+        store = await create_validation_metadata_store(
+            runtime_profile="development",
             supabase_url="",
             supabase_key="",
             allow_in_memory_fallback=True,
         )
-    assert exc_info.value.code == "VALIDATION_STORAGE_FAIL_CLOSED"
+        assert isinstance(store, InMemoryValidationMetadataStore)
+
+    asyncio.run(_run())
 
 
-def test_validation_storage_factory_uses_in_memory_in_non_production() -> None:
-    store = create_validation_metadata_store(
-        runtime_profile="development",
-        supabase_url="",
-        supabase_key="",
-        allow_in_memory_fallback=True,
-    )
-    assert isinstance(store, InMemoryValidationMetadataStore)
+def test_supabase_store_rolls_back_on_partial_upsert_failure() -> None:
+    async def _run() -> None:
+        client = _FakeSupabaseClient()
+        store = SupabaseValidationMetadataStore(client)
+        service = ValidationStorageService(metadata_store=store)
+
+        original_run = _run_metadata(status="queued", final_decision="pending")
+        original_review = _review_metadata(trader_status="requested")
+        original_refs = _blob_refs(chart_payload=b'{"chart":"stable"}')
+
+        await service.persist_run(
+            metadata=original_run,
+            review_state=original_review,
+            blob_refs=original_refs,
+        )
+
+        client.fail_upsert_tables.add("validation_review_states")
+        with pytest.raises(RuntimeError, match="forced-upsert-failure:validation_review_states"):
+            await service.persist_run(
+                metadata=replace(
+                    original_run,
+                    status="completed",
+                    final_decision="pass",
+                    updated_at="2026-02-18T19:40:00Z",
+                ),
+                review_state=replace(
+                    original_review,
+                    trader_status="approved",
+                    updated_at="2026-02-18T19:40:00Z",
+                ),
+                blob_refs=_blob_refs(chart_payload=b'{"chart":"mutated"}'),
+            )
+
+        client.fail_upsert_tables.clear()
+        restored = await service.get_run(
+            run_id=original_run.run_id,
+            tenant_id=original_run.tenant_id,
+            user_id=original_run.user_id,
+        )
+        assert restored is not None
+        assert restored.metadata.status == "queued"
+        assert restored.metadata.final_decision == "pending"
+        assert restored.review_state is not None
+        assert restored.review_state.trader_status == "requested"
+        chart_ref = next(item for item in restored.blob_refs if item.kind == "chart_payload")
+        assert chart_ref.verify_payload(b'{"chart":"stable"}')
+
+    asyncio.run(_run())
+
+
+def test_supabase_store_rejects_non_dict_rows() -> None:
+    async def _run() -> None:
+        client = _FakeSupabaseClient()
+        store = SupabaseValidationMetadataStore(client)
+        service = ValidationStorageService(metadata_store=store)
+
+        run = _run_metadata(status="queued", final_decision="pending")
+        await service.persist_run(
+            metadata=run,
+            review_state=_review_metadata(),
+            blob_refs=_blob_refs(chart_payload=b'{"chart":"v1"}'),
+        )
+
+        client.non_dict_select_tables.add("validation_blob_refs")
+        with pytest.raises(ValidationMetadataStoreError, match="contained non-dict item"):
+            await service.get_run(run_id=run.run_id, tenant_id=run.tenant_id, user_id=run.user_id)
+
+    asyncio.run(_run())

@@ -79,6 +79,9 @@ jobs:
       - name: Run validation schema contract tests
         run: pytest backend/tests/contracts/test_validation_schema_contract.py
 
+      - name: Run SDK validation surface contract tests
+        run: pytest backend/tests/contracts/test_sdk_validation_contract_shape.py
+
       - name: Run backend contract behavior tests
         run: |
           pytest backend/tests/contracts \
@@ -86,7 +89,8 @@ jobs:
             --ignore=backend/tests/contracts/test_openapi_contract_freeze.py \
             --ignore=backend/tests/contracts/test_openapi_contract_v2_baseline.py \
             --ignore=backend/tests/contracts/test_openapi_contract_v2_validation_freeze.py \
-            --ignore=backend/tests/contracts/test_validation_schema_contract.py
+            --ignore=backend/tests/contracts/test_validation_schema_contract.py \
+            --ignore=backend/tests/contracts/test_sdk_validation_contract_shape.py
 
       - name: Validate SLO and alert baseline alignment
         run: python3 contracts/scripts/check-slo-alert-baseline.py

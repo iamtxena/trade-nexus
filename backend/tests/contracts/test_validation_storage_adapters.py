@@ -457,6 +457,37 @@ def test_validation_storage_factory_empty_supabase_key_env_uses_service_role_fal
     asyncio.run(_run())
 
 
+def test_validation_storage_factory_ignores_whitespace_service_role_key_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _run() -> None:
+        create_calls: list[tuple[str, str]] = []
+
+        async def _fake_create_async_client(url: str, key: str) -> _FakeSupabaseClient:
+            create_calls.append((url, key))
+            return _FakeSupabaseClient()
+
+        monkeypatch.setenv("SUPABASE_URL", "https://env.supabase.test")
+        monkeypatch.delenv("SUPABASE_KEY", raising=False)
+        monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "   ")
+        monkeypatch.setitem(
+            sys.modules,
+            "supabase",
+            SimpleNamespace(create_async_client=_fake_create_async_client),
+        )
+
+        store = await create_validation_metadata_store(
+            runtime_profile="development",
+            supabase_url=None,
+            supabase_key=None,
+            allow_in_memory_fallback=True,
+        )
+        assert isinstance(store, InMemoryValidationMetadataStore)
+        assert create_calls == []
+
+    asyncio.run(_run())
+
+
 def test_validation_storage_factory_uses_service_role_key_when_primary_key_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

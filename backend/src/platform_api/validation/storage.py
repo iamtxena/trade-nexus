@@ -927,7 +927,10 @@ async def create_validation_metadata_store(
         if primary_key is not None:
             resolved_key = primary_key
         else:
-            resolved_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            if isinstance(service_role_key, str) and service_role_key.strip() == "":
+                service_role_key = None
+            resolved_key = service_role_key
     if resolved_url and resolved_key:
         try:
             from supabase import create_async_client

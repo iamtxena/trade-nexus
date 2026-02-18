@@ -729,12 +729,14 @@ class SupabaseValidationMetadataStore:
                     rollback_errors.append(f"{self._review_table}: {exc!r}")
 
         restored_blobs: list[dict[str, object]] = []
+        can_restore_blob_rows = True
         if blob_rows is not None:
             if not isinstance(blob_rows, list):
                 rollback_errors.append(
                     f"{self._blob_refs_table}: rollback snapshot blob_rows must be list, "
                     f"got {type(blob_rows).__name__}."
                 )
+                can_restore_blob_rows = False
             else:
                 for item in blob_rows:
                     if not isinstance(item, dict):
@@ -742,23 +744,25 @@ class SupabaseValidationMetadataStore:
                             f"{self._blob_refs_table}: rollback snapshot blob_rows contains "
                             f"non-dict item {type(item).__name__}."
                         )
+                        can_restore_blob_rows = False
                         continue
                     restored_blobs.append(item)
 
-        try:
-            await self._delete_where(table=self._blob_refs_table, filters={"run_id": run_id})
-        except Exception as exc:
-            rollback_errors.append(f"{self._blob_refs_table}: {exc!r}")
-
-        if restored_blobs:
+        if can_restore_blob_rows:
             try:
-                await self._upsert(
-                    table=self._blob_refs_table,
-                    payload=restored_blobs,
-                    on_conflict="run_id,kind",
-                )
+                await self._delete_where(table=self._blob_refs_table, filters={"run_id": run_id})
             except Exception as exc:
                 rollback_errors.append(f"{self._blob_refs_table}: {exc!r}")
+
+            if restored_blobs:
+                try:
+                    await self._upsert(
+                        table=self._blob_refs_table,
+                        payload=restored_blobs,
+                        on_conflict="run_id,kind",
+                    )
+                except Exception as exc:
+                    rollback_errors.append(f"{self._blob_refs_table}: {exc!r}")
 
         if rollback_errors:
             raise ValidationMetadataStoreError(

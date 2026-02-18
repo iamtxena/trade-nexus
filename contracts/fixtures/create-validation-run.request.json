@@ -1,0 +1,23 @@
+{
+  "strategyId": "strat-001",
+  "providerRefId": "lona-strategy-123",
+  "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+  "requestedIndicators": [
+    "zigzag",
+    "ema"
+  ],
+  "datasetIds": [
+    "dataset-btc-1h-2025"
+  ],
+  "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+  "policy": {
+    "profile": "STANDARD",
+    "blockMergeOnFail": true,
+    "blockReleaseOnFail": true,
+    "blockMergeOnAgentFail": true,
+    "blockReleaseOnAgentFail": false,
+    "requireTraderReview": false,
+    "hardFailOnMissingIndicators": true,
+    "failClosedOnEvidenceUnavailable": true
+  }
+}

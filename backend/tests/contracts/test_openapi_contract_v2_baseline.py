@@ -23,6 +23,13 @@ def test_v2_paths_are_declared() -> None:
         "/v2/conversations/sessions:",
         "/v2/conversations/sessions/{sessionId}:",
         "/v2/conversations/sessions/{sessionId}/turns:",
+        "/v2/validation-runs:",
+        "/v2/validation-runs/{runId}:",
+        "/v2/validation-runs/{runId}/artifact:",
+        "/v2/validation-runs/{runId}/review:",
+        "/v2/validation-runs/{runId}/render:",
+        "/v2/validation-baselines:",
+        "/v2/validation-regressions/replay:",
     ):
         assert path in spec, f"Missing required v2 path: {path}"
 
@@ -39,6 +46,13 @@ def test_v2_operation_ids_are_declared() -> None:
         "createConversationSessionV2",
         "getConversationSessionV2",
         "createConversationTurnV2",
+        "createValidationRunV2",
+        "getValidationRunV2",
+        "getValidationRunArtifactV2",
+        "submitValidationRunReviewV2",
+        "createValidationRunRenderV2",
+        "createValidationBaselineV2",
+        "replayValidationRegressionV2",
     ):
         assert f"operationId: {operation_id}" in spec
 
@@ -57,5 +71,20 @@ def test_v2_schema_components_are_present() -> None:
         "ConversationSessionResponse:",
         "CreateConversationTurnRequest:",
         "ConversationTurnResponse:",
+        "ValidationProfile:",
+        "ValidationPolicyProfile:",
+        "ValidationRunArtifact:",
+        "ValidationLlmSnapshotArtifact:",
+        "CreateValidationRunRequest:",
+        "ValidationRunResponse:",
+        "ValidationArtifactResponse:",
+        "CreateValidationRunReviewRequest:",
+        "ValidationRunReviewResponse:",
+        "CreateValidationRenderRequest:",
+        "ValidationRenderResponse:",
+        "CreateValidationBaselineRequest:",
+        "ValidationBaselineResponse:",
+        "CreateValidationRegressionReplayRequest:",
+        "ValidationRegressionReplayResponse:",
     ):
         assert component in spec

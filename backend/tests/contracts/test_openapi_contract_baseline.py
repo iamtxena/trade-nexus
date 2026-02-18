@@ -84,11 +84,15 @@ def test_public_tags_are_declared() -> None:
     for tag in (
         "name: Health",
         "name: Research",
+        "name: Knowledge",
+        "name: Conversations",
+        "name: Validation",
         "name: Strategies",
         "name: Backtests",
         "name: Deployments",
         "name: Portfolios",
         "name: Orders",
         "name: Datasets",
+        "name: Data",
     ):
         assert tag in spec, f"Missing expected tag declaration: {tag}"

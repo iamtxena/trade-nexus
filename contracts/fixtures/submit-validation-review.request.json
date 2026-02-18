@@ -1,0 +1,7 @@
+{
+  "reviewerType": "agent",
+  "decision": "pass",
+  "summary": "Indicator fidelity and metric checks are within policy tolerance.",
+  "findings": [],
+  "comments": []
+}

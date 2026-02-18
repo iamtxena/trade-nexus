@@ -6,7 +6,9 @@ returns trigger
 language plpgsql
 as $$
 begin
-  new.updated_at = now();
+  if new.updated_at is null or new.updated_at = old.updated_at then
+    new.updated_at = now();
+  end if;
   return new;
 end;
 $$;

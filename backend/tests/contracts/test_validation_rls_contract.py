@@ -33,6 +33,7 @@ def test_validation_runs_updated_at_trigger_contract_is_present() -> None:
     assert "create or replace function set_validation_runs_updated_at()" in sql
     assert "create trigger trg_validation_runs_updated_at" in sql
     assert "before update on validation_runs" in sql
+    assert "if new.updated_at is null or new.updated_at = old.updated_at then" in sql
 
 
 def test_validation_runs_policy_requires_user_and_tenant_scope() -> None:

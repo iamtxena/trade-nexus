@@ -463,7 +463,14 @@ class InMemoryValidationMetadataStore:
             review_state=review_state,
             blob_refs=blob_refs,
         )
-        normalized_refs = tuple(sorted(copy.deepcopy(list(blob_refs)), key=lambda item: item.kind))
+        sorted_refs = sorted(copy.deepcopy(list(blob_refs)), key=lambda item: item.kind)
+        deduplicated_refs: list[ValidationBlobReferenceMetadata] = []
+        for ref in sorted_refs:
+            if deduplicated_refs and deduplicated_refs[-1].kind == ref.kind:
+                deduplicated_refs[-1] = ref
+            else:
+                deduplicated_refs.append(ref)
+        normalized_refs = tuple(deduplicated_refs)
         self._runs[metadata.run_id] = PersistedValidationRun(
             metadata=copy.deepcopy(metadata),
             review_state=copy.deepcopy(review_state),
@@ -917,9 +924,14 @@ async def create_validation_metadata_store(
     env_url = os.getenv("SUPABASE_URL")
     if isinstance(env_url, str) and env_url.strip() == "":
         env_url = None
-    resolved_url = supabase_url if supabase_url is not None else env_url
+    explicit_url = supabase_url
+    if isinstance(explicit_url, str) and explicit_url.strip() == "":
+        explicit_url = ""
+    resolved_url = explicit_url if explicit_url is not None else env_url
     if supabase_key is not None:
         resolved_key = supabase_key
+        if isinstance(resolved_key, str) and resolved_key.strip() == "":
+            resolved_key = ""
     else:
         primary_key = os.getenv("SUPABASE_KEY")
         if isinstance(primary_key, str) and primary_key.strip() == "":

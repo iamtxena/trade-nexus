@@ -350,6 +350,35 @@ def test_blob_reference_integrity_and_checksum_contract() -> None:
         validate_blob_payload_integrity(ref, payload + b"tamper")
 
 
+def test_in_memory_store_deduplicates_blob_refs_by_kind() -> None:
+    async def _run() -> None:
+        store = InMemoryValidationMetadataStore()
+        service = ValidationStorageService(metadata_store=store)
+
+        run = _run_metadata(status="queued", final_decision="pending")
+        refs = _blob_refs(chart_payload=b'{"chart":"v1"}')
+        duplicate_chart = ValidationBlobReferenceMetadata.from_payload(
+            run_id=run.run_id,
+            kind="chart_payload",
+            ref="blob://validation/valrun-20260218-0001/chart-payload-v2.json",
+            payload=b'{"chart":"v2"}',
+            content_type="application/json",
+        )
+
+        await service.persist_run(
+            metadata=run,
+            review_state=None,
+            blob_refs=[refs[0], refs[1], duplicate_chart],
+        )
+
+        persisted = await service.get_run(run_id=run.run_id, tenant_id=run.tenant_id, user_id=run.user_id)
+        assert persisted is not None
+        assert [item.kind for item in persisted.blob_refs] == ["backtest_report", "chart_payload"]
+        assert persisted.blob_refs[1].verify_payload(b'{"chart":"v2"}')
+
+    asyncio.run(_run())
+
+
 def test_validation_storage_service_treats_vector_hook_as_best_effort() -> None:
     async def _run() -> None:
         metadata_store = InMemoryValidationMetadataStore()
@@ -418,6 +447,36 @@ def test_validation_storage_factory_explicit_empty_args_do_not_fallback_to_env(
             runtime_profile="development",
             supabase_url="",
             supabase_key="",
+            allow_in_memory_fallback=True,
+        )
+        assert isinstance(store, InMemoryValidationMetadataStore)
+        assert create_calls == []
+
+    asyncio.run(_run())
+
+
+def test_validation_storage_factory_explicit_whitespace_args_do_not_fallback_to_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _run() -> None:
+        create_calls: list[tuple[str, str]] = []
+
+        async def _fake_create_async_client(url: str, key: str) -> _FakeSupabaseClient:
+            create_calls.append((url, key))
+            return _FakeSupabaseClient()
+
+        monkeypatch.setenv("SUPABASE_URL", "https://env.supabase.test")
+        monkeypatch.setenv("SUPABASE_KEY", "env-key")
+        monkeypatch.setitem(
+            sys.modules,
+            "supabase",
+            SimpleNamespace(create_async_client=_fake_create_async_client),
+        )
+
+        store = await create_validation_metadata_store(
+            runtime_profile="development",
+            supabase_url="   ",
+            supabase_key="   ",
             allow_in_memory_fallback=True,
         )
         assert isinstance(store, InMemoryValidationMetadataStore)

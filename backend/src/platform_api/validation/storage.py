@@ -692,11 +692,14 @@ class SupabaseValidationMetadataStore:
                 rollback_errors.append(f"{self._runs_table}: {exc!r}")
         else:
             if not isinstance(run_row, dict):
-                raise ValidationMetadataStoreError("Rollback snapshot for run_row must be a dict.")
-            try:
-                await self._upsert(table=self._runs_table, payload=run_row, on_conflict="run_id")
-            except Exception as exc:
-                rollback_errors.append(f"{self._runs_table}: {exc!r}")
+                rollback_errors.append(
+                    f"{self._runs_table}: rollback snapshot run_row must be dict, got {type(run_row).__name__}."
+                )
+            else:
+                try:
+                    await self._upsert(table=self._runs_table, payload=run_row, on_conflict="run_id")
+                except Exception as exc:
+                    rollback_errors.append(f"{self._runs_table}: {exc!r}")
 
         if review_row is None:
             try:
@@ -705,22 +708,32 @@ class SupabaseValidationMetadataStore:
                 rollback_errors.append(f"{self._review_table}: {exc!r}")
         else:
             if not isinstance(review_row, dict):
-                raise ValidationMetadataStoreError("Rollback snapshot for review_row must be a dict.")
-            try:
-                await self._upsert(table=self._review_table, payload=review_row, on_conflict="run_id")
-            except Exception as exc:
-                rollback_errors.append(f"{self._review_table}: {exc!r}")
+                rollback_errors.append(
+                    f"{self._review_table}: rollback snapshot review_row must be dict, "
+                    f"got {type(review_row).__name__}."
+                )
+            else:
+                try:
+                    await self._upsert(table=self._review_table, payload=review_row, on_conflict="run_id")
+                except Exception as exc:
+                    rollback_errors.append(f"{self._review_table}: {exc!r}")
 
         restored_blobs: list[dict[str, object]] = []
         if blob_rows is not None:
             if not isinstance(blob_rows, list):
-                raise ValidationMetadataStoreError("Rollback snapshot for blob_rows must be a list.")
-            for item in blob_rows:
-                if not isinstance(item, dict):
-                    raise ValidationMetadataStoreError(
-                        f"Rollback snapshot blob_rows contains non-dict item: {type(item).__name__}."
-                    )
-                restored_blobs.append(item)
+                rollback_errors.append(
+                    f"{self._blob_refs_table}: rollback snapshot blob_rows must be list, "
+                    f"got {type(blob_rows).__name__}."
+                )
+            else:
+                for item in blob_rows:
+                    if not isinstance(item, dict):
+                        rollback_errors.append(
+                            f"{self._blob_refs_table}: rollback snapshot blob_rows contains "
+                            f"non-dict item {type(item).__name__}."
+                        )
+                        continue
+                    restored_blobs.append(item)
 
         try:
             await self._delete_where(table=self._blob_refs_table, filters={"run_id": run_id})

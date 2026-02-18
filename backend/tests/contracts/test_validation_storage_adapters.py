@@ -542,3 +542,63 @@ def test_supabase_delete_where_requires_filters() -> None:
             await store._delete_where(table="validation_runs", filters={})  # noqa: SLF001
 
     asyncio.run(_run())
+
+
+def test_supabase_rollback_type_errors_do_not_abort_blob_restoration() -> None:
+    async def _run() -> None:
+        client = _FakeSupabaseClient()
+        store = SupabaseValidationMetadataStore(client)
+        service = ValidationStorageService(metadata_store=store)
+
+        original_run = _run_metadata(status="queued", final_decision="pending")
+        original_review = _review_metadata(trader_status="requested")
+        original_refs = _blob_refs(chart_payload=b'{"chart":"stable"}')
+        await service.persist_run(
+            metadata=original_run,
+            review_state=original_review,
+            blob_refs=original_refs,
+        )
+
+        run_row_snapshot = copy.deepcopy(client._tables["validation_runs"][0])
+        blob_rows_snapshot = copy.deepcopy(client._tables["validation_blob_refs"])
+
+        async def _corrupt_capture(*, run_id: str) -> dict[str, object]:
+            assert run_id == original_run.run_id
+            return {
+                "run_row": run_row_snapshot,
+                "review_row": "not-a-dict",
+                "blob_rows": blob_rows_snapshot,
+            }
+
+        setattr(store, "_capture_run_bundle", _corrupt_capture)
+
+        client.fail_upsert_once_tables.add("validation_blob_refs")
+        with pytest.raises(ValidationMetadataStoreError, match="rollback failed"):
+            await service.persist_run(
+                metadata=replace(
+                    original_run,
+                    status="completed",
+                    final_decision="pass",
+                    updated_at="2026-02-18T21:17:00Z",
+                ),
+                review_state=replace(
+                    original_review,
+                    trader_status="approved",
+                    updated_at="2026-02-18T21:17:00Z",
+                ),
+                blob_refs=_blob_refs(chart_payload=b'{"chart":"mutated"}'),
+            )
+
+        restored = await service.get_run(
+            run_id=original_run.run_id,
+            tenant_id=original_run.tenant_id,
+            user_id=original_run.user_id,
+        )
+        assert restored is not None
+        assert restored.metadata.status == "queued"
+        chart_ref = next(item for item in restored.blob_refs if item.kind == "chart_payload")
+        assert chart_ref.verify_payload(b'{"chart":"stable"}')
+        assert restored.review_state is not None
+        assert restored.review_state.trader_status == "approved"
+
+    asyncio.run(_run())

@@ -3025,6 +3025,11 @@ components:
           oneOf:
             - $ref: '#/components/schemas/ValidationRunArtifact'
             - $ref: '#/components/schemas/ValidationLlmSnapshotArtifact'
+          discriminator:
+            propertyName: schemaVersion
+            mapping:
+              validation-run.v1: '#/components/schemas/ValidationRunArtifact'
+              validation-llm-snapshot.v1: '#/components/schemas/ValidationLlmSnapshotArtifact'
 
     CreateValidationRunRequest:
       type: object
@@ -3177,8 +3182,7 @@ components:
         candidateRunId:
           type: string
         status:
-          type: string
-          enum: [queued, running, completed, failed]
+          $ref: '#/components/schemas/ValidationRunStatus'
         decision:
           type: string
           enum: [pass, conditional_pass, fail, unknown]

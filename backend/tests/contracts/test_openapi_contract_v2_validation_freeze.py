@@ -43,9 +43,7 @@ def test_validation_v2_path_set_is_frozen() -> None:
 def test_validation_v2_operation_ids_are_frozen() -> None:
     spec = _spec_text()
     operation_ids = set(re.findall(r"^\s+operationId:\s+([A-Za-z0-9_]+)\s*$", spec, flags=re.MULTILINE))
-    discovered_validation_operation_ids = {
-        name for name in operation_ids if "Validation" in name or name == "replayValidationRegressionV2"
-    }
+    discovered_validation_operation_ids = {name for name in operation_ids if "Validation" in name}
     assert discovered_validation_operation_ids == EXPECTED_VALIDATION_V2_OPERATION_IDS
 
 

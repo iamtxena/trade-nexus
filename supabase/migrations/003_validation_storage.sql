@@ -32,7 +32,7 @@ begin
 end;
 $$ language plpgsql;
 
-create trigger trg_validation_runs_updated_at
+create or replace trigger trg_validation_runs_updated_at
   before update on validation_runs
   for each row execute function update_validation_updated_at();
 

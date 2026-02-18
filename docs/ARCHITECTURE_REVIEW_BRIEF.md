@@ -16,6 +16,7 @@
 | **Live Engine** | Real-time paper/live trade execution | `live-engine` |
 | **Lona** | Strategy generation, backtesting, scoring | External (lona.agency) |
 | **Data Module** | Market data ingestion, storage, filtering | `trader-data` (planned) |
+| **Validation Layer** | JSON-first strategy validation, regression gates, optional trader review | `trade-nexus` (new wave) |
 
 ### High-Level Architecture
 
@@ -113,6 +114,18 @@ This enables realistic backtesting where the agent has the same information it w
 | **Client** | Web/CLI/OpenClaw | User interaction, personal preferences |
 
 **Why not one agent per user?** Multi-tenant platforms need shared infrastructure. AI SDK gives us control over sessions while sharing resources.
+
+### 5. Validation-First Trader Review (new)
+
+Every strategy run should be validated through a JSON-first artifact that includes:
+
+- prompt and generated strategy output,
+- indicator declarations vs rendered indicator evidence,
+- trades and execution-log evidence,
+- data lineage and metric consistency checks,
+- optional human trader review state.
+
+HTML/PDF outputs are optional renderings derived from the same canonical JSON artifact. Merge/release gates are blocked on validation policy failures.
 
 ---
 

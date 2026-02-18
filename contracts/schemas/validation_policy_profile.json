@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trade-nexus.io/schemas/validation_policy_profile.json",
+  "title": "Trade Nexus Validation Policy Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profile",
+    "blockMergeOnFail",
+    "blockReleaseOnFail",
+    "blockMergeOnAgentFail",
+    "blockReleaseOnAgentFail",
+    "requireTraderReview",
+    "hardFailOnMissingIndicators",
+    "failClosedOnEvidenceUnavailable"
+  ],
+  "properties": {
+    "profile": {
+      "type": "string",
+      "enum": [
+        "FAST",
+        "STANDARD",
+        "EXPERT"
+      ]
+    },
+    "blockMergeOnFail": {
+      "type": "boolean"
+    },
+    "blockReleaseOnFail": {
+      "type": "boolean"
+    },
+    "blockMergeOnAgentFail": {
+      "type": "boolean"
+    },
+    "blockReleaseOnAgentFail": {
+      "type": "boolean"
+    },
+    "requireTraderReview": {
+      "type": "boolean"
+    },
+    "hardFailOnMissingIndicators": {
+      "type": "boolean",
+      "const": true
+    },
+    "failClosedOnEvidenceUnavailable": {
+      "type": "boolean",
+      "const": true
+    }
+  }
+}

@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trade-nexus.io/schemas/validation_llm_snapshot.json",
+  "title": "Trade Nexus Validation LLM Snapshot Artifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "sourceSchemaVersion",
+    "generatedAt",
+    "strategyId",
+    "requestedIndicators",
+    "deterministicChecks",
+    "policy",
+    "evidenceRefs",
+    "finalDecision"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "validation-llm-snapshot.v1"
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceSchemaVersion": {
+      "type": "string",
+      "const": "validation-run.v1"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "strategyId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requestedIndicators": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "deterministicChecks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "indicatorFidelityStatus",
+        "tradeCoherenceStatus",
+        "metricConsistencyStatus"
+      ],
+      "properties": {
+        "indicatorFidelityStatus": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail"
+          ]
+        },
+        "tradeCoherenceStatus": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail"
+          ]
+        },
+        "metricConsistencyStatus": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail"
+          ]
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "blockMergeOnFail",
+        "blockReleaseOnFail",
+        "blockMergeOnAgentFail",
+        "blockReleaseOnAgentFail",
+        "requireTraderReview",
+        "hardFailOnMissingIndicators",
+        "failClosedOnEvidenceUnavailable"
+      ],
+      "properties": {
+        "profile": {
+          "type": "string",
+          "enum": [
+            "FAST",
+            "STANDARD",
+            "EXPERT"
+          ]
+        },
+        "blockMergeOnFail": {
+          "type": "boolean"
+        },
+        "blockReleaseOnFail": {
+          "type": "boolean"
+        },
+        "blockMergeOnAgentFail": {
+          "type": "boolean"
+        },
+        "blockReleaseOnAgentFail": {
+          "type": "boolean"
+        },
+        "requireTraderReview": {
+          "type": "boolean"
+        },
+        "hardFailOnMissingIndicators": {
+          "type": "boolean",
+          "const": true
+        },
+        "failClosedOnEvidenceUnavailable": {
+          "type": "boolean",
+          "const": true
+        }
+      }
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "ref"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "strategy_code",
+              "backtest_report",
+              "trades",
+              "execution_logs",
+              "chart_payload"
+            ]
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "priority",
+          "confidence",
+          "summary"
+        ],
+        "properties": {
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "finalDecision": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "conditional_pass",
+        "fail"
+      ]
+    }
+  }
+}

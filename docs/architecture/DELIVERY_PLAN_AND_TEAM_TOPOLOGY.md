@@ -263,6 +263,57 @@ Tickets:
 3. No adapter call without explicit tenant/user context.
 4. No side-effecting write without idempotency policy.
 5. No merge if contract and implementation diverge.
+6. No merge/release if validation policy gate fails for required profile.
+
+## Post-GateX Validation Program (new wave)
+
+Objective:
+
+Build a production-ready strategy validation and trader review layer around Lona outputs, with JSON-first artifacts and regression gates.
+
+### Team grouping
+
+- Team V1: Validation Core (deterministic checks, schemas, policy engine)
+- Team V2: Agent Review (token-optimized review workflow, bounded tool access)
+- Team V3: Client Review UX (Trade Nexus web lane + CLI hooks)
+- Team V4: Storage and Baselines (Supabase metadata, blob artifacts, baseline replay)
+- Team VR: Independent Review Team (engineering + docs/governance signoff)
+- Master Architect: referee for cross-team disputes and gate decisions
+
+### Sector V: Validation Layer (cross-team)
+
+| Ticket | Repo | Dependencies | Description |
+|-------|------|--------------|-------------|
+| V-01 | trade-nexus | C-01 | Add validation domain schema (`validation_run.json`, `validation_llm_snapshot.json`) and policy model |
+| V-02 | trade-nexus | V-01 | Implement deterministic validation lane (indicator fidelity, trade/log coherence, metric checks) |
+| V-03 | trade-nexus | V-01 | Implement agent review lane with compact artifact input and evidence references |
+| V-04 | trade-nexus | V-01 | Implement validation storage adapters (Supabase metadata + blob evidence refs) |
+| V-05 | trade-nexus | V-02/V-03/V-04 | Add additive `/v2/validation-*` endpoints and contract tests |
+| V-06 | trade-nexus | V-04 | Implement baseline promotion + replay regression workflow |
+| V-07 | trade-nexus | V-06 + R-02 | Enforce merge/release gates on validation regressions |
+| V-08 | trade-nexus | V-05 | Implement optional render pipeline (html/pdf) from canonical JSON |
+| V-09 | trade-nexus | V-05 | Add trader review state machine (`not_requested`, `requested`, `approved`, `rejected`) |
+| V-10 | trading-cli | CLI-01 + V-05 | Add CLI commands for validation run/review/baseline/replay |
+| V-11 | trade-nexus frontend | V-05 + V-09 | Add web review lane for report view/comments/approval |
+| V-12 | trade-nexus + lona-gateway integration adapter | V-02/V-03 | Package validation core ports for future Lona-side embedding |
+
+### Validation wave checkpoints
+
+1. Checkpoint V-A:
+   - `V-01`, `V-02`, `V-04` merged with contract tests.
+2. Checkpoint V-B:
+   - `V-03`, `V-05`, `V-10` merged and usable via CLI.
+3. Checkpoint V-C:
+   - `V-06`, `V-07`, `V-09`, `V-11` merged with gating enabled.
+4. Checkpoint V-D:
+   - `V-08`, `V-12` merged; portability package and optional rendering finalized.
+
+### Validation definition of done
+
+1. Canonical JSON validation artifact produced for every required run.
+2. Deterministic validation and regression replay block merge and release on failure.
+3. Trader review can be enabled per run without being globally mandatory.
+4. No production fallback to mock/in-memory validation paths.
 
 ## Hand-off Package for Each Team
 

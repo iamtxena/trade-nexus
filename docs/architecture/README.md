@@ -27,6 +27,7 @@ If any document conflicts with implementation prototypes, treat these files as a
 | [DOCUMENTATION_IA_AND_GOVERNANCE.md](./DOCUMENTATION_IA_AND_GOVERNANCE.md) | Canonical docs IA, ownership, and gate governance |
 | [GAP_ANALYSIS_ASIS_TOBE.md](./GAP_ANALYSIS_ASIS_TOBE.md) | As-is gaps and exact change proposals |
 | [DELIVERY_PLAN_AND_TEAM_TOPOLOGY.md](./DELIVERY_PLAN_AND_TEAM_TOPOLOGY.md) | Delegation model, repo plan, and ticket sectors |
+| [STRATEGY_VALIDATION_AND_REVIEW_LAYER.md](./STRATEGY_VALIDATION_AND_REVIEW_LAYER.md) | JSON-first validation layer, review workflows, and regression gates |
 | [DATA_LIFECYCLE_AND_LONA_CONNECTOR_V2.md](./DATA_LIFECYCLE_AND_LONA_CONNECTOR_V2.md) | Large-file data lifecycle and Lona-compatible publish connector |
 | [GATE_TEAM_EXECUTION_PLAYBOOK.md](./GATE_TEAM_EXECUTION_PLAYBOOK.md) | Team/gate operating model and update templates |
 | [decisions/](./decisions/) | Architecture decision records (ADRs) for binding program choices |

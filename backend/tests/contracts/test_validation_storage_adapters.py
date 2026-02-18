@@ -426,7 +426,7 @@ def test_validation_storage_factory_explicit_empty_args_do_not_fallback_to_env(
     asyncio.run(_run())
 
 
-def test_validation_storage_factory_empty_supabase_key_env_does_not_use_service_role_fallback(
+def test_validation_storage_factory_empty_supabase_key_env_uses_service_role_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def _run() -> None:
@@ -451,8 +451,8 @@ def test_validation_storage_factory_empty_supabase_key_env_does_not_use_service_
             supabase_key=None,
             allow_in_memory_fallback=True,
         )
-        assert isinstance(store, InMemoryValidationMetadataStore)
-        assert create_calls == []
+        assert isinstance(store, SupabaseValidationMetadataStore)
+        assert create_calls == [("https://env.supabase.test", "service-role-key")]
 
     asyncio.run(_run())
 

@@ -914,11 +914,16 @@ async def create_validation_metadata_store(
     if supabase_client is not None:
         return SupabaseValidationMetadataStore(supabase_client)
 
-    resolved_url = supabase_url if supabase_url is not None else os.getenv("SUPABASE_URL")
+    env_url = os.getenv("SUPABASE_URL")
+    if isinstance(env_url, str) and env_url.strip() == "":
+        env_url = None
+    resolved_url = supabase_url if supabase_url is not None else env_url
     if supabase_key is not None:
         resolved_key = supabase_key
     else:
         primary_key = os.getenv("SUPABASE_KEY")
+        if isinstance(primary_key, str) and primary_key.strip() == "":
+            primary_key = None
         if primary_key is not None:
             resolved_key = primary_key
         else:

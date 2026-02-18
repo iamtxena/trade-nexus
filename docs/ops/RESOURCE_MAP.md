@@ -91,6 +91,7 @@
 | smoke-check.sh | Post-deploy health validation | .ops/scripts/ |
 | ops-drill.sh | 5-scenario operational readiness | .ops/scripts/ |
 | rollback.sh | Revision rollback with validation | .ops/scripts/ |
+| fix-kv-rbac.sh | Key Vault RBAC remediation | .ops/scripts/ |
 
 ## SLO Targets
 

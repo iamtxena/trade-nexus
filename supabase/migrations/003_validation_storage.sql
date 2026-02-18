@@ -41,8 +41,9 @@ create index if not exists idx_validation_runs_strategy on validation_runs (stra
 create index if not exists idx_validation_runs_user_created on validation_runs (user_id, created_at desc);
 
 alter table validation_runs enable row level security;
-create policy "Users can manage own rows" on validation_runs
-  for all using (auth.jwt() ->> 'sub' = user_id);
+-- Users can read own runs; mutations restricted to service role (governance table)
+create policy "Users can read own rows" on validation_runs
+  for select using (auth.jwt() ->> 'sub' = user_id);
 
 -- =============================================================
 -- validation_reviews — comments and verdicts
@@ -99,8 +100,9 @@ create index if not exists idx_validation_baselines_strategy on validation_basel
 create unique index if not exists idx_validation_baselines_active on validation_baselines (user_id, strategy_id) where is_active = true;
 
 alter table validation_baselines enable row level security;
-create policy "Users can manage own rows" on validation_baselines
-  for all using (auth.jwt() ->> 'sub' = user_id);
+-- Users can read own baselines; promotions restricted to service role (governance table)
+create policy "Users can read own rows" on validation_baselines
+  for select using (auth.jwt() ->> 'sub' = user_id);
 
 -- =============================================================
 -- validation_regression_results — replay comparison results
@@ -109,8 +111,8 @@ create table if not exists validation_regression_results (
   id uuid primary key default gen_random_uuid(),
   schema_version text not null default '1.0',
   user_id text not null,
-  baseline_id uuid not null references validation_baselines (id),
-  run_id uuid not null references validation_runs (id),
+  baseline_id uuid not null references validation_baselines (id) on delete cascade,
+  run_id uuid not null references validation_runs (id) on delete cascade,
   drift_metrics jsonb not null default '{}'::jsonb,
   policy_result text not null
     check (policy_result in ('pass', 'fail', 'warn')),
@@ -124,5 +126,6 @@ create index if not exists idx_validation_regression_run on validation_regressio
 create index if not exists idx_validation_regression_user on validation_regression_results (user_id);
 
 alter table validation_regression_results enable row level security;
-create policy "Users can manage own rows" on validation_regression_results
-  for all using (auth.jwt() ->> 'sub' = user_id);
+-- Users can read own results; mutations restricted to service role (governance table)
+create policy "Users can read own rows" on validation_regression_results
+  for select using (auth.jwt() ->> 'sub' = user_id);

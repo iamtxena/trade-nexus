@@ -19,6 +19,7 @@ tags:
   - name: Research
   - name: Knowledge
   - name: Conversations
+  - name: Validation
   - name: Strategies
   - name: Backtests
   - name: Deployments
@@ -1270,6 +1271,309 @@ paths:
         '404':
           $ref: '#/components/responses/Error404'
 
+  /v2/validation-runs:
+    post:
+      tags: [Validation]
+      summary: Start validation run for strategy artifacts
+      operationId: createValidationRunV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValidationRunRequest'
+            example:
+              strategyId: strat-001
+              providerRefId: lona-strategy-123
+              prompt: Build zig-zag strategy for BTC 1h with trend filter
+              requestedIndicators: [zigzag, ema]
+              datasetIds: [dataset-btc-1h-2025]
+              backtestReportRef: blob://validation/candidate/backtest-report.json
+              policy:
+                profile: STANDARD
+                blockMergeOnFail: true
+                blockReleaseOnFail: true
+                blockMergeOnAgentFail: true
+                blockReleaseOnAgentFail: false
+                requireTraderReview: false
+                hardFailOnMissingIndicators: true
+                failClosedOnEvidenceUnavailable: true
+      responses:
+        '202':
+          description: Validation run accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationRunResponse'
+              example:
+                requestId: req-validation-run-001
+                run:
+                  id: valrun-20260217-0001
+                  status: queued
+                  profile: STANDARD
+                  schemaVersion: validation-run.v1
+                  finalDecision: pending
+                  createdAt: '2026-02-17T10:30:00Z'
+                  updatedAt: '2026-02-17T10:30:00Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+
+  /v2/validation-runs/{runId}:
+    get:
+      tags: [Validation]
+      summary: Get validation run status
+      operationId: getValidationRunV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/ValidationRunId'
+      responses:
+        '200':
+          description: Validation run status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationRunResponse'
+              example:
+                requestId: req-validation-run-get-001
+                run:
+                  id: valrun-20260217-0001
+                  status: completed
+                  profile: STANDARD
+                  schemaVersion: validation-run.v1
+                  finalDecision: pass
+                  createdAt: '2026-02-17T10:30:00Z'
+                  updatedAt: '2026-02-17T10:35:00Z'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v2/validation-runs/{runId}/artifact:
+    get:
+      tags: [Validation]
+      summary: Get validation artifact payload
+      operationId: getValidationRunArtifactV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/ValidationRunId'
+      responses:
+        '200':
+          description: Validation artifact payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationArtifactResponse'
+              example:
+                requestId: req-validation-artifact-001
+                artifactType: validation_run
+                artifact:
+                  schemaVersion: validation-run.v1
+                  runId: valrun-20260217-0001
+                  createdAt: '2026-02-17T10:30:00Z'
+                  requestId: req-validation-run-001
+                  tenantId: tenant-001
+                  userId: user-001
+                  strategyRef:
+                    strategyId: strat-001
+                    provider: lona
+                    providerRefId: lona-strategy-123
+                  inputs:
+                    prompt: Build zig-zag strategy for BTC 1h with trend filter
+                    requestedIndicators: [zigzag, ema]
+                    datasetIds: [dataset-btc-1h-2025]
+                    backtestReportRef: blob://validation/valrun-20260217-0001/backtest-report.json
+                  outputs:
+                    strategyCodeRef: blob://validation/valrun-20260217-0001/strategy.py
+                    backtestReportRef: blob://validation/valrun-20260217-0001/backtest-report.json
+                    tradesRef: blob://validation/valrun-20260217-0001/trades.json
+                    executionLogsRef: blob://validation/valrun-20260217-0001/execution.log
+                    chartPayloadRef: blob://validation/valrun-20260217-0001/chart-payload.json
+                  deterministicChecks:
+                    indicatorFidelity:
+                      status: pass
+                      missingIndicators: []
+                    tradeCoherence:
+                      status: pass
+                      violations: []
+                    metricConsistency:
+                      status: pass
+                      driftPct: 0.8
+                  agentReview:
+                    status: pass
+                    summary: No indicator/render drift detected.
+                    findings: []
+                  traderReview:
+                    required: false
+                    status: not_requested
+                    comments: []
+                  policy:
+                    profile: STANDARD
+                    blockMergeOnFail: true
+                    blockReleaseOnFail: true
+                    blockMergeOnAgentFail: true
+                    blockReleaseOnAgentFail: false
+                    requireTraderReview: false
+                    hardFailOnMissingIndicators: true
+                    failClosedOnEvidenceUnavailable: true
+                  finalDecision: pass
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v2/validation-runs/{runId}/review:
+    post:
+      tags: [Validation]
+      summary: Submit validation review decision
+      operationId: submitValidationRunReviewV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/ValidationRunId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValidationRunReviewRequest'
+            example:
+              reviewerType: agent
+              decision: pass
+              summary: Indicator fidelity and metric checks are within policy tolerance.
+              findings: []
+              comments: []
+      responses:
+        '202':
+          description: Validation review accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationRunReviewResponse'
+              example:
+                requestId: req-validation-review-001
+                runId: valrun-20260217-0001
+                reviewAccepted: true
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v2/validation-runs/{runId}/render:
+    post:
+      tags: [Validation]
+      summary: Create optional html/pdf validation render artifact
+      operationId: createValidationRunRenderV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/ValidationRunId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValidationRenderRequest'
+            example:
+              format: html
+      responses:
+        '202':
+          description: Validation render accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationRenderResponse'
+              example:
+                requestId: req-validation-render-001
+                render:
+                  runId: valrun-20260217-0001
+                  format: html
+                  status: queued
+                  artifactRef: null
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v2/validation-baselines:
+    post:
+      tags: [Validation]
+      summary: Promote validation run as baseline
+      operationId: createValidationBaselineV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValidationBaselineRequest'
+            example:
+              runId: valrun-20260217-0001
+              name: btc-1h-zigzag-baseline
+              notes: Gate baseline approved for regression replay.
+      responses:
+        '201':
+          description: Validation baseline created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationBaselineResponse'
+              example:
+                requestId: req-validation-baseline-001
+                baseline:
+                  id: valbase-001
+                  runId: valrun-20260217-0001
+                  name: btc-1h-zigzag-baseline
+                  profile: STANDARD
+                  createdAt: '2026-02-17T10:40:00Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+
+  /v2/validation-regressions/replay:
+    post:
+      tags: [Validation]
+      summary: Replay validation regression against stored baseline
+      operationId: replayValidationRegressionV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValidationRegressionReplayRequest'
+            example:
+              baselineId: valbase-001
+              candidateRunId: valrun-20260217-0099
+      responses:
+        '202':
+          description: Validation regression replay accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationRegressionReplayResponse'
+              example:
+                requestId: req-validation-replay-001
+                replay:
+                  id: valreplay-001
+                  baselineId: valbase-001
+                  candidateRunId: valrun-20260217-0099
+                  status: queued
+                  decision: unknown
+                  summary: Replay accepted for execution.
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1347,6 +1651,12 @@ components:
         type: string
     SessionId:
       name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+    ValidationRunId:
+      name: runId
       in: path
       required: true
       schema:
@@ -2339,3 +2649,551 @@ components:
           type: string
         turn:
           $ref: '#/components/schemas/ConversationTurn'
+
+    ValidationProfile:
+      type: string
+      enum: [FAST, STANDARD, EXPERT]
+
+    ValidationDecision:
+      type: string
+      enum: [pass, conditional_pass, fail]
+
+    ValidationRunDecision:
+      type: string
+      enum: [pending, pass, conditional_pass, fail]
+
+    ValidationRunStatus:
+      type: string
+      enum: [queued, running, completed, failed]
+
+    ValidationCheckStatus:
+      type: string
+      enum: [pass, fail]
+
+    ValidationPolicyProfile:
+      type: object
+      required:
+        [
+          profile,
+          blockMergeOnFail,
+          blockReleaseOnFail,
+          blockMergeOnAgentFail,
+          blockReleaseOnAgentFail,
+          requireTraderReview,
+          hardFailOnMissingIndicators,
+          failClosedOnEvidenceUnavailable,
+        ]
+      properties:
+        profile:
+          $ref: '#/components/schemas/ValidationProfile'
+        blockMergeOnFail:
+          type: boolean
+        blockReleaseOnFail:
+          type: boolean
+        blockMergeOnAgentFail:
+          type: boolean
+        blockReleaseOnAgentFail:
+          type: boolean
+        requireTraderReview:
+          type: boolean
+        hardFailOnMissingIndicators:
+          type: boolean
+          enum: [true]
+        failClosedOnEvidenceUnavailable:
+          type: boolean
+          enum: [true]
+
+    ValidationRun:
+      type: object
+      required: [id, status, profile, schemaVersion, finalDecision, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        status:
+          $ref: '#/components/schemas/ValidationRunStatus'
+        profile:
+          $ref: '#/components/schemas/ValidationProfile'
+        schemaVersion:
+          type: string
+          enum: [validation-run.v1]
+        finalDecision:
+          $ref: '#/components/schemas/ValidationRunDecision'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ValidationRunResponse:
+      type: object
+      required: [requestId, run]
+      properties:
+        requestId:
+          type: string
+        run:
+          $ref: '#/components/schemas/ValidationRun'
+
+    ValidationStrategyRef:
+      type: object
+      required: [strategyId, provider, providerRefId]
+      properties:
+        strategyId:
+          type: string
+        provider:
+          type: string
+          enum: [lona]
+        providerRefId:
+          type: string
+
+    ValidationRunInputs:
+      type: object
+      required: [prompt, requestedIndicators, datasetIds, backtestReportRef]
+      properties:
+        prompt:
+          type: string
+        requestedIndicators:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        datasetIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        backtestReportRef:
+          type: string
+
+    ValidationRunOutputs:
+      type: object
+      required: [strategyCodeRef, backtestReportRef, tradesRef, executionLogsRef, chartPayloadRef]
+      properties:
+        strategyCodeRef:
+          type: string
+        backtestReportRef:
+          type: string
+        tradesRef:
+          type: string
+        executionLogsRef:
+          type: string
+        chartPayloadRef:
+          type: string
+
+    ValidationIndicatorFidelityCheck:
+      type: object
+      required: [status, missingIndicators]
+      properties:
+        status:
+          $ref: '#/components/schemas/ValidationCheckStatus'
+        missingIndicators:
+          type: array
+          items:
+            type: string
+
+    ValidationTradeCoherenceCheck:
+      type: object
+      required: [status, violations]
+      properties:
+        status:
+          $ref: '#/components/schemas/ValidationCheckStatus'
+        violations:
+          type: array
+          items:
+            type: string
+
+    ValidationMetricConsistencyCheck:
+      type: object
+      required: [status, driftPct]
+      properties:
+        status:
+          $ref: '#/components/schemas/ValidationCheckStatus'
+        driftPct:
+          type: number
+          minimum: 0
+
+    ValidationDeterministicChecks:
+      type: object
+      required: [indicatorFidelity, tradeCoherence, metricConsistency]
+      properties:
+        indicatorFidelity:
+          $ref: '#/components/schemas/ValidationIndicatorFidelityCheck'
+        tradeCoherence:
+          $ref: '#/components/schemas/ValidationTradeCoherenceCheck'
+        metricConsistency:
+          $ref: '#/components/schemas/ValidationMetricConsistencyCheck'
+
+    ValidationReviewFinding:
+      type: object
+      required: [id, priority, confidence, summary, evidenceRefs]
+      properties:
+        id:
+          type: string
+        priority:
+          type: integer
+          minimum: 0
+          maximum: 3
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        summary:
+          type: string
+        evidenceRefs:
+          type: array
+          minItems: 1
+          items:
+            type: string
+
+    ValidationAgentReview:
+      type: object
+      required: [status, summary, findings]
+      properties:
+        status:
+          $ref: '#/components/schemas/ValidationDecision'
+        summary:
+          type: string
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationReviewFinding'
+
+    ValidationTraderReviewStatus:
+      type: string
+      enum: [not_requested, requested, approved, rejected]
+
+    ValidationTraderReview:
+      type: object
+      required: [required, status, comments]
+      properties:
+        required:
+          type: boolean
+        status:
+          $ref: '#/components/schemas/ValidationTraderReviewStatus'
+        comments:
+          type: array
+          items:
+            type: string
+
+    ValidationRunArtifact:
+      type: object
+      required:
+        [
+          schemaVersion,
+          runId,
+          createdAt,
+          requestId,
+          tenantId,
+          userId,
+          strategyRef,
+          inputs,
+          outputs,
+          deterministicChecks,
+          agentReview,
+          traderReview,
+          policy,
+          finalDecision,
+        ]
+      properties:
+        schemaVersion:
+          type: string
+          enum: [validation-run.v1]
+        runId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+        tenantId:
+          type: string
+        userId:
+          type: string
+        strategyRef:
+          $ref: '#/components/schemas/ValidationStrategyRef'
+        inputs:
+          $ref: '#/components/schemas/ValidationRunInputs'
+        outputs:
+          $ref: '#/components/schemas/ValidationRunOutputs'
+        deterministicChecks:
+          $ref: '#/components/schemas/ValidationDeterministicChecks'
+        agentReview:
+          $ref: '#/components/schemas/ValidationAgentReview'
+        traderReview:
+          $ref: '#/components/schemas/ValidationTraderReview'
+        policy:
+          $ref: '#/components/schemas/ValidationPolicyProfile'
+        finalDecision:
+          $ref: '#/components/schemas/ValidationDecision'
+
+    ValidationSnapshotDeterministicChecks:
+      type: object
+      required: [indicatorFidelityStatus, tradeCoherenceStatus, metricConsistencyStatus]
+      properties:
+        indicatorFidelityStatus:
+          $ref: '#/components/schemas/ValidationCheckStatus'
+        tradeCoherenceStatus:
+          $ref: '#/components/schemas/ValidationCheckStatus'
+        metricConsistencyStatus:
+          $ref: '#/components/schemas/ValidationCheckStatus'
+
+    ValidationSnapshotEvidenceRef:
+      type: object
+      required: [kind, ref]
+      properties:
+        kind:
+          type: string
+          enum: [strategy_code, backtest_report, trades, execution_logs, chart_payload]
+        ref:
+          type: string
+
+    ValidationLlmSnapshotArtifact:
+      type: object
+      required:
+        [
+          schemaVersion,
+          runId,
+          sourceSchemaVersion,
+          generatedAt,
+          strategyId,
+          requestedIndicators,
+          deterministicChecks,
+          policy,
+          evidenceRefs,
+          finalDecision,
+        ]
+      properties:
+        schemaVersion:
+          type: string
+          enum: [validation-llm-snapshot.v1]
+        runId:
+          type: string
+        sourceSchemaVersion:
+          type: string
+          enum: [validation-run.v1]
+        generatedAt:
+          type: string
+          format: date-time
+        strategyId:
+          type: string
+        requestedIndicators:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        deterministicChecks:
+          $ref: '#/components/schemas/ValidationSnapshotDeterministicChecks'
+        policy:
+          $ref: '#/components/schemas/ValidationPolicyProfile'
+        evidenceRefs:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ValidationSnapshotEvidenceRef'
+        findings:
+          type: array
+          items:
+            type: object
+            required: [priority, confidence, summary]
+            properties:
+              priority:
+                type: integer
+                minimum: 0
+                maximum: 3
+              confidence:
+                type: number
+                minimum: 0
+                maximum: 1
+              summary:
+                type: string
+        finalDecision:
+          $ref: '#/components/schemas/ValidationDecision'
+
+    ValidationArtifactType:
+      type: string
+      enum: [validation_run, validation_llm_snapshot]
+
+    ValidationArtifactResponse:
+      type: object
+      required: [requestId, artifactType, artifact]
+      properties:
+        requestId:
+          type: string
+        artifactType:
+          $ref: '#/components/schemas/ValidationArtifactType'
+        artifact:
+          oneOf:
+            - $ref: '#/components/schemas/ValidationRunArtifact'
+            - $ref: '#/components/schemas/ValidationLlmSnapshotArtifact'
+          discriminator:
+            propertyName: schemaVersion
+            mapping:
+              validation-run.v1: '#/components/schemas/ValidationRunArtifact'
+              validation-llm-snapshot.v1: '#/components/schemas/ValidationLlmSnapshotArtifact'
+
+    CreateValidationRunRequest:
+      type: object
+      required: [strategyId, requestedIndicators, datasetIds, backtestReportRef, policy]
+      properties:
+        strategyId:
+          type: string
+        providerRefId:
+          type: string
+        prompt:
+          type: string
+        requestedIndicators:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        datasetIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        backtestReportRef:
+          type: string
+        policy:
+          $ref: '#/components/schemas/ValidationPolicyProfile'
+
+    CreateValidationRunReviewRequest:
+      type: object
+      required: [reviewerType, decision]
+      properties:
+        reviewerType:
+          type: string
+          enum: [agent, trader]
+        decision:
+          $ref: '#/components/schemas/ValidationDecision'
+        summary:
+          type: string
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationReviewFinding'
+        comments:
+          type: array
+          items:
+            type: string
+
+    ValidationRunReviewResponse:
+      type: object
+      required: [requestId, runId, reviewAccepted]
+      properties:
+        requestId:
+          type: string
+        runId:
+          type: string
+        reviewAccepted:
+          type: boolean
+
+    ValidationRenderFormat:
+      type: string
+      enum: [html, pdf]
+
+    CreateValidationRenderRequest:
+      type: object
+      required: [format]
+      properties:
+        format:
+          $ref: '#/components/schemas/ValidationRenderFormat'
+
+    ValidationRenderJob:
+      type: object
+      required: [runId, format, status]
+      properties:
+        runId:
+          type: string
+        format:
+          $ref: '#/components/schemas/ValidationRenderFormat'
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        artifactRef:
+          type: string
+          nullable: true
+
+    ValidationRenderResponse:
+      type: object
+      required: [requestId, render]
+      properties:
+        requestId:
+          type: string
+        render:
+          $ref: '#/components/schemas/ValidationRenderJob'
+
+    CreateValidationBaselineRequest:
+      type: object
+      required: [runId, name]
+      properties:
+        runId:
+          type: string
+        name:
+          type: string
+          minLength: 1
+        notes:
+          type: string
+
+    ValidationBaseline:
+      type: object
+      required: [id, runId, name, profile, createdAt]
+      properties:
+        id:
+          type: string
+        runId:
+          type: string
+        name:
+          type: string
+        profile:
+          $ref: '#/components/schemas/ValidationProfile'
+        createdAt:
+          type: string
+          format: date-time
+
+    ValidationBaselineResponse:
+      type: object
+      required: [requestId, baseline]
+      properties:
+        requestId:
+          type: string
+        baseline:
+          $ref: '#/components/schemas/ValidationBaseline'
+
+    CreateValidationRegressionReplayRequest:
+      type: object
+      required: [baselineId, candidateRunId]
+      properties:
+        baselineId:
+          type: string
+        candidateRunId:
+          type: string
+        policyOverrides:
+          type: object
+          additionalProperties: true
+
+    ValidationRegressionReplay:
+      type: object
+      required: [id, baselineId, candidateRunId, status, decision]
+      properties:
+        id:
+          type: string
+        baselineId:
+          type: string
+        candidateRunId:
+          type: string
+        status:
+          $ref: '#/components/schemas/ValidationRunStatus'
+        decision:
+          type: string
+          enum: [pass, conditional_pass, fail, unknown]
+        summary:
+          type: string
+
+    ValidationRegressionReplayResponse:
+      type: object
+      required: [requestId, replay]
+      properties:
+        requestId:
+          type: string
+        replay:
+          $ref: '#/components/schemas/ValidationRegressionReplay'

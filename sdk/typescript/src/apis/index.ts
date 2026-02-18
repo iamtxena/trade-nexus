@@ -11,3 +11,4 @@ export * from './OrdersApi';
 export * from './PortfoliosApi';
 export * from './ResearchApi';
 export * from './StrategiesApi';
+export * from './ValidationApi';

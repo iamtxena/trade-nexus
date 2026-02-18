@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import sys
 from collections.abc import Sequence
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -355,6 +357,36 @@ def test_validation_storage_factory_uses_in_memory_in_non_production() -> None:
     asyncio.run(_run())
 
 
+def test_validation_storage_factory_explicit_empty_args_do_not_fallback_to_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _run() -> None:
+        create_calls: list[tuple[str, str]] = []
+
+        async def _fake_create_async_client(url: str, key: str) -> _FakeSupabaseClient:
+            create_calls.append((url, key))
+            return _FakeSupabaseClient()
+
+        monkeypatch.setenv("SUPABASE_URL", "https://env.supabase.test")
+        monkeypatch.setenv("SUPABASE_KEY", "env-key")
+        monkeypatch.setitem(
+            sys.modules,
+            "supabase",
+            SimpleNamespace(create_async_client=_fake_create_async_client),
+        )
+
+        store = await create_validation_metadata_store(
+            runtime_profile="development",
+            supabase_url="",
+            supabase_key="",
+            allow_in_memory_fallback=True,
+        )
+        assert isinstance(store, InMemoryValidationMetadataStore)
+        assert create_calls == []
+
+    asyncio.run(_run())
+
+
 def test_supabase_store_rolls_back_on_partial_upsert_failure() -> None:
     async def _run() -> None:
         client = _FakeSupabaseClient()
@@ -401,6 +433,52 @@ def test_supabase_store_rolls_back_on_partial_upsert_failure() -> None:
         assert restored.review_state.trader_status == "requested"
         chart_ref = next(item for item in restored.blob_refs if item.kind == "chart_payload")
         assert chart_ref.verify_payload(b'{"chart":"stable"}')
+
+    asyncio.run(_run())
+
+
+def test_supabase_store_upsert_replaces_blob_refs_and_clears_review_state() -> None:
+    async def _run() -> None:
+        client = _FakeSupabaseClient()
+        store = SupabaseValidationMetadataStore(client)
+        service = ValidationStorageService(metadata_store=store)
+
+        initial_run = _run_metadata(status="queued", final_decision="pending")
+        await service.persist_run(
+            metadata=initial_run,
+            review_state=_review_metadata(trader_status="requested"),
+            blob_refs=_blob_refs(chart_payload=b'{"chart":"v1"}'),
+        )
+
+        updated_run = replace(
+            initial_run,
+            status="completed",
+            final_decision="pass",
+            updated_at="2026-02-18T19:45:00Z",
+        )
+        await service.persist_run(
+            metadata=updated_run,
+            review_state=None,
+            blob_refs=[
+                ValidationBlobReferenceMetadata.from_payload(
+                    run_id=updated_run.run_id,
+                    kind="backtest_report",
+                    ref="blob://validation/valrun-20260218-0001/backtest-report-v2.json",
+                    payload=b'{"metrics":{"sharpeRatio":1.5}}',
+                    content_type="application/json",
+                )
+            ],
+        )
+
+        persisted = await service.get_run(
+            run_id=updated_run.run_id,
+            tenant_id=updated_run.tenant_id,
+            user_id=updated_run.user_id,
+        )
+        assert persisted is not None
+        assert persisted.review_state is None
+        assert [item.kind for item in persisted.blob_refs] == ["backtest_report"]
+        assert persisted.blob_refs[0].verify_payload(b'{"metrics":{"sharpeRatio":1.5}}')
 
     asyncio.run(_run())
 

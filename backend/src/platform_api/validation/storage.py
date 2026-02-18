@@ -501,6 +501,9 @@ class SupabaseValidationMetadataStore:
                     payload=_review_row_from_metadata(review_state),
                     on_conflict="run_id",
                 )
+            else:
+                await self._delete_where(table=self._review_table, filters={"run_id": metadata.run_id})
+            await self._delete_where(table=self._blob_refs_table, filters={"run_id": metadata.run_id})
             if blob_refs:
                 await self._upsert(
                     table=self._blob_refs_table,
@@ -829,8 +832,11 @@ async def create_validation_metadata_store(
     if supabase_client is not None:
         return SupabaseValidationMetadataStore(supabase_client)
 
-    resolved_url = supabase_url or os.getenv("SUPABASE_URL")
-    resolved_key = supabase_key or os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    resolved_url = supabase_url if supabase_url is not None else os.getenv("SUPABASE_URL")
+    if supabase_key is not None:
+        resolved_key = supabase_key
+    else:
+        resolved_key = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     if resolved_url and resolved_key:
         try:
             from supabase import create_async_client

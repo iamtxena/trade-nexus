@@ -505,3 +505,40 @@ def test_supabase_store_rejects_non_dict_rows() -> None:
             await service.get_run(run_id=run.run_id, tenant_id=run.tenant_id, user_id=run.user_id)
 
     asyncio.run(_run())
+
+
+def test_storage_rejects_mismatched_child_run_ids() -> None:
+    async def _run() -> None:
+        run = _run_metadata(status="queued", final_decision="pending")
+        mismatched_review = replace(_review_metadata(), run_id="valrun-foreign-review")
+        valid_blob_ref = _blob_refs(chart_payload=b'{"chart":"v1"}')[0]
+        mismatched_blob_ref = replace(valid_blob_ref, run_id="valrun-foreign-blob")
+
+        stores = (
+            InMemoryValidationMetadataStore(),
+            SupabaseValidationMetadataStore(_FakeSupabaseClient()),
+        )
+        for store in stores:
+            with pytest.raises(ValidationMetadataStoreError, match="review_state.run_id must match"):
+                await store.upsert_run(
+                    metadata=run,
+                    review_state=mismatched_review,
+                    blob_refs=[valid_blob_ref],
+                )
+            with pytest.raises(ValidationMetadataStoreError, match="blob_refs run_id must match"):
+                await store.upsert_run(
+                    metadata=run,
+                    review_state=None,
+                    blob_refs=[mismatched_blob_ref],
+                )
+
+    asyncio.run(_run())
+
+
+def test_supabase_delete_where_requires_filters() -> None:
+    async def _run() -> None:
+        store = SupabaseValidationMetadataStore(_FakeSupabaseClient())
+        with pytest.raises(ValidationMetadataStoreError, match="_delete_where requires at least one filter"):
+            await store._delete_where(table="validation_runs", filters={})  # noqa: SLF001
+
+    asyncio.run(_run())

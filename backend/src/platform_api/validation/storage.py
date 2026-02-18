@@ -175,6 +175,24 @@ def _is_production_profile(profile: str | None) -> bool:
     return profile.strip().lower() in _PRODUCTION_PROFILE_ALIASES
 
 
+def _ensure_run_child_scope_consistency(
+    *,
+    run_id: str,
+    review_state: ValidationReviewStateMetadata | None,
+    blob_refs: Sequence[ValidationBlobReferenceMetadata],
+) -> None:
+    if review_state is not None and review_state.run_id != run_id:
+        raise ValidationMetadataStoreError(
+            "review_state.run_id must match metadata.run_id for validation persistence."
+        )
+    mismatched_blob_kinds = sorted({item.kind for item in blob_refs if item.run_id != run_id})
+    if mismatched_blob_kinds:
+        raise ValidationMetadataStoreError(
+            "blob_refs run_id must match metadata.run_id for validation persistence; "
+            f"mismatched kinds: {mismatched_blob_kinds}."
+        )
+
+
 def _resolve_runtime_profile(runtime_profile: str | None) -> str:
     if isinstance(runtime_profile, str) and runtime_profile.strip() != "":
         return runtime_profile.strip()
@@ -430,6 +448,11 @@ class InMemoryValidationMetadataStore:
         review_state: ValidationReviewStateMetadata | None,
         blob_refs: Sequence[ValidationBlobReferenceMetadata],
     ) -> None:
+        _ensure_run_child_scope_consistency(
+            run_id=metadata.run_id,
+            review_state=review_state,
+            blob_refs=blob_refs,
+        )
         normalized_refs = tuple(sorted(copy.deepcopy(list(blob_refs)), key=lambda item: item.kind))
         self._runs[metadata.run_id] = PersistedValidationRun(
             metadata=copy.deepcopy(metadata),
@@ -488,6 +511,11 @@ class SupabaseValidationMetadataStore:
         review_state: ValidationReviewStateMetadata | None,
         blob_refs: Sequence[ValidationBlobReferenceMetadata],
     ) -> None:
+        _ensure_run_child_scope_consistency(
+            run_id=metadata.run_id,
+            review_state=review_state,
+            blob_refs=blob_refs,
+        )
         snapshot = await self._capture_run_bundle(run_id=metadata.run_id)
         try:
             await self._upsert(
@@ -583,6 +611,8 @@ class SupabaseValidationMetadataStore:
         await self._execute(query)
 
     async def _delete_where(self, *, table: str, filters: dict[str, object]) -> None:
+        if not filters:
+            raise ValidationMetadataStoreError("_delete_where requires at least one filter.")
         query = self._table(table).delete()
         for key, value in filters.items():
             query = query.eq(key, value)

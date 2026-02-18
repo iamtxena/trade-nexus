@@ -28,6 +28,13 @@ def test_tenant_aware_rls_migration_exists() -> None:
     assert MIGRATION_PATH.exists(), f"Missing migration: {MIGRATION_PATH}"
 
 
+def test_validation_runs_updated_at_trigger_contract_is_present() -> None:
+    sql = _migration_sql()
+    assert "create or replace function set_validation_runs_updated_at()" in sql
+    assert "create trigger trg_validation_runs_updated_at" in sql
+    assert "before update on validation_runs" in sql
+
+
 def test_validation_runs_policy_requires_user_and_tenant_scope() -> None:
     sql = _migration_sql()
     policy = _between(

@@ -722,8 +722,8 @@ export default function ValidationPage() {
                 {runArtifact?.traderReview.comments.length ? (
                   <div className="space-y-1 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
                     <p className="font-medium text-foreground">Current trader comments</p>
-                    {runArtifact.traderReview.comments.map((comment) => (
-                      <p key={comment} className="text-muted-foreground">
+                    {runArtifact.traderReview.comments.map((comment, index) => (
+                      <p key={`${comment}-${index}`} className="text-muted-foreground">
                         - {comment}
                       </p>
                     ))}

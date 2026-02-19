@@ -70,6 +70,10 @@ const COMMANDS: Record<
     description: 'Run full automated pipeline (research → deploy)',
     handler: lazyLoad('pipeline'),
   },
+  validation: {
+    description: 'Validation lifecycle (create, list, get, review, render, replay)',
+    handler: lazyLoad('validation'),
+  },
 };
 
 function lazyLoad(command: string): (args: string[]) => Promise<void> {
@@ -105,6 +109,7 @@ function printHelp() {
   console.log(`  ${dim('nexus portfolio list')}                      List portfolios`);
   console.log(`  ${dim('nexus news --assets crypto')}                Sentiment analysis`);
   console.log(`  ${dim('nexus report daily')}                        Daily summary`);
+  console.log(`  ${dim('nexus validation create --input file.json')} Validation lifecycle`);
   console.log(`  ${dim('nexus pipeline --assets crypto')}            Full automated pipeline`);
   console.log();
 }

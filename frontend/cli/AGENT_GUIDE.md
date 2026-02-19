@@ -134,6 +134,40 @@ bun run nexus strategy backtest \
 bun run nexus strategy score --ids <report-id-1>,<report-id-2>,<report-id-3>
 ```
 
+### Validation Lifecycle
+
+```bash
+# Start validation run from contract JSON payload (canonical)
+bun run nexus validation create --input ./contracts/fixtures/create-validation-run.request.json
+
+# Start with flags and optionally trigger render jobs
+bun run nexus validation create \
+  --strategy-id <strategy-id> \
+  --requested-indicators zigzag,ema \
+  --dataset-ids <dataset-id-1>,<dataset-id-2> \
+  --backtest-report-ref blob://validation/candidate/backtest-report.json \
+  --profile STANDARD \
+  --render html,pdf
+
+# List locally tracked validation runs/replays (from ~/.trade-nexus/validation-history.json)
+bun run nexus validation list --kind all --limit 20
+
+# Get run status or full artifact
+bun run nexus validation get --id <run-id>
+bun run nexus validation get --id <run-id> --artifact
+
+# Submit review (agent or trader), with optional render trigger
+bun run nexus validation review --run-id <run-id> --reviewer trader --decision pass --summary "Approved"
+bun run nexus validation review --run-id <run-id> --input ./review.json --render html
+
+# Request render artifact(s)
+bun run nexus validation render --run-id <run-id> --format html
+bun run nexus validation render --run-id <run-id> --format html,pdf
+
+# Replay regression against baseline
+bun run nexus validation replay --baseline-id <baseline-id> --candidate-run-id <run-id>
+```
+
 ### Market Data
 
 ```bash

@@ -8,6 +8,7 @@ import pytest
 
 from src.platform_api.services.validation_agent_review_service import (
     AgentReviewBudget,
+    AgentReviewFinding,
     AgentReviewToolCall,
     ValidationAgentReviewService,
     ValidationProfile,
@@ -35,6 +36,34 @@ class _FailingToolExecutor:
     def run(self, *, tool_name: str, evidence_ref: str) -> object:
         self.calls.append((tool_name, evidence_ref))
         raise RuntimeError("simulated tool executor failure")
+
+
+class _OutOfScopeFindingService(ValidationAgentReviewService):
+    def _tool_payload_findings(self, *, evidence_ref: str, payload: object) -> list[AgentReviewFinding]:
+        _ = payload
+        return [
+            AgentReviewFinding(
+                id="agent-traceability-out-of-scope",
+                priority=2,
+                confidence=0.7,
+                summary="Synthetic out-of-scope finding for contract guardrail test.",
+                evidence_refs=("blob://outside/ref",),
+            )
+        ]
+
+
+class _DuplicateRefFindingService(ValidationAgentReviewService):
+    def _tool_payload_findings(self, *, evidence_ref: str, payload: object) -> list[AgentReviewFinding]:
+        _ = payload
+        return [
+            AgentReviewFinding(
+                id="agent-traceability-duplicate-refs",
+                priority=2,
+                confidence=0.75,
+                summary="Synthetic duplicate-ref finding for normalization test.",
+                evidence_refs=(evidence_ref, evidence_ref),
+            )
+        ]
 
 
 class _SequenceClock:
@@ -142,6 +171,18 @@ def test_review_output_contract_validates_against_agent_review_schema() -> None:
     _validate_against_schema(payload, schema)
 
 
+def test_trade_coherence_deterministic_finding_uses_trade_and_execution_log_refs() -> None:
+    service = ValidationAgentReviewService()
+    snapshot = _snapshot(profile="STANDARD")
+    snapshot["deterministicChecks"]["tradeCoherenceStatus"] = "fail"
+
+    result = service.review(snapshot=snapshot, tool_calls=())
+    finding = next(item for item in result.findings if item.id == "agent-check-tradecoherencestatus")
+    refs = set(finding.evidence_refs)
+    assert "blob://validation/valrun-20260217-0001/trades.json" in refs
+    assert "blob://validation/valrun-20260217-0001/execution.log" in refs
+
+
 @pytest.mark.parametrize("profile", ["FAST", "STANDARD", "EXPERT"])
 def test_profile_budget_selection_uses_snapshot_profile(profile: str) -> None:
     custom_budgets = _budgets(
@@ -247,3 +288,34 @@ def test_review_fails_closed_when_tool_executor_raises_exception() -> None:
     assert result.budget.breach_reason == "tool_executor_error:RuntimeError"
     assert result.budget.usage.tool_calls_used == 1
     assert executor.calls == [("fetch_evidence_ref", first_ref)]
+
+
+def test_review_fails_closed_when_finding_references_out_of_scope_evidence() -> None:
+    custom_budgets = _budgets(fast=AgentReviewBudget(1.0, 5000, 2, 5))
+    service = _OutOfScopeFindingService(profile_budgets=custom_budgets)
+    snapshot = _snapshot(profile="FAST")
+    first_ref = snapshot["evidenceRefs"][0]["ref"]
+
+    result = service.review(
+        snapshot=snapshot,
+        tool_calls=(AgentReviewToolCall(tool_name="fetch_evidence_ref", evidence_ref=first_ref),),
+    )
+
+    assert result.status == "fail"
+    assert result.budget.within_budget is False
+    assert result.budget.breach_reason == "finding_ref_out_of_scope"
+
+
+def test_review_normalizes_duplicate_finding_evidence_refs() -> None:
+    custom_budgets = _budgets(fast=AgentReviewBudget(1.0, 5000, 2, 5))
+    service = _DuplicateRefFindingService(profile_budgets=custom_budgets)
+    snapshot = _snapshot(profile="FAST")
+    first_ref = snapshot["evidenceRefs"][0]["ref"]
+
+    result = service.review(
+        snapshot=snapshot,
+        tool_calls=(AgentReviewToolCall(tool_name="fetch_evidence_ref", evidence_ref=first_ref),),
+    )
+
+    finding = next(item for item in result.findings if item.id == "agent-traceability-duplicate-refs")
+    assert finding.evidence_refs == (first_ref,)

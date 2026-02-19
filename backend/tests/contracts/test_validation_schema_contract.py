@@ -10,12 +10,12 @@ from typing import Any
 
 import pytest
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCHEMA_DIR = REPO_ROOT / "contracts" / "schemas"
 VALIDATION_RUN_SCHEMA_PATH = SCHEMA_DIR / "validation_run.json"
 VALIDATION_LLM_SNAPSHOT_SCHEMA_PATH = SCHEMA_DIR / "validation_llm_snapshot.json"
 VALIDATION_POLICY_SCHEMA_PATH = SCHEMA_DIR / "validation_policy_profile.json"
+VALIDATION_AGENT_REVIEW_RESULT_SCHEMA_PATH = SCHEMA_DIR / "validation_agent_review_result.json"
 
 
 class SchemaValidationError(ValueError):
@@ -230,6 +230,38 @@ def _valid_validation_llm_snapshot_payload() -> dict[str, Any]:
     }
 
 
+def _valid_agent_review_result_payload() -> dict[str, Any]:
+    return {
+        "status": "fail",
+        "summary": "Agent review blocked: token_budget_exceeded.",
+        "findings": [
+            {
+                "id": "agent-budget-token_budget_exceeded",
+                "priority": 0,
+                "confidence": 1.0,
+                "summary": "Agent review blocked: token_budget_exceeded.",
+                "evidenceRefs": ["blob://validation/valrun-20260217-0001/chart-payload.json"],
+            }
+        ],
+        "budget": {
+            "profile": "STANDARD",
+            "limits": {
+                "maxRuntimeSeconds": 1.2,
+                "maxTokens": 2400,
+                "maxToolCalls": 4,
+                "maxFindings": 6,
+            },
+            "usage": {
+                "runtimeSeconds": 0.01,
+                "tokensUsed": 4096,
+                "toolCallsUsed": 1,
+            },
+            "withinBudget": False,
+            "breachReason": "token_budget_exceeded",
+        },
+    }
+
+
 def test_validation_policy_schema_has_expected_profiles_and_blocking_flags() -> None:
     schema = _load_schema(VALIDATION_POLICY_SCHEMA_PATH)
     required = set(schema["required"])
@@ -249,6 +281,12 @@ def test_validation_run_schema_accepts_canonical_payload() -> None:
 def test_validation_llm_snapshot_schema_accepts_compact_payload() -> None:
     schema = _load_schema(VALIDATION_LLM_SNAPSHOT_SCHEMA_PATH)
     payload = _valid_validation_llm_snapshot_payload()
+    _validate_against_schema(payload, schema)
+
+
+def test_validation_agent_review_result_schema_accepts_payload() -> None:
+    schema = _load_schema(VALIDATION_AGENT_REVIEW_RESULT_SCHEMA_PATH)
+    payload = _valid_agent_review_result_payload()
     _validate_against_schema(payload, schema)
 
 
@@ -274,3 +312,11 @@ def test_validation_llm_snapshot_schema_rejects_additional_properties() -> None:
     mutated["unexpectedField"] = "unexpected-value"
     with pytest.raises(SchemaValidationError):
         _validate_against_schema(mutated, schema)
+
+
+def test_validation_agent_review_result_schema_rejects_additional_properties() -> None:
+    schema = _load_schema(VALIDATION_AGENT_REVIEW_RESULT_SCHEMA_PATH)
+    payload = _valid_agent_review_result_payload()
+    payload["budget"]["limits"]["unexpectedBudgetField"] = "unexpected"
+    with pytest.raises(SchemaValidationError):
+        _validate_against_schema(payload, schema)

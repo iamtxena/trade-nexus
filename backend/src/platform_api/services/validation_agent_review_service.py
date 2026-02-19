@@ -315,8 +315,18 @@ class ValidationAgentReviewService:
                     reason="tool_ref_out_of_scope",
                 )
 
-            tool_payload = self._tool_executor.run(tool_name=call.tool_name, evidence_ref=call.evidence_ref)
             tool_calls_used += 1
+            try:
+                tool_payload = self._tool_executor.run(tool_name=call.tool_name, evidence_ref=call.evidence_ref)
+            except Exception as exc:
+                return self._breach_result(
+                    parsed=parsed,
+                    budget=budget,
+                    started_at=started_at,
+                    tokens_used=tokens_used,
+                    tool_calls_used=tool_calls_used,
+                    reason=f"tool_executor_error:{type(exc).__name__}",
+                )
             tokens_used += _estimate_tokens(tool_payload)
             if tokens_used > budget.max_tokens:
                 return self._breach_result(

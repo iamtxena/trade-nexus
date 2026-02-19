@@ -23,6 +23,15 @@ class _RecordingToolExecutor:
         return {"status": "ok"}
 
 
+class _FailingToolExecutor:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+
+    def run(self, *, tool_name: str, evidence_ref: str) -> object:
+        self.calls.append((tool_name, evidence_ref))
+        raise RuntimeError("simulated tool executor failure")
+
+
 class _SequenceClock:
     def __init__(self, *values: float) -> None:
         self._values = values
@@ -204,3 +213,22 @@ def test_review_blocks_tool_calls_for_out_of_scope_evidence_refs() -> None:
     assert result.budget.within_budget is False
     assert result.budget.breach_reason == "tool_ref_out_of_scope"
     assert executor.calls == []
+
+
+def test_review_fails_closed_when_tool_executor_raises_exception() -> None:
+    executor = _FailingToolExecutor()
+    custom_budgets = _budgets(fast=AgentReviewBudget(1.0, 5000, 2, 5))
+    service = ValidationAgentReviewService(tool_executor=executor, profile_budgets=custom_budgets)
+    snapshot = _snapshot(profile="FAST")
+    first_ref = snapshot["evidenceRefs"][0]["ref"]
+
+    result = service.review(
+        snapshot=snapshot,
+        tool_calls=(AgentReviewToolCall(tool_name="fetch_evidence_ref", evidence_ref=first_ref),),
+    )
+
+    assert result.status == "fail"
+    assert result.budget.within_budget is False
+    assert result.budget.breach_reason == "tool_executor_error:RuntimeError"
+    assert result.budget.usage.tool_calls_used == 1
+    assert executor.calls == [("fetch_evidence_ref", first_ref)]

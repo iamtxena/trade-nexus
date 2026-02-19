@@ -59,12 +59,12 @@ interface ValidationReviewFormState {
 }
 
 const DEFAULT_CREATE_FORM_STATE: ValidationCreateFormState = {
-  strategyId: 'strat-001',
-  providerRefId: 'lona-strategy-123',
-  prompt: 'Build zig-zag strategy for BTC 1h with trend filter',
-  requestedIndicators: 'zigzag, ema',
-  datasetIds: 'dataset-btc-1h-2025',
-  backtestReportRef: 'blob://validation/candidate/backtest-report.json',
+  strategyId: '',
+  providerRefId: '',
+  prompt: '',
+  requestedIndicators: '',
+  datasetIds: '',
+  backtestReportRef: '',
   profile: 'STANDARD',
   requestTraderReview: false,
 };
@@ -153,10 +153,20 @@ export default function ValidationPage() {
     return resolveTraderReviewLaneState(runArtifact.traderReview);
   }, [runArtifact]);
 
-  async function loadRunById(runId: string): Promise<void> {
+  async function loadRunById(
+    runId: string,
+    options?: {
+      clearNotice?: boolean;
+      successNotice?: string;
+    },
+  ): Promise<void> {
+    const clearNotice = options?.clearNotice ?? true;
+    const successNotice = options?.successNotice ?? `Loaded validation run ${runId}.`;
     setIsLoadingRun(true);
     setErrorMessage(null);
-    setNoticeMessage(null);
+    if (clearNotice) {
+      setNoticeMessage(null);
+    }
     try {
       const [runRes, artifactRes] = await Promise.all([
         fetch(`/api/validation/runs/${runId}`),
@@ -183,7 +193,7 @@ export default function ValidationPage() {
       setActiveRunId(runId);
       setRunLookupId(runId);
       setRenderJobs({});
-      setNoticeMessage(`Loaded validation run ${runId}.`);
+      setNoticeMessage(successNotice);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to load validation run.');
     } finally {
@@ -260,12 +270,14 @@ export default function ValidationPage() {
       }
 
       const createdRun = (responsePayload as ValidationRunResponse).run.id;
-      setNoticeMessage(
-        createForm.requestTraderReview
-          ? `Run ${createdRun} created in trader-request mode.`
-          : `Run ${createdRun} created.`,
-      );
-      await loadRunById(createdRun);
+      const createNotice = createForm.requestTraderReview
+        ? `Run ${createdRun} created in trader-request mode.`
+        : `Run ${createdRun} created.`;
+      setNoticeMessage(createNotice);
+      await loadRunById(createdRun, {
+        clearNotice: false,
+        successNotice: createNotice,
+      });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to create validation run.');
     } finally {
@@ -314,8 +326,12 @@ export default function ValidationPage() {
         return;
       }
 
-      setNoticeMessage(`Review accepted for ${activeRunId}.`);
-      await loadRunById(activeRunId);
+      const reviewNotice = `Review accepted for ${activeRunId}.`;
+      setNoticeMessage(reviewNotice);
+      await loadRunById(activeRunId, {
+        clearNotice: false,
+        successNotice: reviewNotice,
+      });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to submit review.');
     } finally {

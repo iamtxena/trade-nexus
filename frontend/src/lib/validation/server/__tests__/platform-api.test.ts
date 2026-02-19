@@ -3,6 +3,7 @@ import { describe, expect, mock, test } from 'bun:test';
 import {
   buildValidationIdempotencyKey,
   callValidationPlatform,
+  isValidValidationRunId,
   proxyValidationPlatformCall,
 } from '../platform-api';
 
@@ -136,5 +137,16 @@ describe('proxyValidationPlatformCall', () => {
 
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ error: 'backend timeout' });
+  });
+});
+
+describe('isValidValidationRunId', () => {
+  test('accepts alphanumeric, underscore, and hyphen run ids', () => {
+    expect(isValidValidationRunId('valrun_001-ABC')).toBe(true);
+  });
+
+  test('rejects path traversal and slash characters', () => {
+    expect(isValidValidationRunId('../etc/passwd')).toBe(false);
+    expect(isValidValidationRunId('run/child')).toBe(false);
   });
 });

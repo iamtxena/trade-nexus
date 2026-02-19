@@ -15,6 +15,7 @@ interface ValidationPlatformCallOptions {
 }
 
 const DEFAULT_PLATFORM_BASE_URL = process.env.ML_BACKEND_URL ?? 'http://localhost:8000';
+const VALIDATION_RUN_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 function resolveBaseUrl(baseUrl: string): string {
   if (baseUrl.endsWith('/')) {
@@ -29,6 +30,10 @@ function resolvePath(path: string): string {
 
 export function buildValidationIdempotencyKey(action: string): string {
   return `idem-web-validation-${action}-${crypto.randomUUID()}`;
+}
+
+export function isValidValidationRunId(runId: string): boolean {
+  return VALIDATION_RUN_ID_PATTERN.test(runId);
 }
 
 export async function callValidationPlatform(

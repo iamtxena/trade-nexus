@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { resolveValidationAccess } from '@/lib/validation/server/auth';
 import {
   buildValidationIdempotencyKey,
+  isValidValidationRunId,
   proxyValidationPlatformCall,
 } from '@/lib/validation/server/platform-api';
 import type { ValidationRenderRequestPayload } from '@/lib/validation/types';
@@ -24,6 +25,9 @@ export async function POST(
   }
 
   const { runId } = await params;
+  if (!isValidValidationRunId(runId)) {
+    return NextResponse.json({ error: 'Invalid runId format' }, { status: 400 });
+  }
   return proxyValidationPlatformCall({
     method: 'POST',
     path: `/v2/validation-runs/${runId}/render`,

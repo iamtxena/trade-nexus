@@ -1,6 +1,16 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Activity, ArrowRight, Bot, Brain, LineChart, TrendingUp, Wallet, Zap } from 'lucide-react';
+import {
+  Activity,
+  ArrowRight,
+  Bot,
+  Brain,
+  LineChart,
+  ShieldCheck,
+  TrendingUp,
+  Wallet,
+  Zap,
+} from 'lucide-react';
 import Link from 'next/link';
 
 const stats = [
@@ -55,6 +65,14 @@ const sections = [
     icon: LineChart,
     status: 'Coming Soon',
     statusColor: 'bg-amber-500',
+  },
+  {
+    href: '/validation',
+    title: 'Validation',
+    description: 'Review canonical validation artifacts, comments, and trader verdicts.',
+    icon: ShieldCheck,
+    status: 'Ready',
+    statusColor: 'bg-emerald-500',
   },
   {
     href: '/agents',

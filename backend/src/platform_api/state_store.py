@@ -385,6 +385,11 @@ class InMemoryStateStore:
             "orders": {},
             "execution_commands_deployments": {},
             "execution_commands_orders": {},
+            "validation_runs": {},
+            "validation_reviews": {},
+            "validation_renders": {},
+            "validation_baselines": {},
+            "validation_replays": {},
         }
 
     def next_id(self, scope: str) -> str:

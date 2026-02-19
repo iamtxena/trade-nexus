@@ -386,6 +386,481 @@ def test_conversation_v2_routes() -> None:
     assert null_topic.status_code == 422
 
 
+def test_validation_v2_routes_wire_deterministic_and_agent_outputs() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-wire-001",
+        "X-Tenant-Id": "tenant-v2-validation",
+        "X-User-Id": "user-v2-validation",
+    }
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-wire-001"},
+        json={
+            "strategyId": "strat-001",
+            "providerRefId": "lona-strategy-123",
+            "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+            "requestedIndicators": ["zigzag", "ema"],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+            "policy": {
+                "profile": "STANDARD",
+                "blockMergeOnFail": True,
+                "blockReleaseOnFail": True,
+                "blockMergeOnAgentFail": True,
+                "blockReleaseOnAgentFail": False,
+                "requireTraderReview": False,
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": True,
+            },
+        },
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    artifact = client.get(f"/v2/validation-runs/{run_id}/artifact", headers=headers)
+    assert artifact.status_code == 200
+    payload = artifact.json()
+    assert payload["requestId"] == headers["X-Request-Id"]
+    assert payload["artifactType"] == "validation_run"
+
+    run_artifact = payload["artifact"]
+    assert run_artifact["requestId"] == headers["X-Request-Id"]
+    assert run_artifact["tenantId"] == headers["X-Tenant-Id"]
+    assert run_artifact["userId"] == headers["X-User-Id"]
+    assert set(run_artifact["deterministicChecks"]) == {
+        "indicatorFidelity",
+        "tradeCoherence",
+        "metricConsistency",
+    }
+    assert set(run_artifact["agentReview"]) == {"status", "summary", "findings"}
+    assert run_artifact["finalDecision"] in {"pass", "conditional_pass", "fail"}
+
+
+def test_validation_v2_trader_conditional_pass_is_reviewed_but_not_fully_passed() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-trader-001",
+        "X-Tenant-Id": "tenant-v2-validation-trader",
+        "X-User-Id": "user-v2-validation-trader",
+    }
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-trader-run-001"},
+        json={
+            "strategyId": "strat-001",
+            "providerRefId": "lona-strategy-123",
+            "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+            "requestedIndicators": ["zigzag", "ema"],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+            "policy": {
+                "profile": "STANDARD",
+                "blockMergeOnFail": True,
+                "blockReleaseOnFail": True,
+                "blockMergeOnAgentFail": False,
+                "blockReleaseOnAgentFail": False,
+                "requireTraderReview": True,
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": True,
+            },
+        },
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    before_review = client.get(f"/v2/validation-runs/{run_id}/artifact", headers=headers)
+    assert before_review.status_code == 200
+    assert before_review.json()["artifact"]["traderReview"]["status"] == "requested"
+
+    review_response = client.post(
+        f"/v2/validation-runs/{run_id}/review",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-trader-review-001"},
+        json={
+            "reviewerType": "trader",
+            "decision": "conditional_pass",
+            "summary": "Approved with caution on market volatility regime shifts.",
+            "comments": ["Needs guardrails before rollout."],
+            "findings": [],
+        },
+    )
+    assert review_response.status_code == 202
+
+    after_review = client.get(f"/v2/validation-runs/{run_id}/artifact", headers=headers)
+    assert after_review.status_code == 200
+    artifact = after_review.json()["artifact"]
+    assert artifact["traderReview"]["status"] == "approved"
+    assert artifact["finalDecision"] == "conditional_pass"
+
+    run = client.get(f"/v2/validation-runs/{run_id}", headers=headers)
+    assert run.status_code == 200
+    assert run.json()["run"]["finalDecision"] == "conditional_pass"
+
+    agent_follow_up_review = client.post(
+        f"/v2/validation-runs/{run_id}/review",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-trader-agent-follow-up-001"},
+        json={
+            "reviewerType": "agent",
+            "decision": "pass",
+            "summary": "No additional deterministic or evidence issues.",
+            "findings": [],
+            "comments": [],
+        },
+    )
+    assert agent_follow_up_review.status_code == 202
+
+    run_after_agent = client.get(f"/v2/validation-runs/{run_id}", headers=headers)
+    assert run_after_agent.status_code == 200
+    assert run_after_agent.json()["run"]["finalDecision"] == "conditional_pass"
+
+
+def test_validation_v2_create_run_idempotency_and_conflict() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-idem-001",
+        "X-Tenant-Id": "tenant-v2-validation-idem",
+        "X-User-Id": "user-v2-validation-idem",
+        "Idempotency-Key": "idem-v2-validation-run-001",
+    }
+    payload = {
+        "strategyId": "strat-001",
+        "providerRefId": "lona-strategy-123",
+        "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+        "requestedIndicators": ["zigzag", "ema"],
+        "datasetIds": ["dataset-btc-1h-2025"],
+        "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+        "policy": {
+            "profile": "STANDARD",
+            "blockMergeOnFail": True,
+            "blockReleaseOnFail": True,
+            "blockMergeOnAgentFail": True,
+            "blockReleaseOnAgentFail": False,
+            "requireTraderReview": False,
+            "hardFailOnMissingIndicators": True,
+            "failClosedOnEvidenceUnavailable": True,
+        },
+    }
+
+    first = client.post("/v2/validation-runs", headers=headers, json=payload)
+    assert first.status_code == 202
+    second = client.post("/v2/validation-runs", headers=headers, json=payload)
+    assert second.status_code == 202
+    assert second.json()["run"]["id"] == first.json()["run"]["id"]
+
+    conflict = client.post(
+        "/v2/validation-runs",
+        headers=headers,
+        json={**payload, "prompt": "different payload"},
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["error"]["code"] == "IDEMPOTENCY_KEY_CONFLICT"
+
+
+def test_validation_v2_rejects_invalid_policy_profile_and_state() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-neg-001",
+        "X-Tenant-Id": "tenant-v2-validation-neg",
+        "X-User-Id": "user-v2-validation-neg",
+    }
+    base_payload = {
+        "strategyId": "strat-001",
+        "providerRefId": "lona-strategy-123",
+        "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+        "requestedIndicators": ["zigzag", "ema"],
+        "datasetIds": ["dataset-btc-1h-2025"],
+        "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+        "policy": {
+            "profile": "STANDARD",
+            "blockMergeOnFail": True,
+            "blockReleaseOnFail": True,
+            "blockMergeOnAgentFail": True,
+            "blockReleaseOnAgentFail": False,
+            "requireTraderReview": False,
+            "hardFailOnMissingIndicators": True,
+            "failClosedOnEvidenceUnavailable": True,
+        },
+    }
+
+    invalid_profile = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-neg-profile-001"},
+        json={**base_payload, "policy": {**base_payload["policy"], "profile": "ULTRA"}},
+    )
+    assert invalid_profile.status_code == 400
+    assert invalid_profile.json()["requestId"] == headers["X-Request-Id"]
+    assert invalid_profile.json()["error"]["code"] == "VALIDATION_POLICY_INVALID"
+
+    invalid_policy = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-neg-policy-001"},
+        json={
+            **base_payload,
+            "policy": {**base_payload["policy"], "hardFailOnMissingIndicators": False},
+        },
+    )
+    assert invalid_policy.status_code == 400
+    assert invalid_policy.json()["requestId"] == headers["X-Request-Id"]
+    assert invalid_policy.json()["error"]["code"] == "VALIDATION_POLICY_INVALID"
+
+    invalid_state = client.post(
+        "/v2/validation-baselines",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-neg-state-001"},
+        json={
+            "runId": "valrun-missing",
+            "name": "missing-run-baseline",
+        },
+    )
+    assert invalid_state.status_code == 400
+    assert invalid_state.json()["requestId"] == headers["X-Request-Id"]
+    assert invalid_state.json()["error"]["code"] == "VALIDATION_STATE_INVALID"
+
+    invalid_replay_state = client.post(
+        "/v2/validation-regressions/replay",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-neg-replay-state-001"},
+        json={
+            "baselineId": "valbase-missing",
+            "candidateRunId": "valrun-missing",
+        },
+    )
+    assert invalid_replay_state.status_code == 400
+    assert invalid_replay_state.json()["requestId"] == headers["X-Request-Id"]
+    assert invalid_replay_state.json()["error"]["code"] == "VALIDATION_STATE_INVALID"
+
+    invalid_replay_policy_override = client.post(
+        "/v2/validation-regressions/replay",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-neg-replay-override-001"},
+        json={
+            "baselineId": "valbase-missing",
+            "candidateRunId": "valrun-missing",
+            "policyOverrides": {"blockMergeOnFail": False},
+        },
+    )
+    assert invalid_replay_policy_override.status_code == 400
+    assert invalid_replay_policy_override.json()["requestId"] == headers["X-Request-Id"]
+    assert invalid_replay_policy_override.json()["error"]["code"] == "VALIDATION_REPLAY_INVALID"
+
+
+def test_validation_v2_rejects_widened_enum_and_nullable_inputs() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-inputs-001",
+        "X-Tenant-Id": "tenant-v2-validation-inputs",
+        "X-User-Id": "user-v2-validation-inputs",
+    }
+    base_payload = {
+        "strategyId": "strat-001",
+        "providerRefId": "lona-strategy-123",
+        "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+        "requestedIndicators": ["zigzag", "ema"],
+        "datasetIds": ["dataset-btc-1h-2025"],
+        "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+        "policy": {
+            "profile": "STANDARD",
+            "blockMergeOnFail": True,
+            "blockReleaseOnFail": True,
+            "blockMergeOnAgentFail": True,
+            "blockReleaseOnAgentFail": False,
+            "requireTraderReview": False,
+            "hardFailOnMissingIndicators": True,
+            "failClosedOnEvidenceUnavailable": True,
+        },
+    }
+
+    null_provider_ref = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-inputs-null-provider-001"},
+        json={**base_payload, "providerRefId": None},
+    )
+    assert null_provider_ref.status_code == 400
+    assert null_provider_ref.json()["error"]["code"] == "VALIDATION_RUN_INVALID"
+
+    null_prompt = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-inputs-null-prompt-001"},
+        json={**base_payload, "prompt": None},
+    )
+    assert null_prompt.status_code == 400
+    assert null_prompt.json()["error"]["code"] == "VALIDATION_RUN_INVALID"
+
+    unknown_strategy = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-inputs-missing-strategy-001"},
+        json={**base_payload, "strategyId": "strat-missing"},
+    )
+    assert unknown_strategy.status_code == 400
+    assert unknown_strategy.json()["error"]["code"] == "VALIDATION_STATE_INVALID"
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-inputs-run-001"},
+        json=base_payload,
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    review_upper_reviewer = client.post(
+        f"/v2/validation-runs/{run_id}/review",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-inputs-review-upper-reviewer-001"},
+        json={
+            "reviewerType": "AGENT",
+            "decision": "pass",
+            "summary": "Uppercase reviewer type should be rejected.",
+            "findings": [],
+            "comments": [],
+        },
+    )
+    assert review_upper_reviewer.status_code == 400
+    assert review_upper_reviewer.json()["error"]["code"] == "VALIDATION_REVIEW_INVALID"
+
+    review_upper_decision = client.post(
+        f"/v2/validation-runs/{run_id}/review",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-inputs-review-upper-decision-001"},
+        json={
+            "reviewerType": "agent",
+            "decision": "PASS",
+            "summary": "Uppercase decision should be rejected.",
+            "findings": [],
+            "comments": [],
+        },
+    )
+    assert review_upper_decision.status_code == 400
+    assert review_upper_decision.json()["error"]["code"] == "VALIDATION_REVIEW_INVALID"
+
+    render_upper_format = client.post(
+        f"/v2/validation-runs/{run_id}/render",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-inputs-render-upper-001"},
+        json={"format": "HTML"},
+    )
+    assert render_upper_format.status_code == 400
+    assert render_upper_format.json()["error"]["code"] == "VALIDATION_RENDER_INVALID"
+
+
+def test_validation_v2_blocks_provider_ref_bypass() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-provider-001",
+        "X-Tenant-Id": "tenant-v2-validation-provider",
+        "X-User-Id": "user-v2-validation-provider",
+    }
+
+    response = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-provider-001"},
+        json={
+            "strategyId": "strat-001",
+            "providerRefId": "external-provider-direct-bypass",
+            "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+            "requestedIndicators": ["zigzag", "ema"],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+            "policy": {
+                "profile": "STANDARD",
+                "blockMergeOnFail": True,
+                "blockReleaseOnFail": True,
+                "blockMergeOnAgentFail": True,
+                "blockReleaseOnAgentFail": False,
+                "requireTraderReview": False,
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": True,
+            },
+        },
+    )
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["requestId"] == headers["X-Request-Id"]
+    assert payload["error"]["code"] == "VALIDATION_PROVIDER_REF_MISMATCH"
+
+
+def test_validation_v2_replay_treats_candidate_improvement_as_pass() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-replay-001",
+        "X-Tenant-Id": "tenant-v2-validation-replay",
+        "X-User-Id": "user-v2-validation-replay",
+    }
+    run_payload = {
+        "strategyId": "strat-001",
+        "providerRefId": "lona-strategy-123",
+        "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+        "requestedIndicators": ["zigzag", "ema"],
+        "datasetIds": ["dataset-btc-1h-2025"],
+        "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+        "policy": {
+            "profile": "STANDARD",
+            "blockMergeOnFail": True,
+            "blockReleaseOnFail": True,
+            "blockMergeOnAgentFail": True,
+            "blockReleaseOnAgentFail": False,
+            "requireTraderReview": False,
+            "hardFailOnMissingIndicators": True,
+            "failClosedOnEvidenceUnavailable": True,
+        },
+    }
+
+    baseline_run_response = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-replay-baseline-run-001"},
+        json={**run_payload, "policy": {**run_payload["policy"], "profile": "EXPERT"}},
+    )
+    assert baseline_run_response.status_code == 202
+    baseline_run_id = baseline_run_response.json()["run"]["id"]
+
+    baseline_run = client.get(f"/v2/validation-runs/{baseline_run_id}", headers=headers)
+    assert baseline_run.status_code == 200
+    assert baseline_run.json()["run"]["finalDecision"] == "fail"
+
+    candidate_run_response = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-replay-candidate-run-001"},
+        json=run_payload,
+    )
+    assert candidate_run_response.status_code == 202
+    candidate_run_id = candidate_run_response.json()["run"]["id"]
+
+    candidate_review = client.post(
+        f"/v2/validation-runs/{candidate_run_id}/review",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-replay-candidate-review-001"},
+        json={
+            "reviewerType": "agent",
+            "decision": "pass",
+            "summary": "Candidate run is acceptable.",
+            "findings": [],
+            "comments": [],
+        },
+    )
+    assert candidate_review.status_code == 202
+
+    candidate_run = client.get(f"/v2/validation-runs/{candidate_run_id}", headers=headers)
+    assert candidate_run.status_code == 200
+    assert candidate_run.json()["run"]["finalDecision"] == "pass"
+
+    baseline_response = client.post(
+        "/v2/validation-baselines",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-replay-baseline-001"},
+        json={"runId": baseline_run_id, "name": "expert-baseline"},
+    )
+    assert baseline_response.status_code == 201
+    baseline_id = baseline_response.json()["baseline"]["id"]
+
+    replay = client.post(
+        "/v2/validation-regressions/replay",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-replay-request-001"},
+        json={"baselineId": baseline_id, "candidateRunId": candidate_run_id},
+    )
+    assert replay.status_code == 202
+    assert replay.json()["replay"]["decision"] == "pass"
+
+
 def test_backtest_feedback_is_ingested_into_kb() -> None:
     client = _client()
 

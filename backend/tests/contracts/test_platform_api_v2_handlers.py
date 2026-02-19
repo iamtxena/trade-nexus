@@ -600,9 +600,21 @@ def test_validation_v2_rejects_invalid_policy_profile_and_state() -> None:
             "name": "missing-run-baseline",
         },
     )
-    assert invalid_state.status_code == 404
+    assert invalid_state.status_code == 400
     assert invalid_state.json()["requestId"] == headers["X-Request-Id"]
-    assert invalid_state.json()["error"]["code"] == "VALIDATION_RUN_NOT_FOUND"
+    assert invalid_state.json()["error"]["code"] == "VALIDATION_STATE_INVALID"
+
+    invalid_replay_state = client.post(
+        "/v2/validation-regressions/replay",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-neg-replay-state-001"},
+        json={
+            "baselineId": "valbase-missing",
+            "candidateRunId": "valrun-missing",
+        },
+    )
+    assert invalid_replay_state.status_code == 400
+    assert invalid_replay_state.json()["requestId"] == headers["X-Request-Id"]
+    assert invalid_replay_state.json()["error"]["code"] == "VALIDATION_STATE_INVALID"
 
     invalid_replay_policy_override = client.post(
         "/v2/validation-regressions/replay",
@@ -616,6 +628,102 @@ def test_validation_v2_rejects_invalid_policy_profile_and_state() -> None:
     assert invalid_replay_policy_override.status_code == 400
     assert invalid_replay_policy_override.json()["requestId"] == headers["X-Request-Id"]
     assert invalid_replay_policy_override.json()["error"]["code"] == "VALIDATION_REPLAY_INVALID"
+
+
+def test_validation_v2_rejects_widened_enum_and_nullable_inputs() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-inputs-001",
+        "X-Tenant-Id": "tenant-v2-validation-inputs",
+        "X-User-Id": "user-v2-validation-inputs",
+    }
+    base_payload = {
+        "strategyId": "strat-001",
+        "providerRefId": "lona-strategy-123",
+        "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+        "requestedIndicators": ["zigzag", "ema"],
+        "datasetIds": ["dataset-btc-1h-2025"],
+        "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+        "policy": {
+            "profile": "STANDARD",
+            "blockMergeOnFail": True,
+            "blockReleaseOnFail": True,
+            "blockMergeOnAgentFail": True,
+            "blockReleaseOnAgentFail": False,
+            "requireTraderReview": False,
+            "hardFailOnMissingIndicators": True,
+            "failClosedOnEvidenceUnavailable": True,
+        },
+    }
+
+    null_provider_ref = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-inputs-null-provider-001"},
+        json={**base_payload, "providerRefId": None},
+    )
+    assert null_provider_ref.status_code == 400
+    assert null_provider_ref.json()["error"]["code"] == "VALIDATION_RUN_INVALID"
+
+    null_prompt = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-inputs-null-prompt-001"},
+        json={**base_payload, "prompt": None},
+    )
+    assert null_prompt.status_code == 400
+    assert null_prompt.json()["error"]["code"] == "VALIDATION_RUN_INVALID"
+
+    unknown_strategy = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-inputs-missing-strategy-001"},
+        json={**base_payload, "strategyId": "strat-missing"},
+    )
+    assert unknown_strategy.status_code == 400
+    assert unknown_strategy.json()["error"]["code"] == "VALIDATION_STATE_INVALID"
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-inputs-run-001"},
+        json=base_payload,
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    review_upper_reviewer = client.post(
+        f"/v2/validation-runs/{run_id}/review",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-inputs-review-upper-reviewer-001"},
+        json={
+            "reviewerType": "AGENT",
+            "decision": "pass",
+            "summary": "Uppercase reviewer type should be rejected.",
+            "findings": [],
+            "comments": [],
+        },
+    )
+    assert review_upper_reviewer.status_code == 400
+    assert review_upper_reviewer.json()["error"]["code"] == "VALIDATION_REVIEW_INVALID"
+
+    review_upper_decision = client.post(
+        f"/v2/validation-runs/{run_id}/review",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-inputs-review-upper-decision-001"},
+        json={
+            "reviewerType": "agent",
+            "decision": "PASS",
+            "summary": "Uppercase decision should be rejected.",
+            "findings": [],
+            "comments": [],
+        },
+    )
+    assert review_upper_decision.status_code == 400
+    assert review_upper_decision.json()["error"]["code"] == "VALIDATION_REVIEW_INVALID"
+
+    render_upper_format = client.post(
+        f"/v2/validation-runs/{run_id}/render",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-inputs-render-upper-001"},
+        json={"format": "HTML"},
+    )
+    assert render_upper_format.status_code == 400
+    assert render_upper_format.json()["error"]["code"] == "VALIDATION_RENDER_INVALID"
 
 
 def test_validation_v2_blocks_provider_ref_bypass() -> None:

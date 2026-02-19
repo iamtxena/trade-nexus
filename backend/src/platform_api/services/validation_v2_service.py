@@ -127,13 +127,31 @@ class ValidationV2Service:
         if cached is not None:
             return ValidationRunResponse.model_validate(cached)
 
+        if "providerRefId" in request.model_fields_set and request.providerRefId is None:
+            raise PlatformAPIError(
+                status_code=400,
+                code="VALIDATION_RUN_INVALID",
+                message="providerRefId must be a string when provided.",
+                request_id=context.request_id,
+                details={"providerRefId": request.providerRefId},
+            )
+        if "prompt" in request.model_fields_set and request.prompt is None:
+            raise PlatformAPIError(
+                status_code=400,
+                code="VALIDATION_RUN_INVALID",
+                message="prompt must be a string when provided.",
+                request_id=context.request_id,
+                details={"prompt": request.prompt},
+            )
+
         strategy = self._store.strategies.get(request.strategyId)
         if strategy is None:
             raise PlatformAPIError(
-                status_code=404,
-                code="STRATEGY_NOT_FOUND",
-                message=f"Strategy {request.strategyId} not found.",
+                status_code=400,
+                code="VALIDATION_STATE_INVALID",
+                message="Validation run references unknown strategyId.",
                 request_id=context.request_id,
+                details={"strategyId": request.strategyId},
             )
         if strategy.provider != "lona":
             raise PlatformAPIError(
@@ -365,8 +383,8 @@ class ValidationV2Service:
             return ValidationRunReviewResponse.model_validate(cached)
 
         record = self._require_run(run_id=run_id, context=context)
-        reviewer_type = request.reviewerType.strip().lower()
-        decision = request.decision.strip().lower()
+        reviewer_type = request.reviewerType
+        decision = request.decision
         if reviewer_type not in {"agent", "trader"}:
             raise PlatformAPIError(
                 status_code=400,
@@ -495,8 +513,8 @@ class ValidationV2Service:
         if cached is not None:
             return ValidationRenderResponse.model_validate(cached)
 
-        normalized_format = request.format.strip().lower()
-        if normalized_format not in {"html", "pdf"}:
+        requested_format = request.format
+        if requested_format not in {"html", "pdf"}:
             raise PlatformAPIError(
                 status_code=400,
                 code="VALIDATION_RENDER_INVALID",
@@ -506,15 +524,15 @@ class ValidationV2Service:
             )
 
         record = self._require_run(run_id=run_id, context=context)
-        render_job = record.render_jobs.get(normalized_format)
+        render_job = record.render_jobs.get(requested_format)
         if render_job is None:
             render_job = ValidationRenderJob(
                 runId=run_id,
-                format=cast(Literal["html", "pdf"], normalized_format),
+                format=cast(Literal["html", "pdf"], requested_format),
                 status="queued",
                 artifactRef=None,
             )
-            record.render_jobs[normalized_format] = render_job
+            record.render_jobs[requested_format] = render_job
 
         response = ValidationRenderResponse(requestId=context.request_id, render=render_job)
         self._save_idempotent_response(
@@ -549,7 +567,15 @@ class ValidationV2Service:
         if cached is not None:
             return ValidationBaselineResponse.model_validate(cached)
 
-        run_record = self._require_run(run_id=request.runId, context=context)
+        run_record = self._runs.get(request.runId)
+        if run_record is None or run_record.tenant_id != context.tenant_id or run_record.user_id != context.user_id:
+            raise PlatformAPIError(
+                status_code=400,
+                code="VALIDATION_STATE_INVALID",
+                message="Validation baseline references unknown runId.",
+                request_id=context.request_id,
+                details={"runId": request.runId},
+            )
         if run_record.run.status != "completed":
             raise PlatformAPIError(
                 status_code=400,
@@ -633,13 +659,22 @@ class ValidationV2Service:
         baseline = self._baselines.get(request.baselineId)
         if baseline is None or baseline.tenant_id != context.tenant_id or baseline.user_id != context.user_id:
             raise PlatformAPIError(
-                status_code=404,
-                code="VALIDATION_BASELINE_NOT_FOUND",
-                message=f"Validation baseline {request.baselineId} not found.",
+                status_code=400,
+                code="VALIDATION_STATE_INVALID",
+                message="Validation replay references unknown baselineId.",
                 request_id=context.request_id,
+                details={"baselineId": request.baselineId},
             )
 
-        candidate = self._require_run(run_id=request.candidateRunId, context=context)
+        candidate = self._runs.get(request.candidateRunId)
+        if candidate is None or candidate.tenant_id != context.tenant_id or candidate.user_id != context.user_id:
+            raise PlatformAPIError(
+                status_code=400,
+                code="VALIDATION_STATE_INVALID",
+                message="Validation replay references unknown candidateRunId.",
+                request_id=context.request_id,
+                details={"candidateRunId": request.candidateRunId},
+            )
         baseline_run = self._runs.get(baseline.baseline.runId)
         if baseline_run is None:
             raise PlatformAPIError(

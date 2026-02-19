@@ -756,12 +756,14 @@ class SupabaseValidationMetadataStore:
                     restored_blobs.append(item)
 
         if can_restore_blob_rows:
+            blob_delete_succeeded = False
             try:
                 await self._delete_where(table=self._blob_refs_table, filters={"run_id": run_id})
+                blob_delete_succeeded = True
             except Exception as exc:
                 rollback_errors.append(f"{self._blob_refs_table}: {exc!r}")
 
-            if restored_blobs:
+            if blob_delete_succeeded and restored_blobs:
                 try:
                     await self._upsert(
                         table=self._blob_refs_table,

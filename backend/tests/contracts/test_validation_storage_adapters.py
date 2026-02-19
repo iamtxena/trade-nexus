@@ -112,6 +112,11 @@ class _FakeSupabaseQuery:
         return stored
 
     def _execute_delete(self) -> list[dict[str, object]]:
+        if self._table in self._client.fail_delete_once_tables:
+            self._client.fail_delete_once_tables.remove(self._table)
+            raise RuntimeError(f"forced-delete-failure:{self._table}")
+        if self._table in self._client.fail_delete_tables:
+            raise RuntimeError(f"forced-delete-failure:{self._table}")
         rows = self._tables.setdefault(self._table, [])
         kept: list[dict[str, object]] = []
         removed: list[dict[str, object]] = []
@@ -129,6 +134,8 @@ class _FakeSupabaseClient:
         self._tables: dict[str, list[dict[str, object]]] = {}
         self.fail_upsert_tables: set[str] = set()
         self.fail_upsert_once_tables: set[str] = set()
+        self.fail_delete_tables: set[str] = set()
+        self.fail_delete_once_tables: set[str] = set()
         self.non_dict_select_tables: set[str] = set()
 
     def table(self, table_name: str) -> _FakeSupabaseQuery:
@@ -844,5 +851,36 @@ def test_supabase_rollback_invalid_blob_snapshot_does_not_delete_existing_blob_r
         assert restored is not None
         chart_ref = next(item for item in restored.blob_refs if item.kind == "chart_payload")
         assert chart_ref.verify_payload(b'{"chart":"stable"}')
+
+    asyncio.run(_run())
+
+
+def test_supabase_rollback_skips_blob_upsert_when_blob_delete_fails() -> None:
+    async def _run() -> None:
+        client = _FakeSupabaseClient()
+        store = SupabaseValidationMetadataStore(client)
+        service = ValidationStorageService(metadata_store=store)
+
+        original_run = _run_metadata(status="queued", final_decision="pending")
+        original_review = _review_metadata(trader_status="requested")
+        original_refs = _blob_refs(chart_payload=b'{"chart":"stable"}')
+        await service.persist_run(
+            metadata=original_run,
+            review_state=original_review,
+            blob_refs=original_refs,
+        )
+
+        snapshot = await store._capture_run_bundle(run_id=original_run.run_id)  # noqa: SLF001
+        assert isinstance(snapshot.get("blob_rows"), list)
+
+        client.fail_delete_once_tables.add("validation_blob_refs")
+        client.fail_upsert_tables.add("validation_blob_refs")
+
+        with pytest.raises(ValidationMetadataStoreError, match="forced-delete-failure:validation_blob_refs") as exc_info:
+            await store._restore_run_bundle(  # noqa: SLF001
+                run_id=original_run.run_id,
+                snapshot=snapshot,
+            )
+        assert "forced-upsert-failure:validation_blob_refs" not in str(exc_info.value)
 
     asyncio.run(_run())

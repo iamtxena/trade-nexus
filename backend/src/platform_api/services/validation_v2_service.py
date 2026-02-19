@@ -429,7 +429,7 @@ class ValidationV2Service:
                 )
             trader_status_map = {
                 "pass": "approved",
-                "conditional_pass": "requested",
+                "conditional_pass": "approved",
                 "fail": "rejected",
             }
             comments = [item.strip() for item in request.comments if item.strip()]
@@ -442,11 +442,15 @@ class ValidationV2Service:
         deterministic_decision = self._resolve_deterministic_decision(artifact_payload)
         agent_review_payload = cast(dict[str, Any], artifact_payload["agentReview"])
         trader_status = cast(str, trader_review["status"])
+        trader_decision: ValidationDecision | None = None
+        if reviewer_type == "trader":
+            trader_decision = cast(ValidationDecision, decision)
         final_decision = self._resolve_final_decision(
             deterministic_decision=deterministic_decision,
             agent_status=cast(ValidationDecision, agent_review_payload["status"]),
             trader_status=trader_status,
             policy=record.policy,
+            trader_decision=trader_decision,
         )
 
         now = utc_now()
@@ -787,6 +791,7 @@ class ValidationV2Service:
         agent_status: ValidationDecision,
         trader_status: str,
         policy: ValidationPolicyConfig,
+        trader_decision: ValidationDecision | None = None,
     ) -> ValidationDecision:
         if deterministic_decision == "fail":
             return "fail"
@@ -800,6 +805,8 @@ class ValidationV2Service:
             if trader_status == "rejected":
                 return "fail"
             if trader_status != "approved":
+                return "conditional_pass"
+            if trader_decision == "conditional_pass":
                 return "conditional_pass"
 
         if agent_status == "conditional_pass":

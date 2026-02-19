@@ -439,6 +439,68 @@ def test_validation_v2_routes_wire_deterministic_and_agent_outputs() -> None:
     assert run_artifact["finalDecision"] in {"pass", "conditional_pass", "fail"}
 
 
+def test_validation_v2_trader_conditional_pass_is_reviewed_but_not_fully_passed() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-trader-001",
+        "X-Tenant-Id": "tenant-v2-validation-trader",
+        "X-User-Id": "user-v2-validation-trader",
+    }
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-trader-run-001"},
+        json={
+            "strategyId": "strat-001",
+            "providerRefId": "lona-strategy-123",
+            "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+            "requestedIndicators": ["zigzag", "ema"],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+            "policy": {
+                "profile": "STANDARD",
+                "blockMergeOnFail": True,
+                "blockReleaseOnFail": True,
+                "blockMergeOnAgentFail": False,
+                "blockReleaseOnAgentFail": False,
+                "requireTraderReview": True,
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": True,
+            },
+        },
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    before_review = client.get(f"/v2/validation-runs/{run_id}/artifact", headers=headers)
+    assert before_review.status_code == 200
+    assert before_review.json()["artifact"]["traderReview"]["status"] == "requested"
+
+    review_response = client.post(
+        f"/v2/validation-runs/{run_id}/review",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-trader-review-001"},
+        json={
+            "reviewerType": "trader",
+            "decision": "conditional_pass",
+            "summary": "Approved with caution on market volatility regime shifts.",
+            "comments": ["Needs guardrails before rollout."],
+            "findings": [],
+        },
+    )
+    assert review_response.status_code == 202
+
+    after_review = client.get(f"/v2/validation-runs/{run_id}/artifact", headers=headers)
+    assert after_review.status_code == 200
+    artifact = after_review.json()["artifact"]
+    assert artifact["traderReview"]["status"] == "approved"
+    assert artifact["finalDecision"] == "conditional_pass"
+
+    run = client.get(f"/v2/validation-runs/{run_id}", headers=headers)
+    assert run.status_code == 200
+    assert run.json()["run"]["finalDecision"] == "conditional_pass"
+
+
 def test_validation_v2_create_run_idempotency_and_conflict() -> None:
     client = _client()
     headers = {

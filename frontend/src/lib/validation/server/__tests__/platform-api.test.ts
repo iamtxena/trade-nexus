@@ -71,6 +71,40 @@ describe('callValidationPlatform', () => {
       }),
     );
   });
+
+  test('forwards list-run GET call without request body', async () => {
+    const fetchMock = mock(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ requestId: 'req-v2-004', runs: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
+
+    await callValidationPlatform({
+      method: 'GET',
+      path: '/v2/validation-runs?limit=25',
+      backendBaseUrl: 'https://api.trade-nexus.local/',
+      access: {
+        userId: 'user-004',
+        tenantId: 'tenant-004',
+        requestId: 'req-web-validation-004',
+      },
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const firstCall = fetchMock.mock.calls[0] as unknown;
+    const [url, requestInit] = firstCall as [string, RequestInit];
+    expect(url).toBe('https://api.trade-nexus.local/v2/validation-runs?limit=25');
+    expect(requestInit.method).toBe('GET');
+    expect(getHeader(requestInit.headers, 'X-Request-Id')).toBe('req-web-validation-004');
+    expect(getHeader(requestInit.headers, 'X-Tenant-Id')).toBe('tenant-004');
+    expect(getHeader(requestInit.headers, 'X-User-Id')).toBe('user-004');
+    expect(getHeader(requestInit.headers, 'Content-Type')).toBeNull();
+    expect(requestInit.body).toBeUndefined();
+  });
 });
 
 describe('proxyValidationPlatformCall', () => {

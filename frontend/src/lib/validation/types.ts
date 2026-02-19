@@ -23,6 +23,11 @@ export interface ValidationRunResponse {
   run: ValidationRunSummary;
 }
 
+export interface ValidationRunListResponse {
+  requestId: string;
+  runs: ValidationRunSummary[];
+}
+
 export interface ValidationStrategyRef {
   strategyId: string;
   provider: string;

@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
-import { type FormEvent, useMemo, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { resolveTraderReviewLaneState } from '@/lib/validation/review-lane-state';
 import {
+  resolveRunIdForListToDetailTransition,
+  sortValidationRunsByUpdatedAtDesc,
+} from '@/lib/validation/review-run-list-state';
+import {
   type CreateValidationRunRequestPayload,
   type ErrorPayload,
   type ValidationArtifactResponse,
@@ -35,8 +39,10 @@ import {
   type ValidationRenderFormat,
   type ValidationRenderResponse,
   type ValidationReviewerType,
+  type ValidationRunListResponse,
   type ValidationRunResponse,
   type ValidationRunReviewRequestPayload,
+  type ValidationRunSummary,
   isValidationRunArtifact,
 } from '@/lib/validation/types';
 
@@ -115,8 +121,20 @@ function toneToBadgeVariant(tone: ReturnType<typeof resolveTraderReviewLaneState
   }
 }
 
+function decisionToBadgeVariant(decision: ValidationRunSummary['finalDecision']) {
+  switch (decision) {
+    case 'pass':
+      return 'default';
+    case 'fail':
+      return 'destructive';
+    default:
+      return 'secondary';
+  }
+}
+
 export default function ValidationPage() {
   const [runLookupId, setRunLookupId] = useState('');
+  const [runList, setRunList] = useState<ValidationRunSummary[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [runResponse, setRunResponse] = useState<ValidationRunResponse | null>(null);
   const [artifactResponse, setArtifactResponse] = useState<ValidationArtifactResponse | null>(null);
@@ -127,6 +145,7 @@ export default function ValidationPage() {
     useState<ValidationCreateFormState>(DEFAULT_CREATE_FORM_STATE);
   const [reviewForm, setReviewForm] =
     useState<ValidationReviewFormState>(DEFAULT_REVIEW_FORM_STATE);
+  const [isLoadingList, setIsLoadingList] = useState(false);
   const [isLoadingRun, setIsLoadingRun] = useState(false);
   const [isCreatingRun, setIsCreatingRun] = useState(false);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
@@ -152,6 +171,67 @@ export default function ValidationPage() {
     }
     return resolveTraderReviewLaneState(runArtifact.traderReview);
   }, [runArtifact]);
+
+  const traderCommentEntries = useMemo(() => {
+    if (!runArtifact) {
+      return [];
+    }
+    const occurrences = new Map<string, number>();
+    return runArtifact.traderReview.comments.map((comment) => {
+      const count = (occurrences.get(comment) ?? 0) + 1;
+      occurrences.set(comment, count);
+      return {
+        key: `${comment}-${count}`,
+        comment,
+      };
+    });
+  }, [runArtifact]);
+
+  const loadRunList = useCallback(
+    async (options?: {
+      clearNotice?: boolean;
+      selectRunId?: string | null;
+      suppressErrors?: boolean;
+    }): Promise<void> => {
+      const clearNotice = options?.clearNotice ?? true;
+      setIsLoadingList(true);
+      setErrorMessage(null);
+      if (clearNotice) {
+        setNoticeMessage(null);
+      }
+      try {
+        const response = await fetch('/api/validation/runs');
+        const responsePayload = await response.json().catch(() => null);
+        if (!response.ok) {
+          if (!options?.suppressErrors) {
+            setErrorMessage(
+              extractErrorMessage(responsePayload, `Run list request failed (${response.status})`),
+            );
+          }
+          return;
+        }
+
+        const runsPayload = responsePayload as ValidationRunListResponse;
+        const runs = sortValidationRunsByUpdatedAtDesc(runsPayload.runs ?? []);
+        setRunList(runs);
+        if (options?.selectRunId && !runs.some((run) => run.id === options.selectRunId)) {
+          setActiveRunId(null);
+          setRunResponse(null);
+          setArtifactResponse(null);
+          setRenderJobs({});
+        }
+      } catch (error) {
+        if (!options?.suppressErrors) {
+          setErrorMessage(
+            error instanceof Error ? error.message : 'Failed to load validation runs.',
+          );
+        }
+      } finally {
+        setIsLoadingList(false);
+      }
+    },
+    [],
+  );
 
   async function loadRunById(
     runId: string,
@@ -201,6 +281,10 @@ export default function ValidationPage() {
     }
   }
 
+  useEffect(() => {
+    void loadRunList({ clearNotice: false, suppressErrors: true });
+  }, [loadRunList]);
+
   async function handleLoadRun(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const normalized = runLookupId.trim();
@@ -209,6 +293,15 @@ export default function ValidationPage() {
       return;
     }
     await loadRunById(normalized);
+  }
+
+  async function handleOpenRunFromList(runId: string) {
+    const targetRunId = resolveRunIdForListToDetailTransition(runList, runId, activeRunId);
+    if (!targetRunId) {
+      setErrorMessage('Selected run is no longer available in the list.');
+      return;
+    }
+    await loadRunById(targetRunId);
   }
 
   async function handleCreateRun(event: FormEvent<HTMLFormElement>) {
@@ -278,6 +371,11 @@ export default function ValidationPage() {
         clearNotice: false,
         successNotice: createNotice,
       });
+      void loadRunList({
+        clearNotice: false,
+        selectRunId: createdRun,
+        suppressErrors: true,
+      });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to create validation run.');
     } finally {
@@ -331,6 +429,11 @@ export default function ValidationPage() {
       await loadRunById(activeRunId, {
         clearNotice: false,
         successNotice: reviewNotice,
+      });
+      void loadRunList({
+        clearNotice: false,
+        selectRunId: activeRunId,
+        suppressErrors: true,
       });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to submit review.');
@@ -406,6 +509,84 @@ export default function ValidationPage() {
           <span>{noticeMessage}</span>
         </div>
       ) : null}
+
+      <Card className="py-4">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle>Validation Run List</CardTitle>
+            <CardDescription>Open a run from list to detail review flow.</CardDescription>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isLoadingList}
+            onClick={() => {
+              void loadRunList();
+            }}
+          >
+            {isLoadingList ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Refreshing…
+              </>
+            ) : (
+              'Refresh Runs'
+            )}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {isLoadingList && runList.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+              Loading validation runs…
+            </div>
+          ) : runList.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+              No validation runs found for this tenant/user context yet.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {runList.map((run) => (
+                <div
+                  key={run.id}
+                  className={`flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between ${
+                    activeRunId === run.id ? 'border-primary/40 bg-primary/5' : 'border-border'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <p className="font-mono text-xs text-foreground">{run.id}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{run.status}</Badge>
+                      <Badge variant={decisionToBadgeVariant(run.finalDecision)}>
+                        {run.finalDecision}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        Updated {new Date(run.updatedAt).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={isLoadingRun}
+                    onClick={() => {
+                      void handleOpenRunFromList(run.id);
+                    }}
+                  >
+                    {isLoadingRun ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" />
+                        Loading…
+                      </>
+                    ) : (
+                      'Open Run'
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="py-4">
@@ -719,12 +900,12 @@ export default function ValidationPage() {
                   </div>
                 ) : null}
 
-                {runArtifact?.traderReview.comments.length ? (
+                {traderCommentEntries.length ? (
                   <div className="space-y-1 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
                     <p className="font-medium text-foreground">Current trader comments</p>
-                    {runArtifact.traderReview.comments.map((comment, index) => (
-                      <p key={`${comment}-${index}`} className="text-muted-foreground">
-                        - {comment}
+                    {traderCommentEntries.map((entry) => (
+                      <p key={entry.key} className="text-muted-foreground">
+                        - {entry.comment}
                       </p>
                     ))}
                   </div>

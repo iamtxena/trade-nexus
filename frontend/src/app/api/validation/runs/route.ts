@@ -7,6 +7,21 @@ import {
 } from '@/lib/validation/server/platform-api';
 import type { CreateValidationRunRequestPayload } from '@/lib/validation/types';
 
+export async function GET(request: NextRequest) {
+  const accessResult = await resolveValidationAccess();
+  if (!accessResult.ok) {
+    return accessResult.response;
+  }
+
+  const query = request.nextUrl.searchParams.toString();
+  const path = query ? `/v2/validation-runs?${query}` : '/v2/validation-runs';
+  return proxyValidationPlatformCall({
+    method: 'GET',
+    path,
+    access: accessResult.access,
+  });
+}
+
 export async function POST(request: NextRequest) {
   const accessResult = await resolveValidationAccess();
   if (!accessResult.ok) {

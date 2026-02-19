@@ -476,4 +476,78 @@ describe('validation command', () => {
       expect(consoleErrorSpy).toHaveBeenCalled();
     }
   });
+
+  test('review exits on invalid-state 409 envelope', async () => {
+    fetchMock = mock((_url: string, _options?: RequestInit) =>
+      Promise.resolve(
+        jsonResponse(
+          {
+            requestId: 'req-v-review-conflict-001',
+            error: {
+              code: 'VALIDATION_STATE_CONFLICT',
+              message: 'Review not allowed when run is queued.',
+            },
+          },
+          409,
+        ),
+      ),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const { validationCommand } = await import('../validation');
+
+    try {
+      await validationCommand([
+        'review',
+        '--run-id',
+        'valrun-0003',
+        '--reviewer',
+        'trader',
+        '--decision',
+        'pass',
+      ]);
+      expect(true).toBe(false);
+    } catch (error) {
+      expect((error as Error).message).toBe('process.exit(1)');
+      const rendered = String(consoleErrorSpy.mock.calls.at(-1)?.[0] ?? '');
+      expect(
+        rendered.includes(
+          'Platform API error 409 (VALIDATION_STATE_CONFLICT): Review not allowed when run is queued. [requestId=req-v-review-conflict-001]',
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test('render exits on invalid-state 409 envelope', async () => {
+    fetchMock = mock((_url: string, _options?: RequestInit) =>
+      Promise.resolve(
+        jsonResponse(
+          {
+            requestId: 'req-v-render-conflict-001',
+            error: {
+              code: 'VALIDATION_STATE_CONFLICT',
+              message: 'Render cannot be requested before review is finalized.',
+            },
+          },
+          409,
+        ),
+      ),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const { validationCommand } = await import('../validation');
+
+    try {
+      await validationCommand(['render', '--run-id', 'valrun-0003', '--format', 'html']);
+      expect(true).toBe(false);
+    } catch (error) {
+      expect((error as Error).message).toBe('process.exit(1)');
+      const rendered = String(consoleErrorSpy.mock.calls.at(-1)?.[0] ?? '');
+      expect(
+        rendered.includes(
+          'Platform API error 409 (VALIDATION_STATE_CONFLICT): Render cannot be requested before review is finalized. [requestId=req-v-render-conflict-001]',
+        ),
+      ).toBe(true);
+    }
+  });
 });

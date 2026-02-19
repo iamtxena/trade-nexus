@@ -45,6 +45,23 @@ def _validate_against_schema(instance: Any, schema: dict[str, Any], *, path: str
 
     schema_type = schema.get("type")
 
+    if isinstance(schema_type, list):
+        if "null" in schema_type and instance is None:
+            return
+        supported_types = [item for item in schema_type if item != "null"]
+        last_error: SchemaValidationError | None = None
+        for candidate_type in supported_types:
+            candidate_schema = copy.deepcopy(schema)
+            candidate_schema["type"] = candidate_type
+            try:
+                _validate_against_schema(instance, candidate_schema, path=path)
+                return
+            except SchemaValidationError as exc:
+                last_error = exc
+        if last_error is not None:
+            raise last_error
+        raise SchemaValidationError(f"{path}: unsupported schema type declaration {schema_type!r}")
+
     if schema_type == "object":
         if not isinstance(instance, dict):
             raise SchemaValidationError(f"{path}: expected object, got {type(instance).__name__}")
@@ -318,5 +335,21 @@ def test_validation_agent_review_result_schema_rejects_additional_properties() -
     schema = _load_schema(VALIDATION_AGENT_REVIEW_RESULT_SCHEMA_PATH)
     payload = _valid_agent_review_result_payload()
     payload["budget"]["limits"]["unexpectedBudgetField"] = "unexpected"
+    with pytest.raises(SchemaValidationError):
+        _validate_against_schema(payload, schema)
+
+
+def test_validation_agent_review_result_schema_accepts_null_breach_reason() -> None:
+    schema = _load_schema(VALIDATION_AGENT_REVIEW_RESULT_SCHEMA_PATH)
+    payload = _valid_agent_review_result_payload()
+    payload["budget"]["withinBudget"] = True
+    payload["budget"]["breachReason"] = None
+    _validate_against_schema(payload, schema)
+
+
+def test_validation_agent_review_result_schema_rejects_non_string_non_null_breach_reason() -> None:
+    schema = _load_schema(VALIDATION_AGENT_REVIEW_RESULT_SCHEMA_PATH)
+    payload = _valid_agent_review_result_payload()
+    payload["budget"]["breachReason"] = ["unexpected-list"]
     with pytest.raises(SchemaValidationError):
         _validate_against_schema(payload, schema)

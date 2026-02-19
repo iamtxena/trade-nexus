@@ -28,11 +28,13 @@ type ValidationHistory = {
   updatedAt: string;
 };
 
-const DEFAULT_HISTORY: ValidationHistory = {
-  runs: [],
-  replays: [],
-  updatedAt: new Date(0).toISOString(),
-};
+function createEmptyHistory(): ValidationHistory {
+  return {
+    runs: [],
+    replays: [],
+    updatedAt: new Date(0).toISOString(),
+  };
+}
 
 export function getValidationHistoryPath(): string {
   const cliHome = process.env.NEXUS_CLI_HOME?.trim() || join(homedir(), '.trade-nexus');
@@ -40,7 +42,7 @@ export function getValidationHistoryPath(): string {
 }
 
 export function readValidationHistory(filePath = getValidationHistoryPath()): ValidationHistory {
-  if (!existsSync(filePath)) return { ...DEFAULT_HISTORY };
+  if (!existsSync(filePath)) return createEmptyHistory();
 
   try {
     const raw = JSON.parse(readFileSync(filePath, 'utf-8')) as Partial<ValidationHistory>;
@@ -50,7 +52,7 @@ export function readValidationHistory(filePath = getValidationHistoryPath()): Va
       updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date(0).toISOString(),
     };
   } catch {
-    return { ...DEFAULT_HISTORY };
+    return createEmptyHistory();
   }
 }
 

@@ -195,8 +195,9 @@ async function triggerOptionalRenders(params: {
   formats: ValidationRenderFormat[];
   requestId?: string;
   idempotencyKey?: string;
+  client?: ReturnType<typeof getPlatformApiClient>;
 }) {
-  const client = getPlatformApiClient();
+  const client = params.client ?? getPlatformApiClient();
   const responses = [];
   for (const [index, format] of params.formats.entries()) {
     const response = await client.createValidationRender(
@@ -208,10 +209,9 @@ async function triggerOptionalRenders(params: {
       },
     );
     responses.push(response);
+    // Keep run history keyed by runId without overwriting run status/decision from render jobs.
     recordValidationRun({
       runId: response.render.runId,
-      requestId: response.requestId,
-      status: response.render.status,
     });
   }
   return responses;
@@ -520,26 +520,13 @@ async function renderValidationRun(args: string[]) {
 
   const client = getPlatformApiClient();
   try {
-    const responses = [];
-    for (const [index, format] of formats.entries()) {
-      const response = await client.createValidationRender(
-        values['run-id'],
-        { format },
-        {
-          requestId: deriveRequestId(values['request-id'], `render-${format}-${index}`),
-          idempotencyKey: deriveIdempotencyKey(
-            values['idempotency-key'],
-            `render-${format}-${index}`,
-          ),
-        },
-      );
-      responses.push(response);
-      recordValidationRun({
-        runId: response.render.runId,
-        requestId: response.requestId,
-        status: response.render.status,
-      });
-    }
+    const responses = await triggerOptionalRenders({
+      runId: values['run-id'],
+      formats,
+      requestId: values['request-id'],
+      idempotencyKey: values['idempotency-key'],
+      client,
+    });
 
     if (responses.length === 1) {
       printJSON(responses[0]);
@@ -607,17 +594,18 @@ function buildReplayPayloadFromFlags(
 
   let policyOverrides: Record<string, unknown> | undefined;
   if (values['policy-overrides']) {
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(values['policy-overrides']);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        exitWithError('--policy-overrides must be a JSON object');
-      }
-      policyOverrides = parsed as Record<string, unknown>;
+      parsed = JSON.parse(values['policy-overrides']);
     } catch (error) {
       exitWithError(
         `Unable to parse --policy-overrides JSON: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      exitWithError('--policy-overrides must be a JSON object');
+    }
+    policyOverrides = parsed as Record<string, unknown>;
   }
 
   return {

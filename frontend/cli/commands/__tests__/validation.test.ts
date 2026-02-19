@@ -139,9 +139,11 @@ describe('validation command', () => {
     const historyPath = join(tempCliHome, 'validation-history.json');
     expect(existsSync(historyPath)).toBe(true);
     const history = JSON.parse(readFileSync(historyPath, 'utf-8')) as {
-      runs: Array<{ runId: string }>;
+      runs: Array<{ runId: string; status?: string }>;
     };
-    expect(history.runs.some((entry) => entry.runId === 'valrun-0001')).toBe(true);
+    const runEntry = history.runs.find((entry) => entry.runId === 'valrun-0001');
+    expect(runEntry).toBeDefined();
+    expect(runEntry?.status).toBe('queued');
   });
 
   test('list uses local history and does not call platform API', async () => {
@@ -402,6 +404,27 @@ describe('validation command', () => {
       expect(true).toBe(false);
     } catch (error) {
       expect((error as Error).message).toBe('process.exit(1)');
+    }
+  });
+
+  test('replay preserves explicit non-object override error message', async () => {
+    const { validationCommand } = await import('../validation');
+
+    try {
+      await validationCommand([
+        'replay',
+        '--baseline-id',
+        'valbase-001',
+        '--candidate-run-id',
+        'valrun-0010',
+        '--policy-overrides',
+        '[]',
+      ]);
+      expect(true).toBe(false);
+    } catch (error) {
+      expect((error as Error).message).toBe('process.exit(1)');
+      const rendered = String(consoleErrorSpy.mock.calls.at(-1)?.[0] ?? '');
+      expect(rendered.includes('--policy-overrides must be a JSON object')).toBe(true);
     }
   });
 

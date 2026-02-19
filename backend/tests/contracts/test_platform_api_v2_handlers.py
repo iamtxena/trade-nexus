@@ -386,6 +386,200 @@ def test_conversation_v2_routes() -> None:
     assert null_topic.status_code == 422
 
 
+def test_validation_v2_routes_wire_deterministic_and_agent_outputs() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-wire-001",
+        "X-Tenant-Id": "tenant-v2-validation",
+        "X-User-Id": "user-v2-validation",
+    }
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-wire-001"},
+        json={
+            "strategyId": "strat-001",
+            "providerRefId": "lona-strategy-123",
+            "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+            "requestedIndicators": ["zigzag", "ema"],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+            "policy": {
+                "profile": "STANDARD",
+                "blockMergeOnFail": True,
+                "blockReleaseOnFail": True,
+                "blockMergeOnAgentFail": True,
+                "blockReleaseOnAgentFail": False,
+                "requireTraderReview": False,
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": True,
+            },
+        },
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    artifact = client.get(f"/v2/validation-runs/{run_id}/artifact", headers=headers)
+    assert artifact.status_code == 200
+    payload = artifact.json()
+    assert payload["requestId"] == headers["X-Request-Id"]
+    assert payload["artifactType"] == "validation_run"
+
+    run_artifact = payload["artifact"]
+    assert run_artifact["requestId"] == headers["X-Request-Id"]
+    assert run_artifact["tenantId"] == headers["X-Tenant-Id"]
+    assert run_artifact["userId"] == headers["X-User-Id"]
+    assert set(run_artifact["deterministicChecks"]) == {
+        "indicatorFidelity",
+        "tradeCoherence",
+        "metricConsistency",
+    }
+    assert set(run_artifact["agentReview"]) == {"status", "summary", "findings"}
+    assert run_artifact["finalDecision"] in {"pass", "conditional_pass", "fail"}
+
+
+def test_validation_v2_create_run_idempotency_and_conflict() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-idem-001",
+        "X-Tenant-Id": "tenant-v2-validation-idem",
+        "X-User-Id": "user-v2-validation-idem",
+        "Idempotency-Key": "idem-v2-validation-run-001",
+    }
+    payload = {
+        "strategyId": "strat-001",
+        "providerRefId": "lona-strategy-123",
+        "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+        "requestedIndicators": ["zigzag", "ema"],
+        "datasetIds": ["dataset-btc-1h-2025"],
+        "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+        "policy": {
+            "profile": "STANDARD",
+            "blockMergeOnFail": True,
+            "blockReleaseOnFail": True,
+            "blockMergeOnAgentFail": True,
+            "blockReleaseOnAgentFail": False,
+            "requireTraderReview": False,
+            "hardFailOnMissingIndicators": True,
+            "failClosedOnEvidenceUnavailable": True,
+        },
+    }
+
+    first = client.post("/v2/validation-runs", headers=headers, json=payload)
+    assert first.status_code == 202
+    second = client.post("/v2/validation-runs", headers=headers, json=payload)
+    assert second.status_code == 202
+    assert second.json()["run"]["id"] == first.json()["run"]["id"]
+
+    conflict = client.post(
+        "/v2/validation-runs",
+        headers=headers,
+        json={**payload, "prompt": "different payload"},
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["error"]["code"] == "IDEMPOTENCY_KEY_CONFLICT"
+
+
+def test_validation_v2_rejects_invalid_policy_profile_and_state() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-neg-001",
+        "X-Tenant-Id": "tenant-v2-validation-neg",
+        "X-User-Id": "user-v2-validation-neg",
+    }
+    base_payload = {
+        "strategyId": "strat-001",
+        "providerRefId": "lona-strategy-123",
+        "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+        "requestedIndicators": ["zigzag", "ema"],
+        "datasetIds": ["dataset-btc-1h-2025"],
+        "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+        "policy": {
+            "profile": "STANDARD",
+            "blockMergeOnFail": True,
+            "blockReleaseOnFail": True,
+            "blockMergeOnAgentFail": True,
+            "blockReleaseOnAgentFail": False,
+            "requireTraderReview": False,
+            "hardFailOnMissingIndicators": True,
+            "failClosedOnEvidenceUnavailable": True,
+        },
+    }
+
+    invalid_profile = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-neg-profile-001"},
+        json={**base_payload, "policy": {**base_payload["policy"], "profile": "ULTRA"}},
+    )
+    assert invalid_profile.status_code == 400
+    assert invalid_profile.json()["requestId"] == headers["X-Request-Id"]
+    assert invalid_profile.json()["error"]["code"] == "VALIDATION_POLICY_INVALID"
+
+    invalid_policy = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-neg-policy-001"},
+        json={
+            **base_payload,
+            "policy": {**base_payload["policy"], "hardFailOnMissingIndicators": False},
+        },
+    )
+    assert invalid_policy.status_code == 400
+    assert invalid_policy.json()["requestId"] == headers["X-Request-Id"]
+    assert invalid_policy.json()["error"]["code"] == "VALIDATION_POLICY_INVALID"
+
+    invalid_state = client.post(
+        "/v2/validation-baselines",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-neg-state-001"},
+        json={
+            "runId": "valrun-missing",
+            "name": "missing-run-baseline",
+        },
+    )
+    assert invalid_state.status_code == 404
+    assert invalid_state.json()["requestId"] == headers["X-Request-Id"]
+    assert invalid_state.json()["error"]["code"] == "VALIDATION_RUN_NOT_FOUND"
+
+
+def test_validation_v2_blocks_provider_ref_bypass() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-provider-001",
+        "X-Tenant-Id": "tenant-v2-validation-provider",
+        "X-User-Id": "user-v2-validation-provider",
+    }
+
+    response = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-provider-001"},
+        json={
+            "strategyId": "strat-001",
+            "providerRefId": "external-provider-direct-bypass",
+            "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+            "requestedIndicators": ["zigzag", "ema"],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+            "policy": {
+                "profile": "STANDARD",
+                "blockMergeOnFail": True,
+                "blockReleaseOnFail": True,
+                "blockMergeOnAgentFail": True,
+                "blockReleaseOnAgentFail": False,
+                "requireTraderReview": False,
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": True,
+            },
+        },
+    )
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["requestId"] == headers["X-Request-Id"]
+    assert payload["error"]["code"] == "VALIDATION_PROVIDER_REF_MISMATCH"
+
+
 def test_backtest_feedback_is_ingested_into_kb() -> None:
     client = _client()
 

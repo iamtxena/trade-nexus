@@ -14,6 +14,11 @@ from src.platform_api.schemas_v2 import (
     BacktestDataExportResponse,
     ConversationSessionResponse,
     ConversationTurnResponse,
+    CreateValidationBaselineRequest,
+    CreateValidationRegressionReplayRequest,
+    CreateValidationRenderRequest,
+    CreateValidationRunRequest,
+    CreateValidationRunReviewRequest,
     CreateConversationSessionRequest,
     CreateConversationTurnRequest,
     KnowledgePatternListResponse,
@@ -21,8 +26,15 @@ from src.platform_api.schemas_v2 import (
     KnowledgeSearchRequest,
     KnowledgeSearchResponse,
     MarketScanV2Response,
+    ValidationArtifactResponse,
+    ValidationBaselineResponse,
+    ValidationRegressionReplayResponse,
+    ValidationRenderResponse,
+    ValidationRunResponse,
+    ValidationRunReviewResponse,
 )
 from src.platform_api.services.conversation_service import ConversationService
+from src.platform_api.services.validation_v2_service import ValidationV2Service
 from src.platform_api.services.v2_services import DataV2Service, KnowledgeV2Service, ResearchV2Service
 
 router = APIRouter(prefix="/v2")
@@ -36,6 +48,7 @@ _research_service = ResearchV2Service(
     store=router_v1_module._store,
 )
 _conversation_service = ConversationService(store=router_v1_module._store)
+_validation_service = ValidationV2Service(store=router_v1_module._store)
 
 
 async def _request_context(
@@ -162,3 +175,117 @@ async def create_conversation_turn_v2(
     context: ContextDep,
 ) -> ConversationTurnResponse:
     return await _conversation_service.create_turn(session_id=sessionId, request=request, context=context)
+
+
+@router.post(
+    "/validation-runs",
+    response_model=ValidationRunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Validation"],
+)
+async def create_validation_run_v2(
+    request: CreateValidationRunRequest,
+    context: ContextDep,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> ValidationRunResponse:
+    return await _validation_service.create_validation_run(
+        request=request,
+        context=context,
+        idempotency_key=idempotency_key,
+    )
+
+
+@router.get("/validation-runs/{runId}", response_model=ValidationRunResponse, tags=["Validation"])
+async def get_validation_run_v2(
+    runId: str,
+    context: ContextDep,
+) -> ValidationRunResponse:
+    return await _validation_service.get_validation_run(run_id=runId, context=context)
+
+
+@router.get(
+    "/validation-runs/{runId}/artifact",
+    response_model=ValidationArtifactResponse,
+    tags=["Validation"],
+)
+async def get_validation_run_artifact_v2(
+    runId: str,
+    context: ContextDep,
+) -> ValidationArtifactResponse:
+    return await _validation_service.get_validation_run_artifact(run_id=runId, context=context)
+
+
+@router.post(
+    "/validation-runs/{runId}/review",
+    response_model=ValidationRunReviewResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Validation"],
+)
+async def submit_validation_run_review_v2(
+    runId: str,
+    request: CreateValidationRunReviewRequest,
+    context: ContextDep,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> ValidationRunReviewResponse:
+    return await _validation_service.submit_validation_run_review(
+        run_id=runId,
+        request=request,
+        context=context,
+        idempotency_key=idempotency_key,
+    )
+
+
+@router.post(
+    "/validation-runs/{runId}/render",
+    response_model=ValidationRenderResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Validation"],
+)
+async def create_validation_run_render_v2(
+    runId: str,
+    request: CreateValidationRenderRequest,
+    context: ContextDep,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> ValidationRenderResponse:
+    return await _validation_service.create_validation_render(
+        run_id=runId,
+        request=request,
+        context=context,
+        idempotency_key=idempotency_key,
+    )
+
+
+@router.post(
+    "/validation-baselines",
+    response_model=ValidationBaselineResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Validation"],
+)
+async def create_validation_baseline_v2(
+    request: CreateValidationBaselineRequest,
+    context: ContextDep,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> ValidationBaselineResponse:
+    return await _validation_service.create_validation_baseline(
+        request=request,
+        context=context,
+        idempotency_key=idempotency_key,
+    )
+
+
+@router.post(
+    "/validation-regressions/replay",
+    response_model=ValidationRegressionReplayResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Validation"],
+)
+async def replay_validation_regression_v2(
+    request: CreateValidationRegressionReplayRequest,
+    context: ContextDep,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> ValidationRegressionReplayResponse:
+    return await _validation_service.replay_validation_regression(
+        request=request,
+        context=context,
+        idempotency_key=idempotency_key,
+    )

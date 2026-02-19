@@ -112,7 +112,7 @@ class PortableValidationModule:
         generated_at = created_at or utc_now()
         snapshot = self._build_snapshot(artifact=artifact, generated_at=generated_at)
 
-        agent_result = self._agent_review_service.review(snapshot=snapshot, tool_calls=())
+        agent_result = self._agent_review_service.review(snapshot=snapshot)
         artifact["agentReview"] = {
             "status": agent_result.status,
             "summary": agent_result.summary,

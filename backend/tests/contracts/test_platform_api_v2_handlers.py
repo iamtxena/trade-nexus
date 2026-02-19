@@ -500,6 +500,23 @@ def test_validation_v2_trader_conditional_pass_is_reviewed_but_not_fully_passed(
     assert run.status_code == 200
     assert run.json()["run"]["finalDecision"] == "conditional_pass"
 
+    agent_follow_up_review = client.post(
+        f"/v2/validation-runs/{run_id}/review",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-trader-agent-follow-up-001"},
+        json={
+            "reviewerType": "agent",
+            "decision": "pass",
+            "summary": "No additional deterministic or evidence issues.",
+            "findings": [],
+            "comments": [],
+        },
+    )
+    assert agent_follow_up_review.status_code == 202
+
+    run_after_agent = client.get(f"/v2/validation-runs/{run_id}", headers=headers)
+    assert run_after_agent.status_code == 200
+    assert run_after_agent.json()["run"]["finalDecision"] == "conditional_pass"
+
 
 def test_validation_v2_create_run_idempotency_and_conflict() -> None:
     client = _client()

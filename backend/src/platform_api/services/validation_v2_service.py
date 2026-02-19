@@ -63,6 +63,7 @@ class _ValidationRunRecord:
     artifact: ValidationRunArtifact
     llm_snapshot: ValidationLlmSnapshotArtifact
     policy: ValidationPolicyConfig
+    trader_decision: ValidationDecision | None = None
     render_jobs: dict[str, ValidationRenderJob] = field(default_factory=dict)
 
 
@@ -447,15 +448,14 @@ class ValidationV2Service:
         deterministic_decision = self._resolve_deterministic_decision(artifact_payload)
         agent_review_payload = cast(dict[str, Any], artifact_payload["agentReview"])
         trader_status = cast(str, trader_review["status"])
-        trader_decision: ValidationDecision | None = None
         if reviewer_type == "trader":
-            trader_decision = cast(ValidationDecision, decision)
+            record.trader_decision = cast(ValidationDecision, decision)
         final_decision = self._resolve_final_decision(
             deterministic_decision=deterministic_decision,
             agent_status=cast(ValidationDecision, agent_review_payload["status"]),
             trader_status=trader_status,
             policy=record.policy,
-            trader_decision=trader_decision,
+            trader_decision=record.trader_decision,
         )
 
         now = utc_now()

@@ -3,34 +3,60 @@
 from __future__ import annotations
 
 import asyncio
-import importlib
+import json
+import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from textwrap import dedent
 from typing import Any
 
-from src.platform_api.validation.connectors.ports import (
-    ConnectorRequestContext,
-    ValidationConnector,
-    ValidationConnectorPayload,
-)
-from src.platform_api.validation.core.deterministic import (
-    DeterministicValidationEvidence,
-    ValidationArtifactContext,
-)
-from src.platform_api.validation.core.portable import PortableValidationModule
-from src.platform_api.validation.render import RenderedValidationArtifact
-from src.platform_api.validation.render.ports import ValidationRenderFormat, ValidationRenderPort
-from src.platform_api.validation.store.ports import ValidationStorePort, ValidationStoreRecord
+import pytest
 
 
-class _PassingConnector(ValidationConnector):
-    def resolve(
-        self,
-        *,
-        context: ConnectorRequestContext,
-        payload: Mapping[str, Any],
-    ) -> ValidationConnectorPayload:
+def _backend_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _run_subprocess_import_check(*modules: str) -> subprocess.CompletedProcess[str]:
+    script = dedent(
+        f"""
+        import importlib
+        import json
+        import sys
+
+        modules = {list(modules)!r}
+        for module in modules:
+            importlib.import_module(module)
+
+        print(
+            json.dumps(
+                {{
+                    "store_metadata_loaded": "src.platform_api.validation.store.metadata" in sys.modules,
+                    "connectors_lona_loaded": "src.platform_api.validation.connectors.lona" in sys.modules,
+                }}
+            )
+        )
+        """
+    )
+    return subprocess.run(
+        [sys.executable, "-c", script],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=str(_backend_root()),
+    )
+
+
+class _PassingConnector:
+    def resolve(self, *, context: Any, payload: Mapping[str, Any]) -> object:
         _ = payload
+        from src.platform_api.validation.connectors.ports import ValidationConnectorPayload
+        from src.platform_api.validation.core.deterministic import (
+            DeterministicValidationEvidence,
+            ValidationArtifactContext,
+        )
+
         return ValidationConnectorPayload(
             artifact_context=ValidationArtifactContext(
                 run_id=context.run_id,
@@ -79,12 +105,10 @@ class _PassingConnector(ValidationConnector):
 
 
 class _MissingIndicatorConnector(_PassingConnector):
-    def resolve(
-        self,
-        *,
-        context: ConnectorRequestContext,
-        payload: Mapping[str, Any],
-    ) -> ValidationConnectorPayload:
+    def resolve(self, *, context: Any, payload: Mapping[str, Any]) -> object:
+        from src.platform_api.validation.connectors.ports import ValidationConnectorPayload
+        from src.platform_api.validation.core.deterministic import DeterministicValidationEvidence
+
         resolved = super().resolve(context=context, payload=payload)
         return ValidationConnectorPayload(
             artifact_context=resolved.artifact_context,
@@ -102,24 +126,26 @@ class _MissingIndicatorConnector(_PassingConnector):
         )
 
 
-class _RecordingStore(ValidationStorePort):
+class _RecordingStore:
     def __init__(self) -> None:
-        self.persisted: list[ValidationStoreRecord] = []
+        self.persisted: list[Any] = []
 
-    async def persist(self, record: ValidationStoreRecord) -> None:
+    async def persist(self, record: Any) -> None:
         self.persisted.append(record)
 
 
-class _RecordingRenderer(ValidationRenderPort):
+class _RecordingRenderer:
     def __init__(self) -> None:
-        self.calls: list[ValidationRenderFormat] = []
+        self.calls: list[str] = []
 
     def render(
         self,
         *,
         artifact: Mapping[str, Any],
-        output_format: ValidationRenderFormat,
-    ) -> RenderedValidationArtifact | None:
+        output_format: str,
+    ) -> object:
+        from src.platform_api.validation.render import RenderedValidationArtifact
+
         self.calls.append(output_format)
         run_id = artifact.get("runId")
         assert isinstance(run_id, str)
@@ -142,19 +168,37 @@ def _policy_payload() -> dict[str, Any]:
     }
 
 
-def test_core_module_import_is_isolated_from_store_and_connector_implementations() -> None:
-    sys.modules.pop("src.platform_api.validation.core.portable", None)
-    sys.modules.pop("src.platform_api.validation.store.metadata", None)
-    sys.modules.pop("src.platform_api.validation.connectors.lona", None)
+@pytest.mark.parametrize(
+    "module_order",
+    [
+        (
+            "src.platform_api.validation.connectors.ports",
+            "src.platform_api.validation.core.portable",
+        ),
+        (
+            "src.platform_api.validation.core.portable",
+            "src.platform_api.validation.connectors.ports",
+        ),
+    ],
+)
+def test_core_module_import_is_isolated_from_store_and_connector_implementations(
+    module_order: Sequence[str],
+) -> None:
+    result = _run_subprocess_import_check(*module_order)
+    assert result.returncode == 0, result.stderr
 
-    importlib.import_module("src.platform_api.validation.core.portable")
+    lines = [line.strip() for line in result.stdout.splitlines() if line.strip() != ""]
+    assert lines, "Expected subprocess to print import-state payload."
+    state = json.loads(lines[-1])
 
-    assert "src.platform_api.validation.store.metadata" not in sys.modules
-    assert "src.platform_api.validation.connectors.lona" not in sys.modules
+    assert state["store_metadata_loaded"] is False
+    assert state["connectors_lona_loaded"] is False
 
 
 def test_portable_core_runs_with_protocol_fakes_across_store_and_render_boundaries() -> None:
     async def _run() -> None:
+        from src.platform_api.validation.core.portable import PortableValidationModule
+
         store = _RecordingStore()
         renderer = _RecordingRenderer()
         module = PortableValidationModule(
@@ -188,6 +232,8 @@ def test_portable_core_runs_with_protocol_fakes_across_store_and_render_boundari
 
 def test_connector_substitution_changes_outcome_without_core_changes() -> None:
     async def _run() -> None:
+        from src.platform_api.validation.core.portable import PortableValidationModule
+
         module_pass = PortableValidationModule(connector=_PassingConnector())
         module_fail = PortableValidationModule(connector=_MissingIndicatorConnector())
 

@@ -642,6 +642,87 @@ def test_validation_v2_blocks_provider_ref_bypass() -> None:
     assert payload["error"]["code"] == "VALIDATION_PROVIDER_REF_MISMATCH"
 
 
+def test_validation_v2_replay_treats_candidate_improvement_as_pass() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-replay-001",
+        "X-Tenant-Id": "tenant-v2-validation-replay",
+        "X-User-Id": "user-v2-validation-replay",
+    }
+    run_payload = {
+        "strategyId": "strat-001",
+        "providerRefId": "lona-strategy-123",
+        "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+        "requestedIndicators": ["zigzag", "ema"],
+        "datasetIds": ["dataset-btc-1h-2025"],
+        "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+        "policy": {
+            "profile": "STANDARD",
+            "blockMergeOnFail": True,
+            "blockReleaseOnFail": True,
+            "blockMergeOnAgentFail": True,
+            "blockReleaseOnAgentFail": False,
+            "requireTraderReview": False,
+            "hardFailOnMissingIndicators": True,
+            "failClosedOnEvidenceUnavailable": True,
+        },
+    }
+
+    baseline_run_response = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-replay-baseline-run-001"},
+        json={**run_payload, "policy": {**run_payload["policy"], "profile": "EXPERT"}},
+    )
+    assert baseline_run_response.status_code == 202
+    baseline_run_id = baseline_run_response.json()["run"]["id"]
+
+    baseline_run = client.get(f"/v2/validation-runs/{baseline_run_id}", headers=headers)
+    assert baseline_run.status_code == 200
+    assert baseline_run.json()["run"]["finalDecision"] == "fail"
+
+    candidate_run_response = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-replay-candidate-run-001"},
+        json=run_payload,
+    )
+    assert candidate_run_response.status_code == 202
+    candidate_run_id = candidate_run_response.json()["run"]["id"]
+
+    candidate_review = client.post(
+        f"/v2/validation-runs/{candidate_run_id}/review",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-replay-candidate-review-001"},
+        json={
+            "reviewerType": "agent",
+            "decision": "pass",
+            "summary": "Candidate run is acceptable.",
+            "findings": [],
+            "comments": [],
+        },
+    )
+    assert candidate_review.status_code == 202
+
+    candidate_run = client.get(f"/v2/validation-runs/{candidate_run_id}", headers=headers)
+    assert candidate_run.status_code == 200
+    assert candidate_run.json()["run"]["finalDecision"] == "pass"
+
+    baseline_response = client.post(
+        "/v2/validation-baselines",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-replay-baseline-001"},
+        json={"runId": baseline_run_id, "name": "expert-baseline"},
+    )
+    assert baseline_response.status_code == 201
+    baseline_id = baseline_response.json()["baseline"]["id"]
+
+    replay = client.post(
+        "/v2/validation-regressions/replay",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-replay-request-001"},
+        json={"baselineId": baseline_id, "candidateRunId": candidate_run_id},
+    )
+    assert replay.status_code == 202
+    assert replay.json()["replay"]["decision"] == "pass"
+
+
 def test_backtest_feedback_is_ingested_into_kb() -> None:
     client = _client()
 

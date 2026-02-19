@@ -653,13 +653,18 @@ class ValidationV2Service:
                 details={"baselineRunId": baseline.baseline.runId},
             )
 
+        baseline_decision = baseline_run.run.finalDecision
+        candidate_decision = candidate.run.finalDecision
+
         decision: ValidationReplayDecision
-        if baseline_run.run.finalDecision == candidate.run.finalDecision:
+        if baseline_decision == candidate_decision:
             decision = "pass"
-        elif candidate.run.finalDecision == "fail":
+        elif candidate_decision == "fail":
             decision = "fail"
-        elif candidate.run.finalDecision == "conditional_pass":
+        elif candidate_decision == "conditional_pass":
             decision = "conditional_pass"
+        elif candidate_decision == "pass":
+            decision = "pass"
         else:
             decision = "unknown"
 

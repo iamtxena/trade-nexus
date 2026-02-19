@@ -12,6 +12,11 @@ from src.platform_api.services.validation_agent_review_service import (
     ValidationAgentReviewService,
     ValidationProfile,
 )
+from tests.contracts.test_validation_schema_contract import (
+    VALIDATION_AGENT_REVIEW_RESULT_SCHEMA_PATH,
+    _load_schema,
+    _validate_against_schema,
+)
 
 
 class _RecordingToolExecutor:
@@ -125,6 +130,16 @@ def test_review_output_contract_shape_is_machine_readable() -> None:
     assert set(budget["limits"]) == {"maxRuntimeSeconds", "maxTokens", "maxToolCalls", "maxFindings"}
     assert set(budget["usage"]) == {"runtimeSeconds", "tokensUsed", "toolCallsUsed"}
     assert isinstance(budget["withinBudget"], bool)
+
+
+def test_review_output_contract_validates_against_agent_review_schema() -> None:
+    service = ValidationAgentReviewService()
+    snapshot = _snapshot(profile="STANDARD")
+    snapshot["deterministicChecks"]["tradeCoherenceStatus"] = "fail"
+
+    payload = service.review(snapshot=snapshot, tool_calls=()).to_contract_payload()
+    schema = _load_schema(VALIDATION_AGENT_REVIEW_RESULT_SCHEMA_PATH)
+    _validate_against_schema(payload, schema)
 
 
 @pytest.mark.parametrize("profile", ["FAST", "STANDARD", "EXPERT"])

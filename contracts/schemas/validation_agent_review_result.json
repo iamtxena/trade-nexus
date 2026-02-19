@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trade-nexus.io/schemas/validation_agent_review_result.json",
+  "title": "Trade Nexus Validation Agent Review Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "summary",
+    "findings",
+    "budget"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "conditional_pass",
+        "fail"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "priority",
+          "confidence",
+          "summary",
+          "evidenceRefs"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "limits",
+        "usage",
+        "withinBudget",
+        "breachReason"
+      ],
+      "properties": {
+        "profile": {
+          "type": "string",
+          "enum": [
+            "FAST",
+            "STANDARD",
+            "EXPERT"
+          ]
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "maxRuntimeSeconds",
+            "maxTokens",
+            "maxToolCalls",
+            "maxFindings"
+          ],
+          "properties": {
+            "maxRuntimeSeconds": {
+              "type": "number",
+              "minimum": 0
+            },
+            "maxTokens": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxToolCalls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "maxFindings": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "usage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runtimeSeconds",
+            "tokensUsed",
+            "toolCallsUsed"
+          ],
+          "properties": {
+            "runtimeSeconds": {
+              "type": "number",
+              "minimum": 0
+            },
+            "tokensUsed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "toolCallsUsed": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "withinBudget": {
+          "type": "boolean"
+        },
+        "breachReason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

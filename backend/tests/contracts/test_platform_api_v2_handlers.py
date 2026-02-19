@@ -859,6 +859,7 @@ def test_validation_v2_replay_treats_candidate_improvement_as_pass() -> None:
     )
     assert replay.status_code == 202
     replay_payload = replay.json()["replay"]
+    assert replay_payload["status"] == "completed"
     assert replay_payload["decision"] == "pass"
     assert replay_payload["mergeBlocked"] is False
     assert replay_payload["releaseBlocked"] is False
@@ -950,6 +951,7 @@ def test_validation_v2_replay_failure_blocks_merge_and_release_by_policy() -> No
     )
     assert replay.status_code == 202
     replay_payload = replay.json()["replay"]
+    assert replay_payload["status"] == "completed"
     assert replay_payload["decision"] == "fail"
     assert replay_payload["mergeBlocked"] is True
     assert replay_payload["releaseBlocked"] is True

@@ -1566,7 +1566,7 @@ paths:
                   id: valreplay-001
                   baselineId: valbase-001
                   candidateRunId: valrun-20260217-0099
-                  status: queued
+                  status: completed
                   decision: pass
                   mergeBlocked: false
                   releaseBlocked: false

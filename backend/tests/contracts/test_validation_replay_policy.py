@@ -160,6 +160,25 @@ def test_replay_policy_threshold_behavior_is_strictly_greater_than() -> None:
     assert "metric_drift_threshold_exceeded" in over_threshold.reasons
 
 
+def test_replay_policy_threshold_ignores_candidate_metric_improvement() -> None:
+    outcome = evaluate_replay_policy(
+        inputs=ValidationReplayInputs(
+            baseline_decision="pass",
+            candidate_decision="pass",
+            baseline_metric_drift_pct=1.2,
+            candidate_metric_drift_pct=0.1,
+            metric_drift_threshold_pct=0.1,
+            block_merge_on_fail=True,
+            block_release_on_fail=True,
+            block_merge_on_agent_fail=True,
+            block_release_on_agent_fail=False,
+        )
+    )
+    assert outcome.metric_drift_delta_pct == 0.0
+    assert outcome.threshold_breached is False
+    assert outcome.decision == "pass"
+
+
 def test_replay_policy_ci_gate_behavior_reflects_blocking_flags() -> None:
     outcome = evaluate_replay_policy(
         inputs=ValidationReplayInputs(
@@ -179,4 +198,3 @@ def test_replay_policy_ci_gate_behavior_reflects_blocking_flags() -> None:
     assert ci_gate_status(outcome=outcome, gate="release") == "blocked"
     with pytest.raises(ValueError):
         ci_gate_status(outcome=outcome, gate="deploy")  # type: ignore[arg-type]
-

@@ -750,7 +750,7 @@ class ValidationV2Service:
             id=replay_id,
             baselineId=request.baselineId,
             candidateRunId=request.candidateRunId,
-            status="queued",
+            status="completed",
             decision=decision,
             mergeBlocked=replay_outcome.merge_blocked,
             releaseBlocked=replay_outcome.release_blocked,

@@ -87,6 +87,7 @@ def evaluate_replay_policy(*, inputs: ValidationReplayInputs) -> ValidationRepla
         decision = "fail"
         reasons.append("candidate_decision_regressed_from_baseline")
 
+    # Replay threshold focuses on regression drift from baseline; candidate improvements do not breach.
     metric_drift_delta_pct = max(0.0, candidate_metric_drift_pct - baseline_metric_drift_pct)
     threshold_breached = metric_drift_delta_pct > metric_drift_threshold_pct
     if threshold_breached:

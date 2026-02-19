@@ -160,6 +160,7 @@ ValidationCheckStatus = Literal["pass", "fail"]
 ValidationTraderReviewStatus = Literal["not_requested", "requested", "approved", "rejected"]
 ValidationArtifactType = Literal["validation_run", "validation_llm_snapshot"]
 ValidationRenderFormat = Literal["html", "pdf"]
+ValidationReplayGateStatus = Literal["pass", "blocked"]
 
 
 class ValidationPolicyProfile(BaseModel):
@@ -375,6 +376,16 @@ class ValidationRegressionReplay(BaseModel):
     candidateRunId: str
     status: Literal["queued", "running", "completed", "failed"]
     decision: Literal["pass", "conditional_pass", "fail", "unknown"]
+    mergeBlocked: bool
+    releaseBlocked: bool
+    mergeGateStatus: ValidationReplayGateStatus
+    releaseGateStatus: ValidationReplayGateStatus
+    baselineDecision: ValidationDecision
+    candidateDecision: ValidationDecision
+    metricDriftDeltaPct: float = Field(ge=0)
+    metricDriftThresholdPct: float = Field(ge=0)
+    thresholdBreached: bool
+    reasons: list[str] = Field(default_factory=list)
     summary: str | None = None
 
 

@@ -858,7 +858,106 @@ def test_validation_v2_replay_treats_candidate_improvement_as_pass() -> None:
         json={"baselineId": baseline_id, "candidateRunId": candidate_run_id},
     )
     assert replay.status_code == 202
-    assert replay.json()["replay"]["decision"] == "pass"
+    replay_payload = replay.json()["replay"]
+    assert replay_payload["decision"] == "pass"
+    assert replay_payload["mergeBlocked"] is False
+    assert replay_payload["releaseBlocked"] is False
+    assert replay_payload["mergeGateStatus"] == "pass"
+    assert replay_payload["releaseGateStatus"] == "pass"
+    assert replay_payload["baselineDecision"] == "fail"
+    assert replay_payload["candidateDecision"] == "pass"
+    assert replay_payload["thresholdBreached"] is False
+    assert replay_payload["reasons"] == []
+
+
+def test_validation_v2_replay_failure_blocks_merge_and_release_by_policy() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-replay-gates-001",
+        "X-Tenant-Id": "tenant-v2-validation-replay-gates",
+        "X-User-Id": "user-v2-validation-replay-gates",
+    }
+
+    baseline_run_response = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-replay-gates-baseline-run-001"},
+        json={
+            "strategyId": "strat-001",
+            "providerRefId": "lona-strategy-123",
+            "prompt": "Baseline run for replay gates.",
+            "requestedIndicators": ["zigzag", "ema"],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+            "policy": {
+                "profile": "STANDARD",
+                "blockMergeOnFail": True,
+                "blockReleaseOnFail": True,
+                "blockMergeOnAgentFail": True,
+                "blockReleaseOnAgentFail": False,
+                "requireTraderReview": False,
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": True,
+            },
+        },
+    )
+    assert baseline_run_response.status_code == 202
+    baseline_run_id = baseline_run_response.json()["run"]["id"]
+    baseline_run = client.get(f"/v2/validation-runs/{baseline_run_id}", headers=headers)
+    assert baseline_run.status_code == 200
+    assert baseline_run.json()["run"]["finalDecision"] == "pass"
+
+    baseline_response = client.post(
+        "/v2/validation-baselines",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-replay-gates-baseline-001"},
+        json={"runId": baseline_run_id, "name": "gates-baseline"},
+    )
+    assert baseline_response.status_code == 201
+    baseline_id = baseline_response.json()["baseline"]["id"]
+
+    candidate_run_response = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-replay-gates-candidate-run-001"},
+        json={
+            "strategyId": "strat-001",
+            "providerRefId": "lona-strategy-123",
+            "prompt": "Candidate run with stricter profile to force deterministic fail.",
+            "requestedIndicators": ["zigzag", "ema"],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+            "policy": {
+                "profile": "EXPERT",
+                "blockMergeOnFail": True,
+                "blockReleaseOnFail": True,
+                "blockMergeOnAgentFail": True,
+                "blockReleaseOnAgentFail": False,
+                "requireTraderReview": False,
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": True,
+            },
+        },
+    )
+    assert candidate_run_response.status_code == 202
+    candidate_run_id = candidate_run_response.json()["run"]["id"]
+    candidate_run = client.get(f"/v2/validation-runs/{candidate_run_id}", headers=headers)
+    assert candidate_run.status_code == 200
+    assert candidate_run.json()["run"]["finalDecision"] == "fail"
+
+    replay = client.post(
+        "/v2/validation-regressions/replay",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-replay-gates-request-001"},
+        json={"baselineId": baseline_id, "candidateRunId": candidate_run_id},
+    )
+    assert replay.status_code == 202
+    replay_payload = replay.json()["replay"]
+    assert replay_payload["decision"] == "fail"
+    assert replay_payload["mergeBlocked"] is True
+    assert replay_payload["releaseBlocked"] is True
+    assert replay_payload["mergeGateStatus"] == "blocked"
+    assert replay_payload["releaseGateStatus"] == "blocked"
+    assert replay_payload["baselineDecision"] == "pass"
+    assert replay_payload["candidateDecision"] == "fail"
+    assert "candidate_decision_regressed_from_baseline" in replay_payload["reasons"]
 
 
 def test_backtest_feedback_is_ingested_into_kb() -> None:

@@ -38,6 +38,10 @@ from src.platform_api.services.validation_deterministic_service import (
     ValidationArtifactContext,
     ValidationPolicyConfig,
 )
+from src.platform_api.services.validation_replay_policy import (
+    ValidationReplayInputs,
+    evaluate_replay_policy,
+)
 from src.platform_api.state_store import InMemoryStateStore, utc_now
 from src.platform_api.validation.storage import (
     InMemoryValidationMetadataStore,
@@ -687,29 +691,78 @@ class ValidationV2Service:
                 details={"baselineRunId": baseline.baseline.runId},
             )
 
-        baseline_decision = baseline_run.run.finalDecision
-        candidate_decision = candidate.run.finalDecision
+        if baseline_run.run.status != "completed" or candidate.run.status != "completed":
+            raise PlatformAPIError(
+                status_code=400,
+                code="VALIDATION_STATE_INVALID",
+                message="Baseline and candidate runs must both be completed for replay.",
+                request_id=context.request_id,
+                details={
+                    "baselineRunStatus": baseline_run.run.status,
+                    "candidateRunStatus": candidate.run.status,
+                },
+            )
 
-        decision: ValidationReplayDecision
-        if baseline_decision == candidate_decision:
-            decision = "pass"
-        elif candidate_decision == "fail":
-            decision = "fail"
-        elif candidate_decision == "conditional_pass":
-            decision = "conditional_pass"
-        elif candidate_decision == "pass":
-            decision = "pass"
-        else:
-            decision = "unknown"
+        baseline_strategy_id = baseline_run.artifact.strategyRef.strategyId
+        candidate_strategy_id = candidate.artifact.strategyRef.strategyId
+        if baseline_strategy_id != candidate_strategy_id:
+            raise PlatformAPIError(
+                status_code=400,
+                code="VALIDATION_STATE_INVALID",
+                message="Validation replay requires baseline and candidate runs from the same strategyId.",
+                request_id=context.request_id,
+                details={
+                    "baselineStrategyId": baseline_strategy_id,
+                    "candidateStrategyId": candidate_strategy_id,
+                },
+            )
+
+        baseline_decision = cast(ValidationDecision, baseline_run.run.finalDecision)
+        candidate_decision = cast(ValidationDecision, candidate.run.finalDecision)
+        baseline_metric_drift_pct = baseline_run.artifact.deterministicChecks.metricConsistency.driftPct
+        candidate_metric_drift_pct = candidate.artifact.deterministicChecks.metricConsistency.driftPct
+        metric_threshold_pct = min(
+            baseline_run.policy.resolved_metric_tolerance_pct(),
+            candidate.policy.resolved_metric_tolerance_pct(),
+        )
+
+        replay_outcome = evaluate_replay_policy(
+            inputs=ValidationReplayInputs(
+                baseline_decision=baseline_decision,
+                candidate_decision=candidate_decision,
+                baseline_metric_drift_pct=baseline_metric_drift_pct,
+                candidate_metric_drift_pct=candidate_metric_drift_pct,
+                metric_drift_threshold_pct=metric_threshold_pct,
+                block_merge_on_fail=candidate.policy.block_merge_on_fail,
+                block_release_on_fail=candidate.policy.block_release_on_fail,
+                block_merge_on_agent_fail=candidate.policy.block_merge_on_agent_fail,
+                block_release_on_agent_fail=candidate.policy.block_release_on_agent_fail,
+            )
+        )
+        decision: ValidationReplayDecision = replay_outcome.decision
 
         replay_id = self._next_replay_id()
+        if replay_outcome.reasons:
+            summary = "Replay comparison detected regression signals."
+        else:
+            summary = "Replay comparison passed without regression."
         replay = ValidationRegressionReplay(
             id=replay_id,
             baselineId=request.baselineId,
             candidateRunId=request.candidateRunId,
             status="queued",
             decision=decision,
-            summary="Replay accepted for execution.",
+            mergeBlocked=replay_outcome.merge_blocked,
+            releaseBlocked=replay_outcome.release_blocked,
+            mergeGateStatus=replay_outcome.merge_gate_status,
+            releaseGateStatus=replay_outcome.release_gate_status,
+            baselineDecision=replay_outcome.baseline_decision,
+            candidateDecision=replay_outcome.candidate_decision,
+            metricDriftDeltaPct=round(replay_outcome.metric_drift_delta_pct, 6),
+            metricDriftThresholdPct=round(replay_outcome.metric_drift_threshold_pct, 6),
+            thresholdBreached=replay_outcome.threshold_breached,
+            reasons=list(replay_outcome.reasons),
+            summary=summary,
         )
         self._replays[replay_id] = replay
 

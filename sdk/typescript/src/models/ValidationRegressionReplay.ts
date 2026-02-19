@@ -13,6 +13,14 @@
  */
 
 import { mapValues } from '../runtime';
+import type { ValidationDecision } from './ValidationDecision';
+import {
+    ValidationDecisionFromJSON,
+    ValidationDecisionFromJSONTyped,
+    ValidationDecisionToJSON,
+    ValidationDecisionToJSONTyped,
+} from './ValidationDecision';
+
 /**
  * 
  * @export
@@ -51,6 +59,66 @@ export interface ValidationRegressionReplay {
     decision: ValidationRegressionReplayDecisionEnum;
     /**
      * 
+     * @type {boolean}
+     * @memberof ValidationRegressionReplay
+     */
+    mergeBlocked: boolean;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof ValidationRegressionReplay
+     */
+    releaseBlocked: boolean;
+    /**
+     * 
+     * @type {string}
+     * @memberof ValidationRegressionReplay
+     */
+    mergeGateStatus: ValidationRegressionReplayMergeGateStatusEnum;
+    /**
+     * 
+     * @type {string}
+     * @memberof ValidationRegressionReplay
+     */
+    releaseGateStatus: ValidationRegressionReplayReleaseGateStatusEnum;
+    /**
+     * 
+     * @type {ValidationDecision}
+     * @memberof ValidationRegressionReplay
+     */
+    baselineDecision: ValidationDecision;
+    /**
+     * 
+     * @type {ValidationDecision}
+     * @memberof ValidationRegressionReplay
+     */
+    candidateDecision: ValidationDecision;
+    /**
+     * 
+     * @type {number}
+     * @memberof ValidationRegressionReplay
+     */
+    metricDriftDeltaPct: number;
+    /**
+     * 
+     * @type {number}
+     * @memberof ValidationRegressionReplay
+     */
+    metricDriftThresholdPct: number;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof ValidationRegressionReplay
+     */
+    thresholdBreached: boolean;
+    /**
+     * 
+     * @type {Array<string>}
+     * @memberof ValidationRegressionReplay
+     */
+    reasons: Array<string>;
+    /**
+     * 
      * @type {string}
      * @memberof ValidationRegressionReplay
      */
@@ -77,6 +145,22 @@ export enum ValidationRegressionReplayDecisionEnum {
     Fail = 'fail',
     Unknown = 'unknown'
 }
+/**
+* @export
+* @enum {string}
+*/
+export enum ValidationRegressionReplayMergeGateStatusEnum {
+    Pass = 'pass',
+    Blocked = 'blocked'
+}
+/**
+* @export
+* @enum {string}
+*/
+export enum ValidationRegressionReplayReleaseGateStatusEnum {
+    Pass = 'pass',
+    Blocked = 'blocked'
+}
 
 
 /**
@@ -88,6 +172,16 @@ export function instanceOfValidationRegressionReplay(value: object): value is Va
     if (!('candidateRunId' in value) || value['candidateRunId'] === undefined) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
     if (!('decision' in value) || value['decision'] === undefined) return false;
+    if (!('mergeBlocked' in value) || value['mergeBlocked'] === undefined) return false;
+    if (!('releaseBlocked' in value) || value['releaseBlocked'] === undefined) return false;
+    if (!('mergeGateStatus' in value) || value['mergeGateStatus'] === undefined) return false;
+    if (!('releaseGateStatus' in value) || value['releaseGateStatus'] === undefined) return false;
+    if (!('baselineDecision' in value) || value['baselineDecision'] === undefined) return false;
+    if (!('candidateDecision' in value) || value['candidateDecision'] === undefined) return false;
+    if (!('metricDriftDeltaPct' in value) || value['metricDriftDeltaPct'] === undefined) return false;
+    if (!('metricDriftThresholdPct' in value) || value['metricDriftThresholdPct'] === undefined) return false;
+    if (!('thresholdBreached' in value) || value['thresholdBreached'] === undefined) return false;
+    if (!('reasons' in value) || value['reasons'] === undefined) return false;
     return true;
 }
 
@@ -106,6 +200,16 @@ export function ValidationRegressionReplayFromJSONTyped(json: any, ignoreDiscrim
         'candidateRunId': json['candidateRunId'],
         'status': json['status'],
         'decision': json['decision'],
+        'mergeBlocked': json['mergeBlocked'],
+        'releaseBlocked': json['releaseBlocked'],
+        'mergeGateStatus': json['mergeGateStatus'],
+        'releaseGateStatus': json['releaseGateStatus'],
+        'baselineDecision': ValidationDecisionFromJSON(json['baselineDecision']),
+        'candidateDecision': ValidationDecisionFromJSON(json['candidateDecision']),
+        'metricDriftDeltaPct': json['metricDriftDeltaPct'],
+        'metricDriftThresholdPct': json['metricDriftThresholdPct'],
+        'thresholdBreached': json['thresholdBreached'],
+        'reasons': json['reasons'],
         'summary': json['summary'] == null ? undefined : json['summary'],
     };
 }
@@ -126,6 +230,16 @@ export function ValidationRegressionReplayToJSONTyped(value?: ValidationRegressi
         'candidateRunId': value['candidateRunId'],
         'status': value['status'],
         'decision': value['decision'],
+        'mergeBlocked': value['mergeBlocked'],
+        'releaseBlocked': value['releaseBlocked'],
+        'mergeGateStatus': value['mergeGateStatus'],
+        'releaseGateStatus': value['releaseGateStatus'],
+        'baselineDecision': ValidationDecisionToJSON(value['baselineDecision']),
+        'candidateDecision': ValidationDecisionToJSON(value['candidateDecision']),
+        'metricDriftDeltaPct': value['metricDriftDeltaPct'],
+        'metricDriftThresholdPct': value['metricDriftThresholdPct'],
+        'thresholdBreached': value['thresholdBreached'],
+        'reasons': value['reasons'],
         'summary': value['summary'],
     };
 }

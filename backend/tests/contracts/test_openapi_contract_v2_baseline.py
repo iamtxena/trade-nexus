@@ -88,3 +88,24 @@ def test_v2_schema_components_are_present() -> None:
         "ValidationRegressionReplayResponse:",
     ):
         assert component in spec
+
+
+def test_validation_replay_schema_declares_gate_and_threshold_fields() -> None:
+    spec = _spec_text()
+    replay_component = spec.split("ValidationRegressionReplay:", maxsplit=1)[1].split(
+        "ValidationRegressionReplayResponse:",
+        maxsplit=1,
+    )[0]
+    for token in (
+        "mergeBlocked",
+        "releaseBlocked",
+        "mergeGateStatus",
+        "releaseGateStatus",
+        "baselineDecision",
+        "candidateDecision",
+        "metricDriftDeltaPct",
+        "metricDriftThresholdPct",
+        "thresholdBreached",
+        "reasons",
+    ):
+        assert token in replay_component

@@ -19,7 +19,9 @@ import {
   recordValidationRun,
 } from '../lib/validation-history';
 
-type ParsedValues<T extends ParseArgsConfig['options']> = ReturnType<typeof parseArgs<T>>['values'];
+type ParsedValues<T extends NonNullable<ParseArgsConfig['options']>> = ReturnType<
+  typeof parseArgs<{ options: T }>
+>['values'];
 
 const VALID_PROFILES: ValidationProfile[] = ['FAST', 'STANDARD', 'EXPERT'];
 const VALID_RENDER_FORMATS: ValidationRenderFormat[] = ['html', 'pdf'];
@@ -86,7 +88,7 @@ function exitWithError(message: string): never {
   process.exit(1);
 }
 
-function parseArgsOrExit<T extends ParseArgsConfig['options']>(config: {
+function parseArgsOrExit<T extends NonNullable<ParseArgsConfig['options']>>(config: {
   args: string[];
   options: T;
 }): ParsedValues<T> {
@@ -263,6 +265,7 @@ async function createValidationRun(args: string[]) {
             formats: renderFormats,
             requestId: values['request-id'],
             idempotencyKey: values['idempotency-key'],
+            client,
           })
         : [];
 
@@ -457,6 +460,7 @@ async function reviewValidationRun(args: string[]) {
             formats: renderFormats,
             requestId: values['request-id'],
             idempotencyKey: values['idempotency-key'],
+            client,
           })
         : [];
 

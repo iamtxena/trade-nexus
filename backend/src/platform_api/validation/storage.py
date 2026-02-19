@@ -195,6 +195,19 @@ def _ensure_run_child_scope_consistency(
         )
 
 
+def _deduplicate_blob_refs_by_kind(
+    blob_refs: Sequence[ValidationBlobReferenceMetadata],
+) -> tuple[ValidationBlobReferenceMetadata, ...]:
+    sorted_refs = sorted(copy.deepcopy(list(blob_refs)), key=lambda item: item.kind)
+    deduplicated_refs: list[ValidationBlobReferenceMetadata] = []
+    for ref in sorted_refs:
+        if deduplicated_refs and deduplicated_refs[-1].kind == ref.kind:
+            deduplicated_refs[-1] = ref
+        else:
+            deduplicated_refs.append(ref)
+    return tuple(deduplicated_refs)
+
+
 def _resolve_runtime_profile(runtime_profile: str | None) -> str:
     if isinstance(runtime_profile, str) and runtime_profile.strip() != "":
         return runtime_profile.strip()
@@ -463,14 +476,7 @@ class InMemoryValidationMetadataStore:
             review_state=review_state,
             blob_refs=blob_refs,
         )
-        sorted_refs = sorted(copy.deepcopy(list(blob_refs)), key=lambda item: item.kind)
-        deduplicated_refs: list[ValidationBlobReferenceMetadata] = []
-        for ref in sorted_refs:
-            if deduplicated_refs and deduplicated_refs[-1].kind == ref.kind:
-                deduplicated_refs[-1] = ref
-            else:
-                deduplicated_refs.append(ref)
-        normalized_refs = tuple(deduplicated_refs)
+        normalized_refs = _deduplicate_blob_refs_by_kind(blob_refs)
         self._runs[metadata.run_id] = PersistedValidationRun(
             metadata=copy.deepcopy(metadata),
             review_state=copy.deepcopy(review_state),
@@ -533,6 +539,7 @@ class SupabaseValidationMetadataStore:
             review_state=review_state,
             blob_refs=blob_refs,
         )
+        normalized_blob_refs = _deduplicate_blob_refs_by_kind(blob_refs)
         snapshot = await self._capture_run_bundle(run_id=metadata.run_id)
         try:
             await self._upsert(
@@ -549,10 +556,10 @@ class SupabaseValidationMetadataStore:
             else:
                 await self._delete_where(table=self._review_table, filters={"run_id": metadata.run_id})
             await self._delete_where(table=self._blob_refs_table, filters={"run_id": metadata.run_id})
-            if blob_refs:
+            if normalized_blob_refs:
                 await self._upsert(
                     table=self._blob_refs_table,
-                    payload=[_blob_ref_row_from_metadata(item) for item in blob_refs],
+                    payload=[_blob_ref_row_from_metadata(item) for item in normalized_blob_refs],
                     on_conflict="run_id,kind",
                 )
         except Exception as exc:

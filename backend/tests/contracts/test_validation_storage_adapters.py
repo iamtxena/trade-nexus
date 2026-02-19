@@ -92,6 +92,14 @@ class _FakeSupabaseQuery:
         payload_items = self._payload if isinstance(self._payload, list) else [self._payload]
         if not all(isinstance(item, dict) for item in payload_items):
             raise AssertionError("Fake Supabase upsert payload must be a dict or list[dict].")
+        if conflict_keys:
+            seen_conflicts: set[tuple[object, ...]] = set()
+            for item in payload_items:
+                assert isinstance(item, dict)
+                conflict_signature = tuple(item.get(key) for key in conflict_keys)
+                if conflict_signature in seen_conflicts:
+                    raise RuntimeError("ON CONFLICT DO UPDATE command cannot affect row a second time")
+                seen_conflicts.add(conflict_signature)
 
         stored: list[dict[str, object]] = []
         for item in payload_items:
@@ -360,6 +368,36 @@ def test_blob_reference_integrity_and_checksum_contract() -> None:
 def test_in_memory_store_deduplicates_blob_refs_by_kind() -> None:
     async def _run() -> None:
         store = InMemoryValidationMetadataStore()
+        service = ValidationStorageService(metadata_store=store)
+
+        run = _run_metadata(status="queued", final_decision="pending")
+        refs = _blob_refs(chart_payload=b'{"chart":"v1"}')
+        duplicate_chart = ValidationBlobReferenceMetadata.from_payload(
+            run_id=run.run_id,
+            kind="chart_payload",
+            ref="blob://validation/valrun-20260218-0001/chart-payload-v2.json",
+            payload=b'{"chart":"v2"}',
+            content_type="application/json",
+        )
+
+        await service.persist_run(
+            metadata=run,
+            review_state=None,
+            blob_refs=[refs[0], refs[1], duplicate_chart],
+        )
+
+        persisted = await service.get_run(run_id=run.run_id, tenant_id=run.tenant_id, user_id=run.user_id)
+        assert persisted is not None
+        assert [item.kind for item in persisted.blob_refs] == ["backtest_report", "chart_payload"]
+        assert persisted.blob_refs[1].verify_payload(b'{"chart":"v2"}')
+
+    asyncio.run(_run())
+
+
+def test_supabase_store_deduplicates_blob_refs_by_kind() -> None:
+    async def _run() -> None:
+        client = _FakeSupabaseClient()
+        store = SupabaseValidationMetadataStore(client)
         service = ValidationStorageService(metadata_store=store)
 
         run = _run_metadata(status="queued", final_decision="pending")

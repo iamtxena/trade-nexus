@@ -17,6 +17,7 @@ from src.platform_api.validation.storage import (
     ValidationBaselineMetadata,
     ValidationBlobReferenceMetadata,
     ValidationMetadataStoreError,
+    ValidationReplayMetadata,
     ValidationReviewStateMetadata,
     ValidationRunDecision,
     ValidationRunMetadata,
@@ -245,6 +246,38 @@ def _blob_refs(*, chart_payload: bytes) -> list[ValidationBlobReferenceMetadata]
     ]
 
 
+def _replay_metadata(
+    *,
+    replay_id: str = "valreplay-226-001",
+    decision: str = "pass",
+    merge_blocked: bool = False,
+    release_blocked: bool = False,
+    merge_gate_status: str = "pass",
+    release_gate_status: str = "pass",
+) -> ValidationReplayMetadata:
+    return ValidationReplayMetadata(
+        replay_id=replay_id,
+        baseline_id="valbase-226-001",
+        baseline_run_id="valrun-20260218-0001",
+        candidate_run_id="valrun-20260218-0002",
+        tenant_id="tenant-226",
+        user_id="user-226",
+        decision=decision,  # type: ignore[arg-type]
+        merge_blocked=merge_blocked,
+        release_blocked=release_blocked,
+        merge_gate_status=merge_gate_status,  # type: ignore[arg-type]
+        release_gate_status=release_gate_status,  # type: ignore[arg-type]
+        baseline_decision="pass",
+        candidate_decision="pass" if decision != "fail" else "fail",
+        metric_drift_delta_pct=0.0 if decision != "fail" else 1.1,
+        metric_drift_threshold_pct=0.5,
+        threshold_breached=decision == "fail",
+        reasons=() if decision != "fail" else ("candidate_decision_regressed_from_baseline",),
+        summary="Replay persisted for auditability contract checks.",
+        created_at="2026-02-18T19:41:00Z",
+    )
+
+
 def test_validation_storage_persistence_lifecycle() -> None:
     async def _run() -> None:
         metadata_store = SupabaseValidationMetadataStore(_FakeSupabaseClient())
@@ -343,6 +376,68 @@ def test_validation_storage_persistence_lifecycle() -> None:
             user_id="wrong-user",
         )
         assert not_found is None
+
+    asyncio.run(_run())
+
+
+def test_validation_storage_persists_and_scopes_replay_metadata() -> None:
+    async def _run() -> None:
+        stores = (
+            InMemoryValidationMetadataStore(),
+            SupabaseValidationMetadataStore(_FakeSupabaseClient()),
+        )
+
+        for store in stores:
+            service = ValidationStorageService(metadata_store=store)
+            replay = _replay_metadata()
+            await service.persist_replay(replay)
+
+            persisted = await service.get_replay(
+                replay_id=replay.replay_id,
+                tenant_id=replay.tenant_id,
+                user_id=replay.user_id,
+            )
+            assert persisted is not None
+            assert persisted.replay_id == replay.replay_id
+            assert persisted.release_gate_status == "pass"
+            assert persisted.reasons == ()
+
+            not_found = await service.get_replay(
+                replay_id=replay.replay_id,
+                tenant_id=replay.tenant_id,
+                user_id="wrong-user",
+            )
+            assert not_found is None
+
+    asyncio.run(_run())
+
+
+def test_supabase_replay_metadata_rejects_non_string_reason_items() -> None:
+    async def _run() -> None:
+        client = _FakeSupabaseClient()
+        store = SupabaseValidationMetadataStore(client)
+        service = ValidationStorageService(metadata_store=store)
+
+        replay = _replay_metadata(
+            replay_id="valreplay-226-002",
+            decision="fail",
+            merge_blocked=True,
+            release_blocked=True,
+            merge_gate_status="blocked",
+            release_gate_status="blocked",
+        )
+        await service.persist_replay(replay)
+
+        replay_rows = client._tables.setdefault("validation_replays", [])
+        assert replay_rows
+        replay_rows[0]["reasons"] = ["candidate_decision_regressed_from_baseline", 404]
+
+        with pytest.raises(ValidationMetadataStoreError, match="Expected list\\[str\\] for reasons"):
+            await service.get_replay(
+                replay_id=replay.replay_id,
+                tenant_id=replay.tenant_id,
+                user_id=replay.user_id,
+            )
 
     asyncio.run(_run())
 

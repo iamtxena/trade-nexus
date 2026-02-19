@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 
 from fastapi.testclient import TestClient
@@ -9,6 +10,7 @@ import pytest
 
 from src.main import app
 from src.platform_api import router_v1 as router_v1_module
+from src.platform_api import router_v2 as router_v2_module
 
 
 HEADERS = {
@@ -870,6 +872,17 @@ def test_validation_v2_replay_treats_candidate_improvement_as_pass() -> None:
     assert replay_payload["thresholdBreached"] is False
     assert replay_payload["reasons"] == []
 
+    persisted = asyncio.run(
+        router_v2_module._validation_service._validation_storage.get_replay(  # noqa: SLF001
+            replay_id=replay_payload["id"],
+            tenant_id=headers["X-Tenant-Id"],
+            user_id=headers["X-User-Id"],
+        )
+    )
+    assert persisted is not None
+    assert persisted.release_blocked is False
+    assert persisted.release_gate_status == "pass"
+
 
 def test_validation_v2_replay_failure_blocks_merge_and_release_by_policy() -> None:
     client = _client()
@@ -960,6 +973,17 @@ def test_validation_v2_replay_failure_blocks_merge_and_release_by_policy() -> No
     assert replay_payload["baselineDecision"] == "pass"
     assert replay_payload["candidateDecision"] == "fail"
     assert "candidate_decision_regressed_from_baseline" in replay_payload["reasons"]
+
+    persisted = asyncio.run(
+        router_v2_module._validation_service._validation_storage.get_replay(  # noqa: SLF001
+            replay_id=replay_payload["id"],
+            tenant_id=headers["X-Tenant-Id"],
+            user_id=headers["X-User-Id"],
+        )
+    )
+    assert persisted is not None
+    assert persisted.merge_blocked is True
+    assert persisted.release_blocked is True
 
 
 def test_backtest_feedback_is_ingested_into_kb() -> None:

@@ -47,6 +47,7 @@ from src.platform_api.validation.storage import (
     InMemoryValidationMetadataStore,
     ValidationBaselineMetadata,
     ValidationBlobReferenceMetadata,
+    ValidationReplayMetadata,
     ValidationReviewStateMetadata,
     ValidationRunMetadata,
     ValidationStorageService,
@@ -765,6 +766,11 @@ class ValidationV2Service:
             summary=summary,
         )
         self._replays[replay_id] = replay
+        await self._persist_replay_metadata(
+            replay=replay,
+            baseline_run_id=baseline.baseline.runId,
+            context=context,
+        )
 
         response = ValidationRegressionReplayResponse(requestId=context.request_id, replay=replay)
         self._save_idempotent_response(
@@ -1039,6 +1045,36 @@ class ValidationV2Service:
             metadata=metadata,
             review_state=review_state,
             blob_refs=blob_refs,
+        )
+
+    async def _persist_replay_metadata(
+        self,
+        *,
+        replay: ValidationRegressionReplay,
+        baseline_run_id: str,
+        context: RequestContext,
+    ) -> None:
+        await self._validation_storage.persist_replay(
+            ValidationReplayMetadata(
+                replay_id=replay.id,
+                baseline_id=replay.baselineId,
+                baseline_run_id=baseline_run_id,
+                candidate_run_id=replay.candidateRunId,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+                decision=cast(Literal["pass", "conditional_pass", "fail", "unknown"], replay.decision),
+                merge_blocked=replay.mergeBlocked,
+                release_blocked=replay.releaseBlocked,
+                merge_gate_status=cast(Literal["pass", "blocked"], replay.mergeGateStatus),
+                release_gate_status=cast(Literal["pass", "blocked"], replay.releaseGateStatus),
+                baseline_decision=cast(ValidationDecision, replay.baselineDecision),
+                candidate_decision=cast(ValidationDecision, replay.candidateDecision),
+                metric_drift_delta_pct=replay.metricDriftDeltaPct,
+                metric_drift_threshold_pct=replay.metricDriftThresholdPct,
+                threshold_breached=replay.thresholdBreached,
+                reasons=tuple(replay.reasons),
+                summary=replay.summary,
+            )
         )
 
     def _next_run_id(self) -> str:

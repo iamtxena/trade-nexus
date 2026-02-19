@@ -341,6 +341,20 @@ class ValidationAgentReviewService:
 
         findings.extend(self._evidence_coverage_findings(parsed=parsed))
         findings = self._dedupe_findings(findings=findings, max_findings=budget.max_findings)
+        findings, finding_traceability_breach = self._normalize_and_validate_finding_evidence_refs(
+            parsed=parsed,
+            findings=findings,
+        )
+        if finding_traceability_breach is not None:
+            return self._breach_result(
+                parsed=parsed,
+                budget=budget,
+                started_at=started_at,
+                tokens_used=tokens_used,
+                tool_calls_used=tool_calls_used,
+                reason=finding_traceability_breach,
+            )
+        findings = self._dedupe_findings(findings=findings, max_findings=budget.max_findings)
 
         status = self._resolve_decision(findings=findings)
         summary = self._build_summary(status=status, findings=findings)
@@ -509,14 +523,38 @@ class ValidationAgentReviewService:
 
     def _deterministic_findings(self, *, parsed: _SnapshotPayload) -> list[AgentReviewFinding]:
         findings: list[AgentReviewFinding] = []
+        evidence_by_kind = self._evidence_refs_by_kind(parsed=parsed)
         check_to_finding = (
-            ("indicatorFidelityStatus", 0, 0.99, "Deterministic indicator fidelity check failed."),
-            ("tradeCoherenceStatus", 1, 0.96, "Deterministic trade coherence check failed."),
-            ("metricConsistencyStatus", 2, 0.9, "Deterministic metric consistency check failed."),
+            (
+                "indicatorFidelityStatus",
+                0,
+                0.99,
+                "Deterministic indicator fidelity check failed.",
+                ("chart_payload", "strategy_code"),
+            ),
+            (
+                "tradeCoherenceStatus",
+                1,
+                0.96,
+                "Deterministic trade coherence check failed.",
+                ("trades", "execution_logs"),
+            ),
+            (
+                "metricConsistencyStatus",
+                2,
+                0.9,
+                "Deterministic metric consistency check failed.",
+                ("backtest_report", "trades"),
+            ),
         )
-        refs = tuple(item.ref for item in parsed.evidence_refs[:2]) or (parsed.evidence_refs[0].ref,)
-        for check_name, priority, confidence, message in check_to_finding:
+        for check_name, priority, confidence, message, preferred_kinds in check_to_finding:
             if parsed.deterministic_checks[check_name] == "fail":
+                refs = self._select_trace_refs(
+                    parsed=parsed,
+                    evidence_by_kind=evidence_by_kind,
+                    preferred_kinds=preferred_kinds,
+                    max_refs=3,
+                )
                 findings.append(
                     AgentReviewFinding(
                         id=f"agent-check-{check_name.lower()}",
@@ -533,19 +571,26 @@ class ValidationAgentReviewService:
             return []
 
         required_kinds = {"backtest_report", "trades", "execution_logs", "chart_payload"}
-        present = {item.kind for item in parsed.evidence_refs}
+        evidence_by_kind = self._evidence_refs_by_kind(parsed=parsed)
+        present = set(evidence_by_kind)
         missing = sorted(required_kinds - present)
         if not missing:
             return []
 
         summary = "Missing evidence references required for bounded agent review: " + ", ".join(missing) + "."
+        refs = self._select_trace_refs(
+            parsed=parsed,
+            evidence_by_kind=evidence_by_kind,
+            preferred_kinds=("backtest_report", "trades", "execution_logs", "chart_payload"),
+            max_refs=2,
+        )
         return [
             AgentReviewFinding(
                 id="agent-evidence-coverage-missing",
                 priority=1,
                 confidence=0.93,
                 summary=summary,
-                evidence_refs=(parsed.evidence_refs[0].ref,),
+                evidence_refs=refs,
             )
         ]
 
@@ -613,6 +658,61 @@ class ValidationAgentReviewService:
             if len(deduped) >= max_findings:
                 break
         return deduped
+
+    def _evidence_refs_by_kind(self, *, parsed: _SnapshotPayload) -> dict[str, tuple[str, ...]]:
+        grouped: dict[str, list[str]] = {}
+        for item in parsed.evidence_refs:
+            grouped.setdefault(item.kind, []).append(item.ref)
+        return {kind: tuple(values) for kind, values in grouped.items()}
+
+    def _select_trace_refs(
+        self,
+        *,
+        parsed: _SnapshotPayload,
+        evidence_by_kind: Mapping[str, Sequence[str]],
+        preferred_kinds: Sequence[str],
+        max_refs: int,
+    ) -> tuple[str, ...]:
+        selected: list[str] = []
+        for kind in preferred_kinds:
+            refs = evidence_by_kind.get(kind, ())
+            for ref in refs:
+                if ref in selected:
+                    continue
+                selected.append(ref)
+                if len(selected) >= max_refs:
+                    return tuple(selected)
+        if selected:
+            return tuple(selected)
+        return (parsed.evidence_refs[0].ref,)
+
+    def _normalize_and_validate_finding_evidence_refs(
+        self,
+        *,
+        parsed: _SnapshotPayload,
+        findings: Sequence[AgentReviewFinding],
+    ) -> tuple[list[AgentReviewFinding], str | None]:
+        allowed_refs = {item.ref for item in parsed.evidence_refs}
+        normalized_findings: list[AgentReviewFinding] = []
+        for finding in findings:
+            normalized_refs = tuple(dict.fromkeys(ref for ref in finding.evidence_refs if ref.strip() != ""))
+            if len(normalized_refs) == 0:
+                return [], "finding_ref_missing"
+            if any(ref not in allowed_refs for ref in normalized_refs):
+                return [], "finding_ref_out_of_scope"
+            if normalized_refs != finding.evidence_refs:
+                normalized_findings.append(
+                    AgentReviewFinding(
+                        id=finding.id,
+                        priority=finding.priority,
+                        confidence=finding.confidence,
+                        summary=finding.summary,
+                        evidence_refs=normalized_refs,
+                    )
+                )
+                continue
+            normalized_findings.append(finding)
+        return normalized_findings, None
 
     def _resolve_decision(self, *, findings: Sequence[AgentReviewFinding]) -> ValidationDecision:
         if not findings:

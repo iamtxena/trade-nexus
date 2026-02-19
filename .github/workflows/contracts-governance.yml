@@ -88,6 +88,9 @@ jobs:
       - name: Run SDK validation surface contract tests
         run: pytest backend/tests/contracts/test_sdk_validation_contract_shape.py
 
+      - name: Enforce replay gate preflight for merge-time governance
+        run: python -m src.platform_api.validation.release_gate_check
+
       - name: Run backend contract behavior tests
         run: |
           pytest backend/tests/contracts \

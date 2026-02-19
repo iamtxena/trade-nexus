@@ -71,6 +71,8 @@ class _ValidationBaselineRecord:
     tenant_id: str
     user_id: str
     baseline: ValidationBaseline
+
+
 def _non_empty(value: str | None) -> str | None:
     if value is None:
         return None

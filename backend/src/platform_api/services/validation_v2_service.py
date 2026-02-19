@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
@@ -72,13 +71,6 @@ class _ValidationBaselineRecord:
     tenant_id: str
     user_id: str
     baseline: ValidationBaseline
-
-
-def _payload_fingerprint(payload: dict[str, Any]) -> str:
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-
 def _non_empty(value: str | None) -> str | None:
     if value is None:
         return None
@@ -107,13 +99,6 @@ class ValidationV2Service:
         self._runs: dict[str, _ValidationRunRecord] = {}
         self._baselines: dict[str, _ValidationBaselineRecord] = {}
         self._replays: dict[str, ValidationRegressionReplay] = {}
-        self._idempotency: dict[str, dict[str, tuple[str, dict[str, Any]]]] = {
-            "validation_runs": {},
-            "validation_reviews": {},
-            "validation_renders": {},
-            "validation_baselines": {},
-            "validation_replays": {},
-        }
         self._run_counter = 1
         self._baseline_counter = 1
         self._replay_counter = 1
@@ -616,7 +601,19 @@ class ValidationV2Service:
         context: RequestContext,
         idempotency_key: str | None,
     ) -> ValidationRegressionReplayResponse:
-        payload = request.model_dump(mode="json")
+        if request.policyOverrides:
+            raise PlatformAPIError(
+                status_code=400,
+                code="VALIDATION_REPLAY_INVALID",
+                message="policyOverrides are not supported for runtime replay execution.",
+                request_id=context.request_id,
+                details={"policyOverrides": request.policyOverrides},
+            )
+
+        payload = {
+            "baselineId": request.baselineId,
+            "candidateRunId": request.candidateRunId,
+        }
         key = self._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
         conflict, cached = self._get_idempotent_response(
             scope="validation_replays",
@@ -987,15 +984,11 @@ class ValidationV2Service:
         key: str,
         payload: dict[str, Any],
     ) -> tuple[bool, dict[str, Any] | None]:
-        scope_map = self._idempotency[scope]
-        fingerprint = _payload_fingerprint(payload)
-        existing = scope_map.get(key)
-        if existing is None:
-            return False, None
-        stored_fingerprint, stored_response = existing
-        if stored_fingerprint != fingerprint:
-            return True, None
-        return False, copy.deepcopy(stored_response)
+        return self._store.get_idempotent_response(
+            scope=scope,
+            key=key,
+            payload=payload,
+        )
 
     def _save_idempotent_response(
         self,
@@ -1005,9 +998,11 @@ class ValidationV2Service:
         payload: dict[str, Any],
         response: dict[str, Any],
     ) -> None:
-        self._idempotency[scope][key] = (
-            _payload_fingerprint(payload),
-            copy.deepcopy(response),
+        self._store.save_idempotent_response(
+            scope=scope,
+            key=key,
+            payload=payload,
+            response=response,
         )
 
 

@@ -604,6 +604,19 @@ def test_validation_v2_rejects_invalid_policy_profile_and_state() -> None:
     assert invalid_state.json()["requestId"] == headers["X-Request-Id"]
     assert invalid_state.json()["error"]["code"] == "VALIDATION_RUN_NOT_FOUND"
 
+    invalid_replay_policy_override = client.post(
+        "/v2/validation-regressions/replay",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-neg-replay-override-001"},
+        json={
+            "baselineId": "valbase-missing",
+            "candidateRunId": "valrun-missing",
+            "policyOverrides": {"blockMergeOnFail": False},
+        },
+    )
+    assert invalid_replay_policy_override.status_code == 400
+    assert invalid_replay_policy_override.json()["requestId"] == headers["X-Request-Id"]
+    assert invalid_replay_policy_override.json()["error"]["code"] == "VALIDATION_REPLAY_INVALID"
+
 
 def test_validation_v2_blocks_provider_ref_bypass() -> None:
     client = _client()

@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)',
@@ -15,11 +16,19 @@ const isProtectedRoute = createRouteMatcher([
   '/api/strategist(.*)',
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
+const clerkProtectedMiddleware = clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {
     await auth.protect();
   }
 });
+
+async function passthroughMiddleware(_request: NextRequest) {
+  return NextResponse.next();
+}
+
+const clerkDisabled = process.env.NEXT_PUBLIC_DISABLE_CLERK === '1';
+
+export default clerkDisabled ? passthroughMiddleware : clerkProtectedMiddleware;
 
 export const config = {
   matcher: [

@@ -10,6 +10,8 @@
     "lint:fix": "biome check --fix .",
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
+    "test": "bun test src cli",
+    "test:e2e": "playwright test",
     "strategist": "bun run cli/strategist.ts",
     "nexus": "bun run cli/nexus.ts"
   },
@@ -38,6 +40,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/bun": "^1.3.8",
     "@types/node": "^25.2.3",

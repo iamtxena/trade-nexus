@@ -283,11 +283,16 @@ jobs:
             }
 
             const reviewActors = await getReviewActors();
-            if (!reviewActors.includes("greptile-apps")) {
+            const hasGreptileReview = reviewActors.some((actor) =>
+              actor.startsWith("greptile-apps"),
+            );
+            if (!hasGreptileReview) {
               core.setFailed("Missing required Greptile review submission.");
               return;
             }
-            const hasCursorReview = reviewActors.includes("cursor");
+            const hasCursorReview = reviewActors.some((actor) =>
+              actor.startsWith("cursor"),
+            );
 
             if (hasCursorReview) {
               core.info("Cursor review submission detected; accepting review signal without waiting for cursor check-run completion.");

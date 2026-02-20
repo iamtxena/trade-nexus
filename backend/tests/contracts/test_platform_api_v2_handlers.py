@@ -539,6 +539,11 @@ def test_validation_v2_rejects_identity_header_spoofing() -> None:
     payload = response.json()
     assert payload["requestId"] == "req-v2-validation-spoof-001"
     assert payload["error"]["code"] == "AUTH_IDENTITY_MISMATCH"
+    details = payload["error"].get("details", {})
+    assert details.get("header") == "X-Tenant-Id"
+    assert details.get("reason") == "identity_header_mismatch"
+    assert "expected" not in details
+    assert "received" not in details
 
 
 def test_validation_v2_uses_auth_claim_identity_without_identity_headers() -> None:

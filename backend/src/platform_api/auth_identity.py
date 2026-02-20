@@ -148,7 +148,6 @@ def _assert_no_identity_spoofing(
         request_id=request_id,
         details={
             "header": header_name,
-            "expected": expected_value,
-            "received": normalized,
+            "reason": "identity_header_mismatch",
         },
     )

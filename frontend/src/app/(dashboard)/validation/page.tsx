@@ -190,12 +190,10 @@ export default function ValidationPage() {
   const loadRunList = useCallback(
     async (options?: {
       clearNotice?: boolean;
-      selectRunId?: string | null;
       suppressErrors?: boolean;
     }): Promise<void> => {
       const clearNotice = options?.clearNotice ?? true;
       setIsLoadingList(true);
-      setErrorMessage(null);
       if (clearNotice) {
         setNoticeMessage(null);
       }
@@ -214,12 +212,6 @@ export default function ValidationPage() {
         const runsPayload = responsePayload as ValidationRunListResponse;
         const runs = sortValidationRunsByUpdatedAtDesc(runsPayload.runs ?? []);
         setRunList(runs);
-        if (options?.selectRunId && !runs.some((run) => run.id === options.selectRunId)) {
-          setActiveRunId(null);
-          setRunResponse(null);
-          setArtifactResponse(null);
-          setRenderJobs({});
-        }
       } catch (error) {
         if (!options?.suppressErrors) {
           setErrorMessage(
@@ -373,7 +365,6 @@ export default function ValidationPage() {
       });
       void loadRunList({
         clearNotice: false,
-        selectRunId: createdRun,
         suppressErrors: true,
       });
     } catch (error) {
@@ -432,7 +423,6 @@ export default function ValidationPage() {
       });
       void loadRunList({
         clearNotice: false,
-        selectRunId: activeRunId,
         suppressErrors: true,
       });
     } catch (error) {

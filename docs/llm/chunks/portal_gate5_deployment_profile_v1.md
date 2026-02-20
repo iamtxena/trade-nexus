@@ -26,10 +26,14 @@ Gate5 enforces one active deployment target profile with no contradictory runtim
 ## Release Readiness Checklist
 
 1. Contract governance checks are green.
-2. `contracts-governance` includes full backend contract behavior suite (`backend/tests/contracts` with OpenAPI baseline/freeze + behavior tests).
-3. Docs governance checks are green.
-4. Deployment documentation and runbooks reference a single active profile.
-5. Parent `#81` status is updated with deployment evidence links.
+2. `contracts-governance` includes explicit Gate5 checks:
+   - `pytest backend/tests/contracts/test_sdk_validation_contract_shape.py`
+   - `python -m src.platform_api.validation.release_gate_check`
+3. `contracts-governance` includes full backend contract behavior suite (`backend/tests/contracts` with OpenAPI baseline/freeze + behavior tests).
+4. Replay-gate preflight remains enforced at deploy-time in `.github/workflows/backend-deploy.yml`.
+5. Docs governance checks are green.
+6. Deployment documentation and runbooks reference a single active profile.
+7. Parent `#81` status is updated with deployment evidence links.
 
 ## Traceability
 

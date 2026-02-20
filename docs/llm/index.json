@@ -358,7 +358,7 @@
   },
   {
     "chunk": "docs/llm/chunks/portal_gate5_deployment_profile_v1.md",
-    "chunk_hash": "b2a757d37dad24462b5f311396c2a17f89eba6c00b320862391115f298cf7525",
+    "chunk_hash": "c88362f3a766f433348b3d046dbe41df5f97c2bfac96ca3cad2222c9266b2896",
     "concepts": [
       "deployment_profile",
       "single_active_path",
@@ -372,7 +372,7 @@
       "Team G"
     ],
     "source": "docs/portal/operations/gate5-deployment-profile.md",
-    "source_hash": "8c8fc4a076725f9ad42124f23750ebfbb5404bb6124bdbd066835b6881114bcd",
+    "source_hash": "05aa9d9a899fd6e2abe9adb327610c2774b9187dd08e602bbd25b4adb452f207",
     "title": "Gate5 Deployment Profile",
     "topic": "operations",
     "workflows": [
@@ -438,7 +438,7 @@
   },
   {
     "chunk": "docs/llm/chunks/portal_gate5_release_runbooks_client_validation_v1.md",
-    "chunk_hash": "678584f25b014bf270509460e556b0b43074aeed9fef259a12b2fba58a99122b",
+    "chunk_hash": "0c21369ddba1606697de078b92d2a7fd100c1d2a55758390d2f310d320e56e46",
     "concepts": [
       "release_runbook",
       "cross_client_validation",
@@ -457,7 +457,7 @@
       "Team G"
     ],
     "source": "docs/portal/operations/gate5-release-runbooks-and-client-validation.md",
-    "source_hash": "170fe1836679a66b3ef7328a51ddc9dab97fc5ae25549d24f6289858a3a2b750",
+    "source_hash": "241000d258337be3bdf437d14b340f14a7868c6ea673c0e6d76adb38d1159d61",
     "title": "Gate5 Release Runbooks And Client Validation",
     "topic": "operations",
     "workflows": [

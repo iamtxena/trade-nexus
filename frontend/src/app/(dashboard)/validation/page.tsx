@@ -133,6 +133,7 @@ function decisionToBadgeVariant(decision: ValidationRunSummary['finalDecision'])
 }
 
 export default function ValidationPage() {
+  const [lastDeepLinkedRunId, setLastDeepLinkedRunId] = useState<string | null>(null);
   const [runLookupId, setRunLookupId] = useState('');
   const [runList, setRunList] = useState<ValidationRunSummary[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -225,57 +226,80 @@ export default function ValidationPage() {
     [],
   );
 
-  async function loadRunById(
-    runId: string,
-    options?: {
-      clearNotice?: boolean;
-      successNotice?: string;
+  const loadRunById = useCallback(
+    async (
+      runId: string,
+      options?: {
+        clearNotice?: boolean;
+        successNotice?: string;
+      },
+    ): Promise<void> => {
+      const clearNotice = options?.clearNotice ?? true;
+      const successNotice = options?.successNotice ?? `Loaded validation run ${runId}.`;
+      setIsLoadingRun(true);
+      setErrorMessage(null);
+      if (clearNotice) {
+        setNoticeMessage(null);
+      }
+      try {
+        const [runRes, artifactRes] = await Promise.all([
+          fetch(`/api/validation/runs/${runId}`),
+          fetch(`/api/validation/runs/${runId}/artifact`),
+        ]);
+        const [runPayload, artifactPayload] = await Promise.all([
+          runRes.json().catch(() => null),
+          artifactRes.json().catch(() => null),
+        ]);
+
+        if (!runRes.ok) {
+          setErrorMessage(extractErrorMessage(runPayload, `Run lookup failed (${runRes.status})`));
+          return;
+        }
+        if (!artifactRes.ok) {
+          setErrorMessage(
+            extractErrorMessage(artifactPayload, `Artifact lookup failed (${artifactRes.status})`),
+          );
+          return;
+        }
+
+        setRunResponse(runPayload as ValidationRunResponse);
+        setArtifactResponse(artifactPayload as ValidationArtifactResponse);
+        setActiveRunId(runId);
+        setRunLookupId(runId);
+        setRenderJobs({});
+        setNoticeMessage(successNotice);
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : 'Failed to load validation run.');
+      } finally {
+        setIsLoadingRun(false);
+      }
     },
-  ): Promise<void> {
-    const clearNotice = options?.clearNotice ?? true;
-    const successNotice = options?.successNotice ?? `Loaded validation run ${runId}.`;
-    setIsLoadingRun(true);
-    setErrorMessage(null);
-    if (clearNotice) {
-      setNoticeMessage(null);
-    }
-    try {
-      const [runRes, artifactRes] = await Promise.all([
-        fetch(`/api/validation/runs/${runId}`),
-        fetch(`/api/validation/runs/${runId}/artifact`),
-      ]);
-      const [runPayload, artifactPayload] = await Promise.all([
-        runRes.json().catch(() => null),
-        artifactRes.json().catch(() => null),
-      ]);
-
-      if (!runRes.ok) {
-        setErrorMessage(extractErrorMessage(runPayload, `Run lookup failed (${runRes.status})`));
-        return;
-      }
-      if (!artifactRes.ok) {
-        setErrorMessage(
-          extractErrorMessage(artifactPayload, `Artifact lookup failed (${artifactRes.status})`),
-        );
-        return;
-      }
-
-      setRunResponse(runPayload as ValidationRunResponse);
-      setArtifactResponse(artifactPayload as ValidationArtifactResponse);
-      setActiveRunId(runId);
-      setRunLookupId(runId);
-      setRenderJobs({});
-      setNoticeMessage(successNotice);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to load validation run.');
-    } finally {
-      setIsLoadingRun(false);
-    }
-  }
+    [],
+  );
 
   useEffect(() => {
     void loadRunList({ clearNotice: false, suppressErrors: true });
   }, [loadRunList]);
+
+  const loadDeepLinkedRun = useCallback(() => {
+    const deepLinkedRunId = new URLSearchParams(window.location.search).get('runId')?.trim() ?? '';
+    if (!deepLinkedRunId || deepLinkedRunId === lastDeepLinkedRunId) {
+      return;
+    }
+
+    setLastDeepLinkedRunId(deepLinkedRunId);
+    setRunLookupId(deepLinkedRunId);
+    void loadRunById(deepLinkedRunId, {
+      clearNotice: false,
+      successNotice: `Loaded validation run ${deepLinkedRunId} from URL.`,
+    });
+  }, [lastDeepLinkedRunId, loadRunById]);
+
+  useEffect(() => {
+    loadDeepLinkedRun();
+    window.addEventListener('popstate', loadDeepLinkedRun);
+    return () => window.removeEventListener('popstate', loadDeepLinkedRun);
+  }, [loadDeepLinkedRun]);
 
   async function handleLoadRun(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

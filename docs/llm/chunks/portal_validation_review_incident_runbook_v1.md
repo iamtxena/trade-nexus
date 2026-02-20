@@ -83,6 +83,34 @@ PYTHONPATH=backend python -m src.platform_api.validation.release_gate_check
 2. Compare baseline and candidate evidence references from replay payload.
 3. Patch deterministic or policy drift, rerun contract/replay tests, and re-run replay.
 
+## Incident Class D: Deep-Link Run Load Failures (`#279`)
+
+### Trigger
+
+Reviewer opens `/validation?runId=<runId>` but run detail/artifact does not resolve in web UI.
+
+### Triage Commands
+
+```bash
+RUN_ID="<run-id>"
+TOKEN="<bearer-token>"
+API_BASE="https://api.trade-nexus.io"
+
+curl -sS "$API_BASE/v2/validation-runs/$RUN_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Request-Id: req-validation-deeplink-run-001"
+
+curl -sS "$API_BASE/v2/validation-runs/$RUN_ID/artifact" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Request-Id: req-validation-deeplink-artifact-001"
+```
+
+### Containment And Recovery
+
+1. Verify the deep link contains the exact `runId` returned by CLI/SDK output.
+2. If API calls pass, reload `/validation?runId=<runId>` with a fresh authenticated session.
+3. If API calls fail, treat as contract/auth incident and follow Class B/C flow.
+
 ## Governance And Review Findings Disposition
 
 1. Resolve Cursor and Greptile findings before merge when a fix is feasible in-scope.
@@ -111,6 +139,7 @@ Validation Review incident update:
 ## Traceability
 
 - Child issue: [#282](https://github.com/iamtxena/trade-nexus/issues/282)
+- Related deep-link issue: [#279](https://github.com/iamtxena/trade-nexus/issues/279)
 - Parent issue: [#288](https://github.com/iamtxena/trade-nexus/issues/288)
 - Contract source: `/docs/architecture/specs/platform-api.openapi.yaml`
 - Replay gate check: `/backend/src/platform_api/validation/release_gate_check.py`

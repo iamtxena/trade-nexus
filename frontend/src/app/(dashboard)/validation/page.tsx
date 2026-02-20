@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -133,7 +133,7 @@ function decisionToBadgeVariant(decision: ValidationRunSummary['finalDecision'])
 }
 
 export default function ValidationPage() {
-  const [lastDeepLinkedRunId, setLastDeepLinkedRunId] = useState<string | null>(null);
+  const lastDeepLinkedRunIdRef = useRef<string | null>(null);
   const [runLookupId, setRunLookupId] = useState('');
   const [runList, setRunList] = useState<ValidationRunSummary[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -283,17 +283,17 @@ export default function ValidationPage() {
 
   const loadDeepLinkedRun = useCallback(() => {
     const deepLinkedRunId = new URLSearchParams(window.location.search).get('runId')?.trim() ?? '';
-    if (!deepLinkedRunId || deepLinkedRunId === lastDeepLinkedRunId) {
+    if (!deepLinkedRunId || deepLinkedRunId === lastDeepLinkedRunIdRef.current) {
       return;
     }
 
-    setLastDeepLinkedRunId(deepLinkedRunId);
+    lastDeepLinkedRunIdRef.current = deepLinkedRunId;
     setRunLookupId(deepLinkedRunId);
     void loadRunById(deepLinkedRunId, {
       clearNotice: false,
       successNotice: `Loaded validation run ${deepLinkedRunId} from URL.`,
     });
-  }, [lastDeepLinkedRunId, loadRunById]);
+  }, [loadRunById]);
 
   useEffect(() => {
     loadDeepLinkedRun();

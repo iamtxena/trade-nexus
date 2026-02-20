@@ -26,7 +26,10 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { resolveTraderReviewLaneState } from '@/lib/validation/review-lane-state';
+import {
+  type TraderReviewTone,
+  resolveTraderReviewLaneState,
+} from '@/lib/validation/review-lane-state';
 import { readReviewRunHistory, upsertReviewRunHistory } from '@/lib/validation/review-run-history';
 import { resolveRunIdForListToDetailTransition } from '@/lib/validation/review-run-list-state';
 import {
@@ -119,7 +122,7 @@ function formatApiError(payload: unknown, fallback: string): string {
   return maybeError.requestId ? `${message} (requestId: ${maybeError.requestId})` : message;
 }
 
-function toneToBadgeVariant(tone: ReturnType<typeof resolveTraderReviewLaneState>['tone']) {
+function toneToBadgeVariant(tone: TraderReviewTone) {
   switch (tone) {
     case 'pending':
       return 'secondary';
@@ -140,19 +143,6 @@ function decisionToBadgeVariant(decision: ValidationRunSummary['finalDecision'])
       return 'destructive';
     default:
       return 'secondary';
-  }
-}
-
-function timelineToneToBadgeVariant(tone: ValidationTimelineEvent['tone']) {
-  switch (tone) {
-    case 'success':
-      return 'default';
-    case 'danger':
-      return 'destructive';
-    case 'pending':
-      return 'secondary';
-    default:
-      return 'outline';
   }
 }
 
@@ -849,7 +839,7 @@ export default function ValidationPage() {
                       <p className="text-xs text-muted-foreground">{event.detail}</p>
                     </div>
                     <div className="md:justify-self-end">
-                      <Badge variant={timelineToneToBadgeVariant(event.tone)}>{event.tone}</Badge>
+                      <Badge variant={toneToBadgeVariant(event.tone)}>{event.tone}</Badge>
                     </div>
                   </div>
                 );
@@ -928,25 +918,7 @@ export default function ValidationPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="decision">Decision</Label>
-                  <Select
-                    value={reviewForm.decision}
-                    onValueChange={(value: ValidationDecision) =>
-                      setReviewForm((previous) => ({ ...previous, decision: value }))
-                    }
-                  >
-                    <SelectTrigger id="decision" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pass">pass</SelectItem>
-                      <SelectItem value="conditional_pass">conditional_pass</SelectItem>
-                      <SelectItem value="fail">fail</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Decision Actions</Label>
+                  <Label>Decision</Label>
                   <div className="grid grid-cols-3 gap-2">
                     <Button
                       type="button"

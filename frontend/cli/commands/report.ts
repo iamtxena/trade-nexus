@@ -1,7 +1,10 @@
+import { writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
+
 import { xai } from '@ai-sdk/xai';
 import { generateText } from 'ai';
 
+import { getLonaClient } from '../../src/lib/lona/client';
 import { validateConfig } from '../lib/config';
 import { getLiveEngineClient } from '../lib/live-engine';
 import {
@@ -12,6 +15,7 @@ import {
   printDivider,
   printError,
   printHeader,
+  printSuccess,
   printTable,
   red,
   spinner,
@@ -29,6 +33,7 @@ export async function reportCommand(args: string[]) {
   const handlers: Record<string, (a: string[]) => Promise<void>> = {
     daily: dailyReport,
     strategy: strategyReport,
+    get: getReport,
   };
 
   const handler = handlers[subcommand];
@@ -46,10 +51,141 @@ function printHelp() {
   console.log(`${bold('Usage:')}  nexus report <subcommand> [options]\n`);
   console.log(`${bold('Subcommands:')}`);
   console.log(`  ${cyan('daily')}      Generate daily trading summary`);
-  console.log(`  ${cyan('strategy')}   Detailed report for one strategy\n`);
+  console.log(`  ${cyan('strategy')}   Detailed report for one strategy`);
+  console.log(`  ${cyan('get')}        Fetch a backtest report by ID\n`);
   console.log(`${bold('Examples:')}`);
   console.log(`  ${dim('nexus report daily')}`);
-  console.log(`  ${dim('nexus report strategy --id <live-engine-strategy-id>')}\n`);
+  console.log(`  ${dim('nexus report strategy --id <live-engine-strategy-id>')}`);
+  console.log(`  ${dim('nexus report get --id <report-id>')}`);
+  console.log(`  ${dim('nexus report get --id <report-id> --full')}`);
+  console.log(`  ${dim('nexus report get --id <report-id> --timeline')}`);
+  console.log(`  ${dim('nexus report get --id <report-id> --output /tmp/report.json')}\n`);
+}
+
+async function getReport(args: string[]) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      id: { type: 'string' },
+      full: { type: 'boolean', default: false },
+      timeline: { type: 'boolean', default: false },
+      output: { type: 'string' },
+    },
+    allowPositionals: false,
+  });
+
+  if (!values.id) {
+    printError('--id is required (backtest report ID)');
+    process.exit(1);
+  }
+
+  validateConfig(['LONA_AGENT_TOKEN']);
+  const client = getLonaClient();
+
+  const wantFull = values.full ?? false;
+  const wantTimeline = values.timeline ?? false;
+
+  if (wantFull || wantTimeline) {
+    const spin = spinner(`Fetching full report ${values.id}...`);
+    try {
+      const fullReport = await client.getFullReport(values.id);
+      spin.stop('Report fetched');
+
+      if (wantTimeline) {
+        const timeline = (fullReport.backtest_timeline ?? fullReport.timeline ?? []) as unknown[];
+        const content = JSON.stringify(timeline, null, 2);
+        if (values.output) {
+          writeFileSync(values.output, content, 'utf-8');
+          printSuccess(`Timeline written to ${values.output} (${timeline.length} entries)`);
+        } else {
+          console.log(content);
+        }
+        return;
+      }
+
+      // --full: output entire report
+      const content = JSON.stringify(fullReport, null, 2);
+      if (values.output) {
+        writeFileSync(values.output, content, 'utf-8');
+        printSuccess(`Full report written to ${values.output}`);
+      } else {
+        console.log(content);
+      }
+    } catch (error) {
+      spin.stop();
+      printError(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+    return;
+  }
+
+  // Default: summary stats
+  const spin = spinner(`Fetching report ${values.id}...`);
+  try {
+    const report = await client.getReport(values.id);
+    spin.stop('Report fetched');
+
+    if (values.output) {
+      const content = JSON.stringify(report, null, 2);
+      writeFileSync(values.output, content, 'utf-8');
+      printSuccess(`Report written to ${values.output}`);
+      return;
+    }
+
+    printHeader(`Report: ${report.name || report.id}`);
+    console.log(`  ${bold('ID:')}       ${report.id}`);
+    console.log(`  ${bold('Status:')}   ${formatReportStatus(report.status)}`);
+    console.log(`  ${bold('Strategy:')} ${report.strategy_id}`);
+    if (report.description) {
+      console.log(`  ${bold('Info:')}     ${dim(report.description)}`);
+    }
+    console.log(`  ${bold('Created:')}  ${report.created_at}`);
+
+    if (report.total_stats && Object.keys(report.total_stats).length > 0) {
+      console.log(`\n${bold('Summary Stats:')}`);
+      const stats = report.total_stats;
+      const rows = Object.entries(stats).map(([key, value]) => [
+        key,
+        typeof value === 'number' ? formatStatValue(key, value) : String(value ?? '-'),
+      ]);
+      printTable(['Metric', 'Value'], rows);
+    }
+
+    if (report.error) {
+      console.log(`\n  ${red('Error:')} ${report.error}`);
+    }
+
+    console.log(
+      `\n  ${dim('Use --full for complete report data, --timeline for timeline only')}\n`,
+    );
+  } catch (error) {
+    spin.stop();
+    printError(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
+function formatReportStatus(status: string): string {
+  switch (status.toUpperCase()) {
+    case 'COMPLETED':
+      return green(status);
+    case 'FAILED':
+      return red(status);
+    case 'PENDING':
+    case 'EXECUTING':
+    case 'PROCESSING':
+      return yellow(status);
+    default:
+      return status;
+  }
+}
+
+function formatStatValue(key: string, value: number): string {
+  const pctKeys = /percent|pct|ratio|sharpe|sortino|drawdown|return/i;
+  if (pctKeys.test(key)) {
+    return value >= 0 ? green(value.toFixed(4)) : red(value.toFixed(4));
+  }
+  return String(value);
 }
 
 async function dailyReport(_args: string[]) {

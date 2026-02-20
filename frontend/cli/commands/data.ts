@@ -1,8 +1,19 @@
+import { writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 
-import { getLonaClient } from '../../src/lib/lona/client';
+import { LonaClientError, getLonaClient } from '../../src/lib/lona/client';
+import type { OhlcDataPoint } from '../../src/lib/lona/types';
 import { validateConfig } from '../lib/config';
-import { bold, cyan, dim, printError, printHeader, printTable, spinner } from '../lib/output';
+import {
+  bold,
+  cyan,
+  dim,
+  printError,
+  printHeader,
+  printSuccess,
+  printTable,
+  spinner,
+} from '../lib/output';
 
 export async function dataCommand(args: string[]) {
   const subcommand = args[0];
@@ -15,6 +26,7 @@ export async function dataCommand(args: string[]) {
   const handlers: Record<string, (a: string[]) => Promise<void>> = {
     list: listSymbols,
     download: downloadData,
+    export: exportSymbolData,
     delete: deleteSymbol,
   };
 
@@ -34,6 +46,7 @@ function printHelp() {
   console.log(`${bold('Subcommands:')}`);
   console.log(`  ${cyan('list')}       List available market data symbols`);
   console.log(`  ${cyan('download')}   Download market data from Binance to Lona`);
+  console.log(`  ${cyan('export')}     Export symbol OHLC data as JSON or CSV`);
   console.log(`  ${cyan('delete')}     Delete a symbol by ID\n`);
   console.log(`${bold('Examples:')}`);
   console.log(
@@ -45,6 +58,8 @@ function printHelp() {
   console.log(
     `  ${dim('nexus data download --symbol BTCUSDT --interval 1h --start 2025-01-01 --end 2025-06-01 --force')}`,
   );
+  console.log(`  ${dim('nexus data export --id <symbol-id> --format json')}`);
+  console.log(`  ${dim('nexus data export --id <symbol-id> --format csv --output /tmp/data.csv')}`);
   console.log(`  ${dim('nexus data delete --id <symbol-id>')}\n`);
 }
 
@@ -155,9 +170,88 @@ async function downloadData(args: string[]) {
     );
   } catch (error) {
     spin.stop();
-    printError(error instanceof Error ? error.message : String(error));
+    if (error instanceof LonaClientError) {
+      const msg = error.message;
+      if (error.statusCode === 404) {
+        printError(
+          `Symbol not found. Ensure the symbol '${values.symbol}' exists on Binance, verify the date range is valid, or try a shorter period.`,
+        );
+      } else if (error.statusCode === 400 || msg.includes('not found on Binance')) {
+        printError(msg);
+        console.log(
+          dim(
+            '  Tip: Check the symbol name (e.g. BTCUSDT, ETHUSDT) and ensure the interval is valid (1m, 5m, 1h, 1d).',
+          ),
+        );
+      } else {
+        printError(msg);
+      }
+    } else {
+      printError(error instanceof Error ? error.message : String(error));
+    }
     process.exit(1);
   }
+}
+
+async function exportSymbolData(args: string[]) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      id: { type: 'string' },
+      format: { type: 'string', default: 'json' },
+      output: { type: 'string' },
+    },
+    allowPositionals: false,
+  });
+
+  if (!values.id) {
+    printError('--id is required (symbol ID from "nexus data list")');
+    process.exit(1);
+  }
+
+  const format = values.format ?? 'json';
+  if (format !== 'json' && format !== 'csv') {
+    printError('--format must be "json" or "csv"');
+    process.exit(1);
+  }
+
+  validateConfig(['LONA_AGENT_TOKEN']);
+  const client = getLonaClient();
+
+  const spin = spinner(`Fetching OHLC data for symbol ${values.id}...`);
+  try {
+    const data = await client.getSymbolData(values.id);
+    spin.stop(`Fetched ${data.length} data points`);
+
+    const content = format === 'csv' ? ohlcToCsv(data) : JSON.stringify(data, null, 2);
+
+    if (values.output) {
+      writeFileSync(values.output, content, 'utf-8');
+      printSuccess(
+        `Data written to ${values.output} (${data.length} rows, ${format.toUpperCase()})`,
+      );
+    } else {
+      console.log(content);
+    }
+  } catch (error) {
+    spin.stop();
+    if (error instanceof LonaClientError && error.statusCode === 404) {
+      printError(
+        `Symbol '${values.id}' not found. Run "nexus data list" to see available symbols.`,
+      );
+    } else {
+      printError(error instanceof Error ? error.message : String(error));
+    }
+    process.exit(1);
+  }
+}
+
+function ohlcToCsv(data: OhlcDataPoint[]): string {
+  const rows = ['timestamp,open,high,low,close,volume'];
+  for (const d of data) {
+    rows.push(`${d.timestamp},${d.open},${d.high},${d.low},${d.close},${d.volume}`);
+  }
+  return rows.join('\n');
 }
 
 async function deleteSymbol(args: string[]) {

@@ -7,6 +7,7 @@ import type {
   LonaStrategy,
   LonaStrategyFromDescriptionResponse,
   LonaSymbol,
+  OhlcDataPoint,
 } from './types';
 
 const BINANCE_KLINES_URL = 'https://api.binance.com/api/v3/klines';
@@ -221,28 +222,24 @@ export class LonaClient {
     if (TIMEOUT_PATTERN.test(message)) {
       return {
         category: 'TIMEOUT_ERROR',
-        hint:
-          'Hint: narrow the date range or reduce strategy complexity, then rerun. If this persists, inspect runner capacity/timeouts in Lona.',
+        hint: 'Hint: narrow the date range or reduce strategy complexity, then rerun. If this persists, inspect runner capacity/timeouts in Lona.',
       };
     }
     if (DATA_NOT_FOUND_PATTERN.test(message)) {
       return {
         category: 'DATA_ERROR',
-        hint:
-          'Hint: verify the data ID exists for this same Lona user/token. If data was created from another interface/user, redownload or list symbols with this token.',
+        hint: 'Hint: verify the data ID exists for this same Lona user/token. If data was created from another interface/user, redownload or list symbols with this token.',
       };
     }
     if (CODE_ERROR_PATTERN.test(message)) {
       return {
         category: 'CODE_ERROR',
-        hint:
-          'Hint: strategy code failed during compilation/runtime. Validate code locally and inspect the stderr snippet below for the exact line or symbol.',
+        hint: 'Hint: strategy code failed during compilation/runtime. Validate code locally and inspect the stderr snippet below for the exact line or symbol.',
       };
     }
     return {
       category: 'EXECUTION_ERROR',
-      hint:
-        'Hint: inspect full runner stderr/traceback. This is usually a runtime exception or backend execution failure.',
+      hint: 'Hint: inspect full runner stderr/traceback. This is usually a runtime exception or backend execution failure.',
     };
   }
 
@@ -400,6 +397,54 @@ export class LonaClient {
     return this.request<LonaSymbol>('GET', `/api/v1/symbols/${symbolId}`);
   }
 
+  async getSymbolData(symbolId: string): Promise<OhlcDataPoint[]> {
+    const symbol = await this.getSymbol(symbolId);
+
+    // If the API returns a file_url, fetch CSV from there
+    if (symbol.file_url) {
+      const response = await fetch(symbol.file_url);
+      if (!response.ok) {
+        throw new LonaClientError(
+          `Failed to fetch symbol data from file URL: ${response.status} ${response.statusText}`,
+          response.status,
+        );
+      }
+      const text = await response.text();
+      return this.parseCsvToOhlc(text);
+    }
+
+    // Otherwise fetch from the data endpoint
+    try {
+      return await this.request<OhlcDataPoint[]>('GET', `/api/v1/symbols/${symbolId}/data`);
+    } catch (error) {
+      if (error instanceof LonaClientError && error.statusCode === 404) {
+        throw new LonaClientError(
+          `No data available for symbol '${symbolId}'. The symbol exists but its data endpoint is not accessible. Check that the symbol was uploaded with data content.`,
+          404,
+        );
+      }
+      throw error;
+    }
+  }
+
+  private parseCsvToOhlc(csv: string): OhlcDataPoint[] {
+    const lines = csv.trim().split('\n');
+    if (lines.length < 2) return [];
+
+    // Skip header row
+    return lines.slice(1).map((line) => {
+      const [timestamp, open, high, low, close, volume] = line.split(',');
+      return {
+        timestamp: timestamp.trim(),
+        open: Number(open),
+        high: Number(high),
+        low: Number(low),
+        close: Number(close),
+        volume: Number(volume),
+      };
+    });
+  }
+
   async deleteSymbol(symbolId: string): Promise<void> {
     return this.requestVoid('DELETE', `/api/v1/symbols/${symbolId}`);
   }
@@ -506,10 +551,15 @@ export class LonaClient {
 
       const response = await fetch(url.toString());
       if (!response.ok) {
-        throw new LonaClientError(
-          `Binance API error ${response.status}: ${await response.text()}`,
-          response.status,
-        );
+        const body = await response.text();
+        if (response.status === 404 || response.status === 400) {
+          const hint =
+            response.status === 400 && /invalid symbol/i.test(body)
+              ? `Symbol '${symbol}' not found on Binance. Check the symbol name (e.g. BTCUSDT, ETHUSDT).`
+              : `Binance returned ${response.status} for '${symbol}'. Verify the symbol exists on Binance and the interval '${interval}' is valid. Try a shorter date range or more recent dates.`;
+          throw new LonaClientError(hint, response.status);
+        }
+        throw new LonaClientError(`Binance API error ${response.status}: ${body}`, response.status);
       }
 
       const batch: unknown[][] = await response.json();

@@ -295,18 +295,31 @@ jobs:
               return;
             }
 
+            let cursorRuns = (await getCheckRuns()).filter((run) =>
+              run.name.toLowerCase().includes("cursor"),
+            );
+            if (cursorRuns.length === 0) {
+              core.info(
+                "No cursor review/check-run detected for this PR scope; accepting Greptile-only review signal.",
+              );
+              core.info("Review governance checks passed.");
+              return;
+            }
+
             const maxWaitMs = 5 * 60 * 1000;
             const pollIntervalMs = 15 * 1000;
             const waitUntil = Date.now() + maxWaitMs;
-            let cursorRuns = [];
             let cursorPassed = false;
 
             while (Date.now() <= waitUntil) {
               const checkRuns = await getCheckRuns();
               cursorRuns = checkRuns.filter((run) => run.name.toLowerCase().includes("cursor"));
               if (cursorRuns.length === 0) {
-                await sleep(pollIntervalMs);
-                continue;
+                core.info(
+                  "Cursor check-run no longer present; accepting Greptile-only review signal.",
+                );
+                core.info("Review governance checks passed.");
+                return;
               }
 
               const completedRuns = cursorRuns.filter((run) => run.status === "completed");

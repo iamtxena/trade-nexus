@@ -117,7 +117,7 @@
 
 ## 3. Supabase Schema Readiness
 
-### 3.1 Current Tables (2 migrations)
+### 3.1 Current Tables (5 migrations)
 
 **Migration 001** (`001_initial_schema.sql`):
 - `strategies` — user strategies with RLS
@@ -127,20 +127,30 @@
 **Migration 002** (`002_kb_schema.sql`):
 - `kb_patterns`, `kb_market_regimes`, `kb_lessons_learned`, `kb_macro_events`, `kb_correlations`
 
-### 3.2 Review-Web Tables Needed (Migration 003 — pending #275 contract freeze)
+**Migration 003** (`003_validation_storage.sql`):
+- `validation_runs` — main validation workflow state (strategy/backtest refs, trader review status, policy decision)
+- `validation_reviews` — reviewer comments and decisions (approve/reject/revise with rationale)
+- `validation_baselines` — deterministic baseline snapshots for replay regression
+- `validation_regression_results` — regression comparison results (pass/fail/drift)
 
-The review-web flow requires new tables for:
-- **review_sessions** — tracks review sessions (run ID, strategy ID, status, reviewer)
-- **review_comments** — trader comments on strategy/backtest artifacts
-- **review_decisions** — approve/reject/revise decisions with rationale
-- **review_artifacts** — JSON-first canonical artifacts (backtest reports, strategy snapshots)
+**Migration 004** (`004_validation_storage_rls_tenant_scope.sql`):
+- RLS + tenant scoping for validation tables
 
-These tables MUST follow the existing patterns:
+**Migration 005** (`005_validation_replays_tenant_scope.sql`):
+- RLS + tenant scoping for replay tables
+
+### 3.2 Review-Web Schema Readiness
+
+The review-web flow is **already covered** by the existing validation storage schema (migrations 003-005). The `validation_runs` table tracks trader review status (`not_requested`, `requested`, `approved`, `rejected`) and `validation_reviews` stores reviewer comments and decisions.
+
+These tables follow the established patterns:
 - UUID primary keys with `gen_random_uuid()`
 - `user_id TEXT NOT NULL` column for RLS
-- RLS enabled with `auth.jwt() ->> 'sub' = user_id` policy
+- RLS enabled with tenant-scoped policies (migration 004)
 - `created_at TIMESTAMPTZ DEFAULT now()` timestamps
 - `schema_version TEXT NOT NULL DEFAULT '1.0'` for evolution
+
+No additional migration is needed for review-web unless #275 introduces new contract requirements.
 
 ### 3.3 Migration Promotion Path
 
@@ -148,8 +158,8 @@ These tables MUST follow the existing patterns:
 Local dev → Supabase CLI (supabase db push) → Staging → Production
 ```
 
-**Promotion steps**:
-1. Write migration SQL in `supabase/migrations/003_review_web.sql`
+**Promotion steps** (for any future migration):
+1. Write migration SQL in `supabase/migrations/NNN_<name>.sql`
 2. Test locally with `supabase db push` against local Supabase
 3. Run `supabase db push` against staging project (if available)
 4. Run `supabase db push` against production project
@@ -157,13 +167,14 @@ Local dev → Supabase CLI (supabase db push) → Staging → Production
 
 ### 3.4 Migration Rollback Procedure
 
-**Rollback steps for 003_review_web.sql**:
+**Rollback steps for validation storage (if needed)**:
 ```sql
--- Rollback migration 003
-DROP TABLE IF EXISTS review_artifacts CASCADE;
-DROP TABLE IF EXISTS review_decisions CASCADE;
-DROP TABLE IF EXISTS review_comments CASCADE;
-DROP TABLE IF EXISTS review_sessions CASCADE;
+-- Rollback migrations 003-005
+DROP TABLE IF EXISTS validation_regression_results CASCADE;
+DROP TABLE IF EXISTS validation_baselines CASCADE;
+DROP TABLE IF EXISTS validation_reviews CASCADE;
+DROP TABLE IF EXISTS validation_runs CASCADE;
+DROP FUNCTION IF EXISTS update_validation_updated_at() CASCADE;
 ```
 
 **Execution**:

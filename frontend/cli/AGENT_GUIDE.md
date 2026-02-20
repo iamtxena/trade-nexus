@@ -124,11 +124,14 @@ bun run nexus strategy code --id <strategy-id>
 
 # Run a backtest
 bun run nexus strategy backtest \
-  --id <strategy-id> \
-  --data <data-id> \
+  --strategy-id <strategy-id> \
+  --symbol-id <data-id> \
   --start 2025-01-01 \
   --end 2025-06-01 \
   --capital 100000
+
+# Backward-compatible aliases (deprecated): --id and --data
+bun run nexus strategy backtest --id <strategy-id> --data <data-id> --start 2025-01-01 --end 2025-06-01
 
 # Score and rank strategies by backtest report IDs
 bun run nexus strategy score --ids <report-id-1>,<report-id-2>,<report-id-3>
@@ -282,7 +285,7 @@ bun run nexus strategy create --description "Bollinger Band breakout on ETH 4h..
 bun run nexus data download --symbol ETHUSDT --interval 4h --start 2024-06-01 --end 2025-01-01
 
 # 5. Backtest the strategy
-bun run nexus strategy backtest --id <strategy-id> --data <data-id> --start 2024-06-01 --end 2025-01-01
+bun run nexus strategy backtest --strategy-id <strategy-id> --symbol-id <data-id> --start 2024-06-01 --end 2025-01-01
 
 # 6. If results are good, deploy to paper trading
 bun run nexus deploy --strategy-id <strategy-id> --capital 10000

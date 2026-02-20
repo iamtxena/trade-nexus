@@ -28,6 +28,9 @@ Run this playbook only when foundational dependencies are complete:
    - `review-governance`
    - `docs-governance`
    - `llm-package-governance`
+   - `contract-governance` must include:
+     - `pytest backend/tests/contracts/test_sdk_validation_contract_shape.py`
+     - `python -m src.platform_api.validation.release_gate_check`
 2. Confirm deployment profile remains singular:
    - `/docs/portal/operations/gate5-deployment-profile.md`
 3. Confirm reliability closure evidence is current:
@@ -77,6 +80,24 @@ Promotion and rollback follow the existing operational runbooks:
 2. Reproduce using lane-specific commands from the compatibility matrix.
 3. Recover: fix contract drift or client expectation mismatch, then rerun lane and governance checks.
 
+### Scenario D: Replay Gate Blocked (`mergeGateStatus=blocked` or `releaseGateStatus=blocked`)
+
+1. Contain:
+   - block merge and deployment promotion for the candidate revision,
+   - mark release status as `BLOCKED` in gate updates,
+   - link the failing governance run in the child issue.
+2. Verify and reproduce with replay preflight:
+   - CI parity command (merge-time/deploy-time gate):
+     - `python -m src.platform_api.validation.release_gate_check`
+   - Local pass validation:
+     - `PYTHONPATH=backend python3 -m src.platform_api.validation.release_gate_check --baseline-profile STANDARD --candidate-profile STANDARD --output /tmp/replay-gate-pass.json`
+   - Local blocked reproduction:
+     - `PYTHONPATH=backend python3 -m src.platform_api.validation.release_gate_check --baseline-profile STANDARD --candidate-profile EXPERT --output /tmp/replay-gate-blocked.json`
+3. Recover:
+   - inspect replay output and reasons,
+   - remediate candidate policy/runtime drift,
+   - rerun governance checks and confirm replay gate returns pass status.
+
 ## Evidence Recording
 
 For each release candidate, capture:
@@ -85,6 +106,10 @@ For each release candidate, capture:
 2. Command output summaries per lane.
 3. Deployment revision and smoke-check outcome.
 4. Any rollback/incident actions executed.
+5. Replay-gate evidence when blocked:
+   - failing run URL (`contracts-governance` or `backend-deploy`),
+   - replay JSON fields: `id`, `decision`, `mergeBlocked`, `releaseBlocked`, `mergeGateStatus`, `releaseGateStatus`, `baselineDecision`, `candidateDecision`, `reasons`,
+   - remediation PR URL and post-fix rerun URL showing pass.
 
 Use:
 

@@ -16,6 +16,9 @@ from src.platform_api.schemas_v2 import (
     CreateValidationBaselineRequest,
     CreateValidationRegressionReplayRequest,
     CreateValidationRenderRequest,
+    CreateValidationReviewCommentRequest,
+    CreateValidationReviewDecisionRequest,
+    CreateValidationReviewRenderRequest,
     CreateValidationRunRequest,
     CreateValidationRunReviewRequest,
     ValidationArtifactResponse,
@@ -27,8 +30,19 @@ from src.platform_api.schemas_v2 import (
     ValidationRegressionReplayResponse,
     ValidationRenderJob,
     ValidationRenderResponse,
+    ValidationReviewArtifact,
+    ValidationReviewComment,
+    ValidationReviewCommentResponse,
+    ValidationReviewDecision,
+    ValidationReviewDecisionResponse,
+    ValidationReviewRenderJob,
+    ValidationReviewRenderResponse,
+    ValidationReviewRunDetailResponse,
+    ValidationReviewRunListResponse,
+    ValidationReviewRunSummary,
     ValidationRun,
     ValidationRunArtifact,
+    ValidationRunListResponse,
     ValidationRunResponse,
     ValidationRunReviewResponse,
 )
@@ -73,6 +87,9 @@ class _ValidationRunRecord:
     trader_decision: ValidationDecision | None = None
     render_jobs: dict[str, ValidationRenderJob] = field(default_factory=dict)
     render_audit_blobs: dict[str, _ValidationRenderBlob] = field(default_factory=dict)
+    review_comments: list[ValidationReviewComment] = field(default_factory=list)
+    review_decision: ValidationReviewDecision | None = None
+    review_render_jobs: dict[str, ValidationReviewRenderJob] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -122,6 +139,7 @@ class ValidationV2Service:
         self._run_counter = 1
         self._baseline_counter = 1
         self._replay_counter = 1
+        self._review_comment_counter = 1
 
     async def create_validation_run(
         self,
@@ -281,6 +299,7 @@ class ValidationV2Service:
             "status": agent_result.status,
             "summary": agent_result.summary,
             "findings": [item.to_contract_payload() for item in agent_result.findings],
+            "budget": agent_result.budget.to_contract_payload(),
         }
 
         trader_status = "requested" if policy.require_trader_review else "not_requested"
@@ -360,6 +379,18 @@ class ValidationV2Service:
         )
         return response
 
+    async def list_validation_runs(self, *, context: RequestContext) -> ValidationRunListResponse:
+        runs = [
+            record.run.model_copy()
+            for record in self._runs.values()
+            if record.tenant_id == context.tenant_id and record.user_id == context.user_id
+        ]
+        runs.sort(key=lambda run: run.updatedAt, reverse=True)
+        return ValidationRunListResponse(
+            requestId=context.request_id,
+            runs=runs,
+        )
+
     async def get_validation_run(self, *, run_id: str, context: RequestContext) -> ValidationRunResponse:
         record = self._require_run(run_id=run_id, context=context)
         return ValidationRunResponse(requestId=context.request_id, run=record.run)
@@ -375,6 +406,315 @@ class ValidationV2Service:
             requestId=context.request_id,
             artifactType="validation_run",
             artifact=record.artifact,
+        )
+
+    async def list_validation_review_runs(
+        self,
+        *,
+        context: RequestContext,
+        status_filter: str | None = None,
+        final_decision_filter: str | None = None,
+        cursor: str | None = None,
+        limit: int = 25,
+    ) -> ValidationReviewRunListResponse:
+        items = [
+            self._build_validation_review_run_summary(record=record)
+            for record in self._runs.values()
+            if record.tenant_id == context.tenant_id and record.user_id == context.user_id
+        ]
+        if status_filter is not None:
+            items = [item for item in items if item.status == status_filter]
+        if final_decision_filter is not None:
+            items = [item for item in items if item.finalDecision == final_decision_filter]
+        items.sort(key=lambda item: item.updatedAt, reverse=True)
+
+        start = self._decode_pagination_cursor(cursor=cursor)
+        bounded_start = min(start, len(items))
+        page = items[bounded_start : bounded_start + limit]
+        next_cursor: str | None = None
+        if bounded_start + limit < len(items):
+            next_cursor = str(bounded_start + limit)
+        return ValidationReviewRunListResponse(
+            requestId=context.request_id,
+            items=page,
+            nextCursor=next_cursor,
+        )
+
+    async def get_validation_review_run(
+        self,
+        *,
+        run_id: str,
+        context: RequestContext,
+    ) -> ValidationReviewRunDetailResponse:
+        record = self._require_run(run_id=run_id, context=context)
+        review_artifact = ValidationReviewArtifact(
+            schemaVersion="validation-review.v1",
+            run=record.run.model_copy(),
+            artifact=record.artifact.model_copy(),
+            comments=[item.model_copy() for item in record.review_comments],
+            decision=record.review_decision.model_copy() if record.review_decision is not None else None,
+            renders=[
+                item.model_copy()
+                for item in sorted(
+                    record.review_render_jobs.values(),
+                    key=lambda render_job: render_job.requestedAt,
+                )
+            ],
+        )
+        return ValidationReviewRunDetailResponse(
+            requestId=context.request_id,
+            artifact=review_artifact,
+        )
+
+    async def create_validation_review_comment(
+        self,
+        *,
+        run_id: str,
+        request: CreateValidationReviewCommentRequest,
+        context: RequestContext,
+        idempotency_key: str | None,
+    ) -> ValidationReviewCommentResponse:
+        payload = {"runId": run_id, **request.model_dump(mode="json")}
+        key = self._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
+        conflict, cached = self._get_idempotent_response(
+            scope="validation_review_comments",
+            key=self._scoped_idempotency_key(context=context, key=key),
+            payload=payload,
+        )
+        if conflict:
+            raise PlatformAPIError(
+                status_code=409,
+                code="IDEMPOTENCY_KEY_CONFLICT",
+                message="Idempotency-Key reused with different payload.",
+                request_id=context.request_id,
+            )
+        if cached is not None:
+            return ValidationReviewCommentResponse.model_validate(cached)
+
+        record = self._require_run(run_id=run_id, context=context)
+        normalized_body = _non_empty(request.body)
+        if normalized_body is None:
+            raise PlatformAPIError(
+                status_code=400,
+                code="VALIDATION_REVIEW_INVALID",
+                message="body must be a non-empty string.",
+                request_id=context.request_id,
+                details={"body": request.body},
+            )
+        evidence_refs = self._normalize_evidence_refs(
+            evidence_refs=request.evidenceRefs,
+            request_id=context.request_id,
+        )
+
+        created_at = utc_now()
+        comment = ValidationReviewComment(
+            id=self._next_review_comment_id(),
+            runId=run_id,
+            tenantId=context.tenant_id,
+            userId=context.user_id,
+            body=normalized_body,
+            evidenceRefs=evidence_refs,
+            createdAt=created_at,
+        )
+        record.review_comments.append(comment)
+        await self._touch_run_record(record=record, updated_at=created_at)
+
+        response = ValidationReviewCommentResponse(
+            requestId=context.request_id,
+            runId=run_id,
+            commentAccepted=True,
+            comment=comment,
+        )
+        self._save_idempotent_response(
+            scope="validation_review_comments",
+            key=self._scoped_idempotency_key(context=context, key=key),
+            payload=payload,
+            response=response.model_dump(mode="json"),
+        )
+        return response
+
+    async def create_validation_review_decision(
+        self,
+        *,
+        run_id: str,
+        request: CreateValidationReviewDecisionRequest,
+        context: RequestContext,
+        idempotency_key: str | None,
+    ) -> ValidationReviewDecisionResponse:
+        payload = {"runId": run_id, **request.model_dump(mode="json")}
+        key = self._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
+        conflict, cached = self._get_idempotent_response(
+            scope="validation_review_decisions",
+            key=self._scoped_idempotency_key(context=context, key=key),
+            payload=payload,
+        )
+        if conflict:
+            raise PlatformAPIError(
+                status_code=409,
+                code="IDEMPOTENCY_KEY_CONFLICT",
+                message="Idempotency-Key reused with different payload.",
+                request_id=context.request_id,
+            )
+        if cached is not None:
+            return ValidationReviewDecisionResponse.model_validate(cached)
+
+        record = self._require_run(run_id=run_id, context=context)
+        if request.action == "approve" and request.decision == "fail":
+            raise PlatformAPIError(
+                status_code=400,
+                code="VALIDATION_REVIEW_INVALID",
+                message="action=approve cannot be used with decision=fail.",
+                request_id=context.request_id,
+                details={"action": request.action, "decision": request.decision},
+            )
+        if request.action == "reject" and request.decision != "fail":
+            raise PlatformAPIError(
+                status_code=400,
+                code="VALIDATION_REVIEW_INVALID",
+                message="action=reject requires decision=fail.",
+                request_id=context.request_id,
+                details={"action": request.action, "decision": request.decision},
+            )
+        normalized_reason = _non_empty(request.reason)
+        if normalized_reason is None:
+            raise PlatformAPIError(
+                status_code=400,
+                code="VALIDATION_REVIEW_INVALID",
+                message="reason must be a non-empty string.",
+                request_id=context.request_id,
+                details={"reason": request.reason},
+            )
+        evidence_refs = self._normalize_evidence_refs(
+            evidence_refs=request.evidenceRefs,
+            request_id=context.request_id,
+        )
+
+        created_at = utc_now()
+        decision = ValidationReviewDecision(
+            runId=run_id,
+            action=request.action,
+            decision=request.decision,
+            reason=normalized_reason,
+            evidenceRefs=evidence_refs,
+            decidedByTenantId=context.tenant_id,
+            decidedByUserId=context.user_id,
+            createdAt=created_at,
+        )
+        record.review_decision = decision
+
+        artifact_payload = record.artifact.model_dump(mode="json")
+        snapshot_payload = record.llm_snapshot.model_dump(mode="json")
+        trader_review = cast(dict[str, Any], artifact_payload["traderReview"])
+        trader_review["status"] = "approved" if request.action == "approve" else "rejected"
+        record.trader_decision = cast(ValidationDecision, request.decision)
+        deterministic_decision = self._resolve_deterministic_decision(artifact_payload)
+        agent_review_payload = cast(dict[str, Any], artifact_payload["agentReview"])
+        final_decision = self._resolve_final_decision(
+            deterministic_decision=deterministic_decision,
+            agent_status=cast(ValidationDecision, agent_review_payload["status"]),
+            trader_status=cast(str, trader_review["status"]),
+            policy=record.policy,
+            trader_decision=record.trader_decision,
+        )
+        artifact_payload["finalDecision"] = final_decision
+        snapshot_payload["finalDecision"] = final_decision
+
+        record.artifact = ValidationRunArtifact.model_validate(artifact_payload)
+        record.llm_snapshot = ValidationLlmSnapshotArtifact.model_validate(snapshot_payload)
+        await self._touch_run_record(
+            record=record,
+            updated_at=created_at,
+            final_decision=final_decision,
+        )
+
+        response = ValidationReviewDecisionResponse(
+            requestId=context.request_id,
+            runId=run_id,
+            decisionAccepted=True,
+            decision=decision,
+        )
+        self._save_idempotent_response(
+            scope="validation_review_decisions",
+            key=self._scoped_idempotency_key(context=context, key=key),
+            payload=payload,
+            response=response.model_dump(mode="json"),
+        )
+        return response
+
+    async def create_validation_review_render(
+        self,
+        *,
+        run_id: str,
+        request: CreateValidationReviewRenderRequest,
+        context: RequestContext,
+        idempotency_key: str | None,
+    ) -> ValidationReviewRenderResponse:
+        payload = {"runId": run_id, **request.model_dump(mode="json")}
+        key = self._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
+        conflict, cached = self._get_idempotent_response(
+            scope="validation_review_renders",
+            key=self._scoped_idempotency_key(context=context, key=key),
+            payload=payload,
+        )
+        if conflict:
+            raise PlatformAPIError(
+                status_code=409,
+                code="IDEMPOTENCY_KEY_CONFLICT",
+                message="Idempotency-Key reused with different payload.",
+                request_id=context.request_id,
+            )
+        if cached is not None:
+            return ValidationReviewRenderResponse.model_validate(cached)
+
+        record = self._require_run(run_id=run_id, context=context)
+        render_job = record.review_render_jobs.get(request.format)
+        if render_job is None:
+            now = utc_now()
+            render_job = ValidationReviewRenderJob(
+                runId=run_id,
+                format=request.format,
+                status="queued",
+                artifactRef=None,
+                downloadUrl=None,
+                checksumSha256=None,
+                expiresAt=None,
+                requestedAt=now,
+                updatedAt=now,
+            )
+            record.review_render_jobs[request.format] = render_job
+            await self._touch_run_record(record=record, updated_at=now)
+
+        response = ValidationReviewRenderResponse(
+            requestId=context.request_id,
+            render=render_job,
+        )
+        self._save_idempotent_response(
+            scope="validation_review_renders",
+            key=self._scoped_idempotency_key(context=context, key=key),
+            payload=payload,
+            response=response.model_dump(mode="json"),
+        )
+        return response
+
+    async def get_validation_review_render(
+        self,
+        *,
+        run_id: str,
+        format: Literal["html", "pdf"],
+        context: RequestContext,
+    ) -> ValidationReviewRenderResponse:
+        record = self._require_run(run_id=run_id, context=context)
+        render_job = record.review_render_jobs.get(format)
+        if render_job is None:
+            raise PlatformAPIError(
+                status_code=404,
+                code="VALIDATION_RENDER_NOT_FOUND",
+                message=f"Validation review render {format} not found for run {run_id}.",
+                request_id=context.request_id,
+            )
+        return ValidationReviewRenderResponse(
+            requestId=context.request_id,
+            render=render_job,
         )
 
     async def submit_validation_run_review(
@@ -429,10 +769,12 @@ class ValidationV2Service:
         if reviewer_type == "agent":
             summary = _non_empty(request.summary) or "Agent review submitted."
             findings_payload = [item.model_dump(mode="json") for item in request.findings]
+            existing_agent_review = cast(dict[str, Any], artifact_payload["agentReview"])
             artifact_payload["agentReview"] = {
                 "status": decision,
                 "summary": summary,
                 "findings": findings_payload,
+                "budget": existing_agent_review.get("budget"),
             }
             snapshot_payload["findings"] = [
                 {
@@ -1350,6 +1692,73 @@ class ValidationV2Service:
             )
         )
 
+    async def _touch_run_record(
+        self,
+        *,
+        record: _ValidationRunRecord,
+        updated_at: str,
+        final_decision: ValidationDecision | None = None,
+    ) -> None:
+        updates: dict[str, Any] = {"updatedAt": updated_at}
+        if final_decision is not None:
+            updates["finalDecision"] = cast(
+                Literal["pending", "pass", "conditional_pass", "fail"],
+                final_decision,
+            )
+        record.run = record.run.model_copy(update=updates)
+        await self._persist_run_metadata(record=record)
+
+    @staticmethod
+    def _decode_pagination_cursor(*, cursor: str | None) -> int:
+        normalized = _non_empty(cursor)
+        if normalized is None:
+            return 0
+        try:
+            parsed = int(normalized)
+        except ValueError:
+            return 0
+        if parsed < 0:
+            return 0
+        return parsed
+
+    @staticmethod
+    def _normalize_evidence_refs(
+        *,
+        evidence_refs: list[str],
+        request_id: str,
+    ) -> list[str]:
+        normalized: list[str] = []
+        for ref in evidence_refs:
+            candidate = _non_empty(ref)
+            if candidate is None or not is_valid_blob_reference(candidate):
+                raise PlatformAPIError(
+                    status_code=400,
+                    code="VALIDATION_REVIEW_INVALID",
+                    message="evidenceRefs entries must use blob:// reference format.",
+                    request_id=request_id,
+                    details={"evidenceRef": ref},
+                )
+            normalized.append(candidate)
+        return normalized
+
+    @staticmethod
+    def _build_validation_review_run_summary(
+        *,
+        record: _ValidationRunRecord,
+    ) -> ValidationReviewRunSummary:
+        trader_status = record.artifact.traderReview.status
+        return ValidationReviewRunSummary(
+            id=record.run.id,
+            status=record.run.status,
+            profile=record.run.profile,
+            finalDecision=record.run.finalDecision,
+            traderReviewStatus=trader_status,
+            commentCount=len(record.review_comments),
+            pendingDecision=record.review_decision is None and trader_status == "requested",
+            createdAt=record.run.createdAt,
+            updatedAt=record.run.updatedAt,
+        )
+
     def _next_run_id(self) -> str:
         value = self._run_counter
         self._run_counter += 1
@@ -1364,6 +1773,11 @@ class ValidationV2Service:
         value = self._replay_counter
         self._replay_counter += 1
         return f"valreplay-{value:03d}"
+
+    def _next_review_comment_id(self) -> str:
+        value = self._review_comment_counter
+        self._review_comment_counter += 1
+        return f"valcomment-{value:03d}"
 
     @staticmethod
     def _resolve_idempotency_key(*, context: RequestContext, idempotency_key: str | None) -> str:

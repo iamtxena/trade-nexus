@@ -189,6 +189,11 @@ class ValidationRunResponse(BaseModel):
     run: ValidationRun
 
 
+class ValidationRunListResponse(BaseModel):
+    requestId: str
+    runs: list[ValidationRun] = Field(default_factory=list)
+
+
 class ValidationStrategyRef(BaseModel):
     strategyId: str
     provider: Literal["lona"]
@@ -239,10 +244,32 @@ class ValidationReviewFinding(BaseModel):
     evidenceRefs: list[str] = Field(min_length=1)
 
 
+class ValidationAgentReviewBudgetLimits(BaseModel):
+    maxRuntimeSeconds: float = Field(ge=0)
+    maxTokens: int = Field(ge=1)
+    maxToolCalls: int = Field(ge=0)
+    maxFindings: int = Field(ge=1)
+
+
+class ValidationAgentReviewBudgetUsage(BaseModel):
+    runtimeSeconds: float = Field(ge=0)
+    tokensUsed: int = Field(ge=0)
+    toolCallsUsed: int = Field(ge=0)
+
+
+class ValidationAgentReviewBudget(BaseModel):
+    profile: ValidationProfile
+    limits: ValidationAgentReviewBudgetLimits
+    usage: ValidationAgentReviewBudgetUsage
+    withinBudget: bool
+    breachReason: str | None = None
+
+
 class ValidationAgentReview(BaseModel):
     status: ValidationDecision
     summary: str
     findings: list[ValidationReviewFinding] = Field(default_factory=list)
+    budget: ValidationAgentReviewBudget
 
 
 class ValidationTraderReview(BaseModel):
@@ -343,6 +370,109 @@ class ValidationRenderJob(BaseModel):
 class ValidationRenderResponse(BaseModel):
     requestId: str
     render: ValidationRenderJob
+
+
+ValidationReviewDecisionAction = Literal["approve", "reject"]
+
+
+class ValidationReviewRunSummary(BaseModel):
+    id: str
+    status: ValidationRunStatus
+    profile: ValidationProfile
+    finalDecision: ValidationRunDecision
+    traderReviewStatus: ValidationTraderReviewStatus
+    commentCount: int = Field(ge=0)
+    pendingDecision: bool
+    createdAt: str
+    updatedAt: str
+
+
+class ValidationReviewRunListResponse(BaseModel):
+    requestId: str
+    items: list[ValidationReviewRunSummary] = Field(default_factory=list)
+    nextCursor: str | None = None
+
+
+class ValidationReviewComment(BaseModel):
+    id: str
+    runId: str
+    tenantId: str
+    userId: str
+    body: str = Field(min_length=1)
+    evidenceRefs: list[str] = Field(default_factory=list)
+    createdAt: str
+
+
+class CreateValidationReviewCommentRequest(BaseModel):
+    body: str = Field(min_length=1)
+    evidenceRefs: list[str] = Field(default_factory=list)
+
+
+class ValidationReviewCommentResponse(BaseModel):
+    requestId: str
+    runId: str
+    commentAccepted: bool
+    comment: ValidationReviewComment
+
+
+class ValidationReviewDecision(BaseModel):
+    runId: str
+    action: ValidationReviewDecisionAction
+    decision: ValidationDecision
+    reason: str = Field(min_length=1)
+    evidenceRefs: list[str] = Field(default_factory=list)
+    decidedByTenantId: str
+    decidedByUserId: str
+    createdAt: str
+
+
+class CreateValidationReviewDecisionRequest(BaseModel):
+    action: ValidationReviewDecisionAction
+    decision: ValidationDecision
+    reason: str = Field(min_length=1)
+    evidenceRefs: list[str] = Field(default_factory=list)
+
+
+class ValidationReviewDecisionResponse(BaseModel):
+    requestId: str
+    runId: str
+    decisionAccepted: bool
+    decision: ValidationReviewDecision
+
+
+class CreateValidationReviewRenderRequest(BaseModel):
+    format: ValidationRenderFormat
+
+
+class ValidationReviewRenderJob(BaseModel):
+    runId: str
+    format: ValidationRenderFormat
+    status: Literal["queued", "running", "completed", "failed"]
+    artifactRef: str | None = None
+    downloadUrl: str | None = None
+    checksumSha256: str | None = None
+    expiresAt: str | None = None
+    requestedAt: str
+    updatedAt: str
+
+
+class ValidationReviewRenderResponse(BaseModel):
+    requestId: str
+    render: ValidationReviewRenderJob
+
+
+class ValidationReviewArtifact(BaseModel):
+    schemaVersion: Literal["validation-review.v1"]
+    run: ValidationRun
+    artifact: ValidationRunArtifact
+    comments: list[ValidationReviewComment] = Field(default_factory=list)
+    decision: ValidationReviewDecision | None = None
+    renders: list[ValidationReviewRenderJob] = Field(default_factory=list)
+
+
+class ValidationReviewRunDetailResponse(BaseModel):
+    requestId: str
+    artifact: ValidationReviewArtifact
 
 
 class CreateValidationBaselineRequest(BaseModel):

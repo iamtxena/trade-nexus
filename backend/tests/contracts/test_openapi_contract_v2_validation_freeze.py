@@ -15,16 +15,29 @@ EXPECTED_VALIDATION_V2_PATHS = {
     "/v2/validation-runs/{runId}/artifact",
     "/v2/validation-runs/{runId}/review",
     "/v2/validation-runs/{runId}/render",
+    "/v2/validation-review/runs",
+    "/v2/validation-review/runs/{runId}",
+    "/v2/validation-review/runs/{runId}/comments",
+    "/v2/validation-review/runs/{runId}/decisions",
+    "/v2/validation-review/runs/{runId}/renders",
+    "/v2/validation-review/runs/{runId}/renders/{format}",
     "/v2/validation-baselines",
     "/v2/validation-regressions/replay",
 }
 
 EXPECTED_VALIDATION_V2_OPERATION_IDS = {
+    "listValidationRunsV2",
     "createValidationRunV2",
     "getValidationRunV2",
     "getValidationRunArtifactV2",
     "submitValidationRunReviewV2",
     "createValidationRunRenderV2",
+    "listValidationReviewRunsV2",
+    "getValidationReviewRunV2",
+    "createValidationReviewCommentV2",
+    "createValidationReviewDecisionV2",
+    "createValidationReviewRenderV2",
+    "getValidationReviewRenderV2",
     "createValidationBaselineV2",
     "replayValidationRegressionV2",
 }
@@ -32,6 +45,13 @@ EXPECTED_VALIDATION_V2_OPERATION_IDS = {
 
 def _spec_text() -> str:
     return OPENAPI_SPEC.read_text(encoding="utf-8")
+
+
+def _operation_block(spec: str, operation_id: str) -> str:
+    return spec.split(f"operationId: {operation_id}", maxsplit=1)[1].split(
+        "\n      responses:",
+        maxsplit=1,
+    )[0]
 
 
 def test_validation_v2_path_set_is_frozen() -> None:
@@ -58,3 +78,19 @@ def test_validation_contract_is_json_first_with_optional_html_pdf_render_only() 
     assert "enum: [html, pdf]" in render_format_component
     assert "enum: [html, pdf, json]" not in render_format_component
     assert "ValidationArtifactResponse:" in spec
+
+
+def test_validation_v2_write_operations_reference_idempotency_parameter() -> None:
+    spec = _spec_text()
+    for operation_id in (
+        "createValidationRunV2",
+        "submitValidationRunReviewV2",
+        "createValidationRunRenderV2",
+        "createValidationReviewCommentV2",
+        "createValidationReviewDecisionV2",
+        "createValidationReviewRenderV2",
+        "createValidationBaselineV2",
+        "replayValidationRegressionV2",
+    ):
+        block = _operation_block(spec, operation_id)
+        assert "#/components/parameters/IdempotencyKey" in block

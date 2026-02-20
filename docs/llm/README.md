@@ -24,4 +24,4 @@ python3 scripts/docs/check_llm_package.py
 
 ## CI Enforcement
 
-`docs-governance` workflow regenerates this package and fails on drift or invalid ownership/reference links.
+`llm-package-governance` workflow regenerates and validates this package, then fails if generated `docs/llm` artifacts are not committed.

@@ -2,7 +2,16 @@ import { parseArgs } from 'node:util';
 
 import { getLonaClient } from '../../src/lib/lona/client';
 import { validateConfig } from '../lib/config';
-import { bold, cyan, dim, printError, printHeader, printTable, spinner } from '../lib/output';
+import {
+  bold,
+  cyan,
+  dim,
+  printError,
+  printHeader,
+  printTable,
+  printWarning,
+  spinner,
+} from '../lib/output';
 
 export async function strategyCommand(args: string[]) {
   const subcommand = args[0];
@@ -41,6 +50,10 @@ function printHelp() {
   console.log(`  ${cyan('code')}       Get strategy Python code`);
   console.log(`  ${cyan('backtest')}   Run a backtest`);
   console.log(`  ${cyan('score')}      Score strategies from backtest results\n`);
+  console.log(`${bold('Backtest flags:')}`);
+  console.log(`  ${dim('--strategy-id <strategyId>')} (primary, alias: --id)`);
+  console.log(`  ${dim('--symbol-id <dataId>')} (primary, alias: --data)`);
+  console.log(`  ${dim('--start YYYY-MM-DD --end YYYY-MM-DD')}\n`);
 }
 
 async function listStrategies(_args: string[]) {
@@ -167,11 +180,13 @@ async function getStrategyCode(args: string[]) {
   console.log(`\n${code}\n`);
 }
 
-async function runBacktest(args: string[]) {
+export async function runBacktest(args: string[]) {
   const { values } = parseArgs({
     args,
     options: {
+      'strategy-id': { type: 'string' },
       id: { type: 'string' },
+      'symbol-id': { type: 'string' },
       data: { type: 'string' },
       start: { type: 'string' },
       end: { type: 'string' },
@@ -180,25 +195,64 @@ async function runBacktest(args: string[]) {
     allowPositionals: false,
   });
 
-  if (!values.id || !values.data || !values.start || !values.end) {
-    printError('Required: --id <strategyId> --data <dataId> --start YYYY-MM-DD --end YYYY-MM-DD');
+  if (
+    values['strategy-id'] &&
+    values.id &&
+    values['strategy-id'].trim() !== values.id.trim()
+  ) {
+    printError('Conflicting values for --strategy-id and --id. Use only one strategy identifier.');
+    process.exit(1);
+  }
+
+  if (values['symbol-id'] && values.data) {
+    const normalize = (v: string) =>
+      v
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+        .sort()
+        .join(',');
+    if (normalize(values['symbol-id']) !== normalize(values.data)) {
+      printError('Conflicting values for --symbol-id and --data. Use only one symbol identifier.');
+      process.exit(1);
+    }
+  }
+
+  const strategyId = values['strategy-id']?.trim() || values.id?.trim();
+  const symbolId = values['symbol-id']?.trim() || values.data?.trim();
+  const dataIds = symbolId
+    ?.split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  if (!strategyId || !dataIds || dataIds.length === 0 || !values.start || !values.end) {
+    printError(
+      'Required: --strategy-id <strategyId> (alias: --id) --symbol-id <dataId> (alias: --data) --start YYYY-MM-DD --end YYYY-MM-DD',
+    );
     process.exit(1);
   }
 
   validateConfig(['LONA_AGENT_TOKEN']);
   const client = getLonaClient();
 
+  if (!values['strategy-id'] && values.id) {
+    printWarning('Using legacy --id for backtest strategy. Prefer --strategy-id.');
+  }
+  if (!values['symbol-id'] && values.data) {
+    printWarning('Using legacy --data for backtest symbol. Prefer --symbol-id.');
+  }
+
   printHeader('Backtest');
-  console.log(`  ${cyan('Strategy:')} ${values.id}`);
-  console.log(`  ${cyan('Data:')}     ${values.data}`);
+  console.log(`  ${cyan('Strategy:')} ${strategyId}`);
+  console.log(`  ${cyan('Symbol:')}   ${symbolId}`);
   console.log(`  ${cyan('Period:')}   ${values.start} to ${values.end}`);
   console.log(`  ${cyan('Capital:')}  $${Number(values.capital).toLocaleString()}\n`);
 
   const spin = spinner('Running backtest...');
   try {
     const { report_id } = await client.runBacktest({
-      strategy_id: values.id,
-      data_ids: values.data.split(','),
+      strategy_id: strategyId,
+      data_ids: dataIds,
       start_date: values.start,
       end_date: values.end,
       simulation_parameters: {

@@ -390,6 +390,9 @@ class InMemoryStateStore:
             "validation_renders": {},
             "validation_baselines": {},
             "validation_replays": {},
+            "validation_review_comments": {},
+            "validation_review_decisions": {},
+            "validation_review_renders": {},
         }
 
     def next_id(self, scope: str) -> str:

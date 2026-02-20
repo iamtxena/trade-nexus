@@ -225,7 +225,8 @@
       "required": [
         "status",
         "summary",
-        "findings"
+        "findings",
+        "budget"
       ],
       "properties": {
         "status": {
@@ -279,6 +280,88 @@
                   "minLength": 1
                 }
               }
+            }
+          }
+        },
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "profile",
+            "limits",
+            "usage",
+            "withinBudget",
+            "breachReason"
+          ],
+          "properties": {
+            "profile": {
+              "type": "string",
+              "enum": [
+                "FAST",
+                "STANDARD",
+                "EXPERT"
+              ]
+            },
+            "limits": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "maxRuntimeSeconds",
+                "maxTokens",
+                "maxToolCalls",
+                "maxFindings"
+              ],
+              "properties": {
+                "maxRuntimeSeconds": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "maxTokens": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "maxToolCalls": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "maxFindings": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "usage": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "runtimeSeconds",
+                "tokensUsed",
+                "toolCallsUsed"
+              ],
+              "properties": {
+                "runtimeSeconds": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "tokensUsed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "toolCallsUsed": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "withinBudget": {
+              "type": "boolean"
+            },
+            "breachReason": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
             }
           }
         }

@@ -117,6 +117,7 @@ class PortableValidationModule:
             "status": agent_result.status,
             "summary": agent_result.summary,
             "findings": _findings_payload(agent_result),
+            "budget": agent_result.budget.to_contract_payload(),
         }
         final_decision = self._resolve_final_decision(
             deterministic_status=deterministic_result.final_decision,

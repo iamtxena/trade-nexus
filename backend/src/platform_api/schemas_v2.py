@@ -244,10 +244,32 @@ class ValidationReviewFinding(BaseModel):
     evidenceRefs: list[str] = Field(min_length=1)
 
 
+class ValidationAgentReviewBudgetLimits(BaseModel):
+    maxRuntimeSeconds: float = Field(ge=0)
+    maxTokens: int = Field(ge=1)
+    maxToolCalls: int = Field(ge=0)
+    maxFindings: int = Field(ge=1)
+
+
+class ValidationAgentReviewBudgetUsage(BaseModel):
+    runtimeSeconds: float = Field(ge=0)
+    tokensUsed: int = Field(ge=0)
+    toolCallsUsed: int = Field(ge=0)
+
+
+class ValidationAgentReviewBudget(BaseModel):
+    profile: ValidationProfile
+    limits: ValidationAgentReviewBudgetLimits
+    usage: ValidationAgentReviewBudgetUsage
+    withinBudget: bool
+    breachReason: str | None = None
+
+
 class ValidationAgentReview(BaseModel):
     status: ValidationDecision
     summary: str
     findings: list[ValidationReviewFinding] = Field(default_factory=list)
+    budget: ValidationAgentReviewBudget
 
 
 class ValidationTraderReview(BaseModel):

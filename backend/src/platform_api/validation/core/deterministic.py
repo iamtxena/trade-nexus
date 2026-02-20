@@ -19,6 +19,27 @@ _PROFILE_METRIC_TOLERANCE_PCT: dict[ValidationProfile, float] = {
     "EXPERT": 0.25,
 }
 
+_PROFILE_AGENT_REVIEW_BUDGETS: dict[ValidationProfile, dict[str, float | int]] = {
+    "FAST": {
+        "maxRuntimeSeconds": 0.35,
+        "maxTokens": 600,
+        "maxToolCalls": 1,
+        "maxFindings": 3,
+    },
+    "STANDARD": {
+        "maxRuntimeSeconds": 1.2,
+        "maxTokens": 2400,
+        "maxToolCalls": 4,
+        "maxFindings": 6,
+    },
+    "EXPERT": {
+        "maxRuntimeSeconds": 3.5,
+        "maxTokens": 7200,
+        "maxToolCalls": 8,
+        "maxFindings": 12,
+    },
+}
+
 _LIFECYCLE_ALIASES: dict[str, str] = {
     "created": "created",
     "submitted": "created",
@@ -610,6 +631,7 @@ class DeterministicValidationEngine:
     ) -> dict[str, Any]:
         created_timestamp = created_at or utc_now()
         trader_status = "requested" if policy.require_trader_review else "not_requested"
+        agent_review_budget = _PROFILE_AGENT_REVIEW_BUDGETS[policy.profile]
 
         return {
             "schemaVersion": "validation-run.v1",
@@ -641,6 +663,17 @@ class DeterministicValidationEngine:
                 "status": "pass",
                 "summary": "Agent lane not executed in deterministic-only validation run.",
                 "findings": [],
+                "budget": {
+                    "profile": policy.profile,
+                    "limits": dict(agent_review_budget),
+                    "usage": {
+                        "runtimeSeconds": 0.0,
+                        "tokensUsed": 0,
+                        "toolCallsUsed": 0,
+                    },
+                    "withinBudget": True,
+                    "breachReason": None,
+                },
             },
             "traderReview": {
                 "required": policy.require_trader_review,

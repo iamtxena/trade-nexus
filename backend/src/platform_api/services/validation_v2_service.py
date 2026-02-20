@@ -287,6 +287,7 @@ class ValidationV2Service:
             "status": agent_result.status,
             "summary": agent_result.summary,
             "findings": [item.to_contract_payload() for item in agent_result.findings],
+            "budget": agent_result.budget.to_contract_payload(),
         }
 
         trader_status = "requested" if policy.require_trader_review else "not_requested"
@@ -756,10 +757,12 @@ class ValidationV2Service:
         if reviewer_type == "agent":
             summary = _non_empty(request.summary) or "Agent review submitted."
             findings_payload = [item.model_dump(mode="json") for item in request.findings]
+            existing_agent_review = cast(dict[str, Any], artifact_payload["agentReview"])
             artifact_payload["agentReview"] = {
                 "status": decision,
                 "summary": summary,
                 "findings": findings_payload,
+                "budget": existing_agent_review.get("budget"),
             }
             snapshot_payload["findings"] = [
                 {

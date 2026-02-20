@@ -80,7 +80,7 @@
 |----------|---------|---------|
 | backend-deploy.yml | Push to main (backend/**) | Build, push ACR, deploy Container App |
 | contracts-governance.yml | All `pull_request` events; push to `main` when contract/backend/docs paths change | OpenAPI lint, contract tests, replay preflight, review gates |
-| docs-governance.yml | All `pull_request` events; push to `main` when docs/portal/scripts paths change | Docusaurus build, link validation, frontmatter and stale-ref checks |
+| docs-governance.yml | All `pull_request` events; push to `main` when `docs/**`, `docs/portal-site/**`, `scripts/docs/**`, `CONTRIBUTING.md`, or `.github/workflows/docs-governance.yml` changes | Docusaurus build, link validation, frontmatter and stale-ref checks |
 | llm-package-governance.yml | All `pull_request` events; push to `main` when docs/scripts paths change | LLM package generation, validation, and committed-artifact drift check |
 | publish-sdk.yml | Manual or sdk-v* tag | SDK regeneration and npm publish |
 

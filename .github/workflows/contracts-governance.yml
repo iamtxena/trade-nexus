@@ -89,32 +89,32 @@ jobs:
         if: always()
         run: |
           REPORT_PATH=".ops/artifacts/validation-replay-gate-contracts-governance.json"
-          if [[ -f "${REPORT_PATH}" ]]; then
-            python - <<'PY'
-            import json
-            import os
-            from pathlib import Path
-
-            report_path = Path(".ops/artifacts/validation-replay-gate-contracts-governance.json")
-            payload = json.loads(report_path.read_text(encoding="utf-8"))
-            gate = payload.get("gate", {})
-            lines = [
-                "### Validation Replay Gate Report (Merge Governance)",
-                f"- gateStatus: `{payload.get('gateStatus')}`",
-                f"- replayId: `{gate.get('id')}`",
-                f"- baselineId: `{gate.get('baselineId')}`",
-                f"- candidateRunId: `{gate.get('candidateRunId')}`",
-            ]
-            summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-            if summary_path:
-                with Path(summary_path).open("a", encoding="utf-8") as summary_file:
-                    summary_file.write("\n".join(lines) + "\n")
-            print(json.dumps(payload, indent=2, sort_keys=True))
-            PY
-          else
+          if [[ ! -f "${REPORT_PATH}" ]]; then
             echo "Replay gate report missing at ${REPORT_PATH}" >&2
             exit 1
           fi
+          python - "${REPORT_PATH}" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          report_path = Path(sys.argv[1])
+          payload = json.loads(report_path.read_text(encoding="utf-8"))
+          gate = payload.get("gate", {})
+          lines = [
+              "### Validation Replay Gate Report (Merge Governance)",
+              f"- gateStatus: `{payload.get('gateStatus')}`",
+              f"- replayId: `{gate.get('id')}`",
+              f"- baselineId: `{gate.get('baselineId')}`",
+              f"- candidateRunId: `{gate.get('candidateRunId')}`",
+          ]
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with Path(summary_path).open("a", encoding="utf-8") as summary_file:
+                  summary_file.write("\n".join(lines) + "\n")
+          print(json.dumps(payload, indent=2, sort_keys=True))
+          PY
 
       - name: Upload replay gate report (merge governance)
         if: always()

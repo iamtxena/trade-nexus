@@ -66,25 +66,29 @@
 
 ## 2. Security Audit & Findings
 
-### 2.1 CRITICAL: Plaintext Credentials in Repository
+### 2.1 LOCAL-ONLY: Plaintext Credentials File
 
-**File**: `.azure-secrets.md` (committed to repo)
+**File**: `.azure-secrets.md` (local workspace only)
 
-**Finding**: This file contains plaintext Azure credentials:
-- ACR passwords (primary + secondary)
-- Service Principal client secret
-- Subscription/tenant IDs
+**Verified status** (2026-02-20):
+- `.gitignore` line 72 excludes the file
+- **Not tracked** in git index
+- **0 commits** found in reachable history (`git rev-list --all`)
+- **0 matches** across 25 remote branches
+- GitHub content API returns **404** (not in remote)
+- GitHub secret-scanning alerts: **none**
+- Local file permissions tightened to **600**
 
-**Risk**: HIGH — anyone with repo read access can extract credentials.
+**Finding**: The file contains plaintext Azure credentials (ACR passwords, SP client secret, subscription/tenant IDs) but has never been committed. Risk is local-only.
 
-**Remediation**:
-1. Rotate ACR password immediately after removing file
-2. Rotate Service Principal client secret
-3. Remove `.azure-secrets.md` from repository history (`git filter-repo`)
-4. Add `.azure-secrets.md` to `.gitignore`
-5. Update GitHub Actions secrets with new credentials
+**Required actions** (precautionary):
+1. Rotate ACR password: `az acr credential renew --name tradenexusacr`
+2. Rotate SP client secret: `az ad sp credential reset --id <client-id>`
+3. Update GitHub Actions secrets (`ACR_PASSWORD`, `AZURE_CREDENTIALS`) with rotated values
+4. Move `.azure-secrets.md` out of repo workspace into a vault or password manager
+5. Resume normal rollout only after rotation confirmation
 
-**Owner**: Cloud Ops (immediate action required)
+**Owner**: Cloud Ops
 
 ### 2.2 Secret Rotation Rules
 

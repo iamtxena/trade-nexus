@@ -43,6 +43,12 @@ Run this playbook only when foundational dependencies are complete:
 | OpenClaw | Platform API lane contract + end-to-end flow | `cd trade-nexus/backend && uv run --with pytest python -m pytest tests/contracts/test_openclaw_client_lane_contract.py tests/contracts/test_openclaw_e2e_flow.py` | both suites pass |
 | Agent runtime | risk/research/reconciliation/orchestrator contracts | `cd trade-nexus/backend && uv run --with pytest python -m pytest tests/contracts` | full contract suite passes |
 
+## Validation Reviewer Impact (`#280`)
+
+1. Reviewer surfaces should show `agentReview.budget` from canonical validation artifacts.
+2. Budget state (`withinBudget` plus optional `breachReason`) is part of review evidence and must be preserved in issue/PR evidence links.
+3. Missing budget metadata should be treated as contract drift, not as a soft UI warning.
+
 ## Deployment Promotion And Rollback
 
 Promotion and rollback follow the existing operational runbooks:
@@ -77,6 +83,21 @@ Promotion and rollback follow the existing operational runbooks:
 2. Reproduce using lane-specific commands from the compatibility matrix.
 3. Recover: fix contract drift or client expectation mismatch, then rerun lane and governance checks.
 
+### Scenario D: Agent Review Budget Contract Drift
+
+1. Trigger:
+   - `agentReview.budget` missing or malformed in validation artifact payloads.
+2. Contain:
+   - block merge and deployment promotion for affected change set.
+3. Verify with:
+   - `pytest backend/tests/contracts/test_validation_schema_contract.py`
+   - `pytest backend/tests/contracts/test_openapi_contract_v2_validation_freeze.py`
+   - `pytest backend/tests/contracts/test_platform_api_v2_handlers.py`
+4. Recover:
+   - patch contract/runtime alignment,
+   - regenerate SDK artifacts if model shape changed,
+   - rerun governance checks before releasing.
+
 ## Evidence Recording
 
 For each release candidate, capture:
@@ -85,6 +106,9 @@ For each release candidate, capture:
 2. Command output summaries per lane.
 3. Deployment revision and smoke-check outcome.
 4. Any rollback/incident actions executed.
+5. Budget-contract evidence for `#280` changes:
+   - artifact payload excerpt containing `agentReview.budget`,
+   - test run links for schema/freeze/handler validation.
 
 Use:
 
@@ -94,6 +118,7 @@ Use:
 ## Traceability
 
 - Child issue: `#147`
+- Validation review budget issue: `#280`
 - Parent epics: `#81`, `#106`
 - Signoff: `#150`
 - Related docs:

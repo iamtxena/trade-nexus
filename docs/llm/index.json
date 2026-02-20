@@ -541,5 +541,97 @@
       "runtime_observability",
       "incident_traceability"
     ]
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_validation_review_api_semantics_v1.md",
+    "chunk_hash": "90b085e9d845625dfdd92f5377ad5cd80f7b0573902f1c1383e177527a560383",
+    "concepts": [
+      "validation_api",
+      "response_semantics",
+      "auth_derived_identity",
+      "idempotency"
+    ],
+    "endpoints": [
+      "/v2/validation-runs",
+      "/v2/validation-runs/{runId}",
+      "/v2/validation-runs/{runId}/artifact",
+      "/v2/validation-runs/{runId}/review",
+      "/v2/validation-runs/{runId}/render",
+      "/v2/validation-baselines",
+      "/v2/validation-regressions/replay"
+    ],
+    "id": "portal_validation_review_api_semantics_v1",
+    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/282",
+    "owners": [
+      "Validation Review Web Docs"
+    ],
+    "source": "docs/portal/api/validation-review-api-semantics.md",
+    "source_hash": "2d22f0cbc5370eb6c4bb26937d7d08a2ec995b00451bc4112766c2c8e6e97300",
+    "title": "Validation Review API Contracts And Response Semantics",
+    "topic": "api",
+    "workflows": [
+      "validation_review_web",
+      "contract_first_review"
+    ]
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_validation_review_incident_runbook_v1.md",
+    "chunk_hash": "169704803ed1c8a549339466bfacccc75a36fdeed422dbcba51ee35930317b74",
+    "concepts": [
+      "incident_runbook",
+      "render_failure",
+      "auth_failure",
+      "regression_failure"
+    ],
+    "endpoints": [
+      "/v1/health",
+      "/v2/validation-runs/{runId}/artifact",
+      "/v2/validation-runs/{runId}/render",
+      "/v2/validation-regressions/replay"
+    ],
+    "id": "portal_validation_review_incident_runbook_v1",
+    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/282",
+    "owners": [
+      "Validation Review Web Docs",
+      "Team F"
+    ],
+    "source": "docs/portal/operations/validation-review-incident-runbook.md",
+    "source_hash": "aad96e458a28f2d237ca5362df37a42ebb199e42cc03c2b91cfc0b8f6d461987",
+    "title": "Validation Review Incident Runbook",
+    "topic": "operations",
+    "workflows": [
+      "incident_response",
+      "findings_disposition"
+    ]
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_validation_reviewer_workflow_v1.md",
+    "chunk_hash": "dbb5107241f8ecee33ae803a34b842db8101a30add91b86abc0691796b17c05d",
+    "concepts": [
+      "reviewer_workflow",
+      "web_lane",
+      "json_canonical",
+      "status_reporting"
+    ],
+    "endpoints": [
+      "/v2/validation-runs",
+      "/v2/validation-runs/{runId}",
+      "/v2/validation-runs/{runId}/artifact",
+      "/v2/validation-runs/{runId}/review",
+      "/v2/validation-runs/{runId}/render"
+    ],
+    "id": "portal_validation_reviewer_workflow_v1",
+    "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/282",
+    "owners": [
+      "Validation Review Web Docs"
+    ],
+    "source": "docs/portal/platform/validation-reviewer-workflow.md",
+    "source_hash": "76621ea3538b3bc3cf93280874449de29d830df35ce4d6e6dbc7012d620bfb80",
+    "title": "Validation Review Web Reviewer Workflow",
+    "topic": "platform",
+    "workflows": [
+      "reviewer_decision_flow",
+      "issue_status_reporting"
+    ]
   }
 ]

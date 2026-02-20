@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trade-nexus.io/schemas/validation_replay_gate_report.json",
+  "title": "Trade Nexus Validation Replay Gate Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "gateStatus",
+    "gate",
+    "evidenceRefs"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "validation-replay-gate-report.v1"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "gateStatus": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "blocked"
+      ]
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "baselineId",
+        "candidateRunId",
+        "status",
+        "decision",
+        "mergeBlocked",
+        "releaseBlocked",
+        "mergeGateStatus",
+        "releaseGateStatus",
+        "baselineDecision",
+        "candidateDecision",
+        "metricDriftDeltaPct",
+        "metricDriftThresholdPct",
+        "thresholdBreached",
+        "reasons",
+        "summary"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "baselineId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "candidateRunId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "completed",
+            "failed"
+          ]
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "conditional_pass",
+            "fail",
+            "unknown"
+          ]
+        },
+        "mergeBlocked": {
+          "type": "boolean"
+        },
+        "releaseBlocked": {
+          "type": "boolean"
+        },
+        "mergeGateStatus": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "blocked"
+          ]
+        },
+        "releaseGateStatus": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "blocked"
+          ]
+        },
+        "baselineDecision": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "conditional_pass",
+            "fail"
+          ]
+        },
+        "candidateDecision": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "conditional_pass",
+            "fail"
+          ]
+        },
+        "metricDriftDeltaPct": {
+          "type": "number",
+          "minimum": 0
+        },
+        "metricDriftThresholdPct": {
+          "type": "number",
+          "minimum": 0
+        },
+        "thresholdBreached": {
+          "type": "boolean"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "ref"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "validation_replay_id",
+              "validation_baseline_id",
+              "validation_candidate_run_id"
+            ]
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -105,6 +106,34 @@ async def compute_release_gate_replay(
     return replay_response.replay
 
 
+def _is_gate_blocked(*, replay: ValidationRegressionReplay) -> bool:
+    return (
+        replay.mergeBlocked
+        or replay.releaseBlocked
+        or replay.mergeGateStatus != "pass"
+        or replay.releaseGateStatus != "pass"
+    )
+
+
+def _utc_now_rfc3339() -> str:
+    return datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def build_release_gate_report(*, replay: ValidationRegressionReplay) -> dict[str, object]:
+    gate_blocked = _is_gate_blocked(replay=replay)
+    return {
+        "schemaVersion": "validation-replay-gate-report.v1",
+        "generatedAt": _utc_now_rfc3339(),
+        "gateStatus": "blocked" if gate_blocked else "pass",
+        "gate": replay.model_dump(mode="json"),
+        "evidenceRefs": [
+            {"kind": "validation_replay_id", "ref": replay.id},
+            {"kind": "validation_baseline_id", "ref": replay.baselineId},
+            {"kind": "validation_candidate_run_id", "ref": replay.candidateRunId},
+        ],
+    }
+
+
 def run_release_gate_check(
     *,
     baseline_profile: ValidationProfile = "STANDARD",
@@ -117,8 +146,8 @@ def run_release_gate_check(
             candidate_profile=candidate_profile,
         )
     )
-    payload = replay.model_dump(mode="json")
-    output = json.dumps(payload, sort_keys=True)
+    report = build_release_gate_report(replay=replay)
+    output = json.dumps(report, sort_keys=True)
     print(output)
 
     if output_path is not None:
@@ -126,12 +155,7 @@ def run_release_gate_check(
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(f"{output}\n", encoding="utf-8")
 
-    gate_blocked = (
-        replay.mergeBlocked
-        or replay.releaseBlocked
-        or replay.mergeGateStatus != "pass"
-        or replay.releaseGateStatus != "pass"
-    )
+    gate_blocked = _is_gate_blocked(replay=replay)
     if gate_blocked:
         print(
             (

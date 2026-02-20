@@ -1406,6 +1406,19 @@ paths:
                     status: pass
                     summary: No indicator/render drift detected.
                     findings: []
+                    budget:
+                      profile: STANDARD
+                      limits:
+                        maxRuntimeSeconds: 1.2
+                        maxTokens: 2400
+                        maxToolCalls: 4
+                        maxFindings: 6
+                      usage:
+                        runtimeSeconds: 0.12
+                        tokensUsed: 512
+                        toolCallsUsed: 0
+                      withinBudget: true
+                      breachReason: null
                   traderReview:
                     required: false
                     status: not_requested
@@ -2855,9 +2868,56 @@ components:
           items:
             type: string
 
+    ValidationAgentReviewBudgetLimits:
+      type: object
+      required: [maxRuntimeSeconds, maxTokens, maxToolCalls, maxFindings]
+      properties:
+        maxRuntimeSeconds:
+          type: number
+          minimum: 0
+        maxTokens:
+          type: integer
+          minimum: 1
+        maxToolCalls:
+          type: integer
+          minimum: 0
+        maxFindings:
+          type: integer
+          minimum: 1
+
+    ValidationAgentReviewBudgetUsage:
+      type: object
+      required: [runtimeSeconds, tokensUsed, toolCallsUsed]
+      properties:
+        runtimeSeconds:
+          type: number
+          minimum: 0
+        tokensUsed:
+          type: integer
+          minimum: 0
+        toolCallsUsed:
+          type: integer
+          minimum: 0
+
+    ValidationAgentReviewBudget:
+      type: object
+      required: [profile, limits, usage, withinBudget, breachReason]
+      properties:
+        profile:
+          $ref: '#/components/schemas/ValidationProfile'
+        limits:
+          $ref: '#/components/schemas/ValidationAgentReviewBudgetLimits'
+        usage:
+          $ref: '#/components/schemas/ValidationAgentReviewBudgetUsage'
+        withinBudget:
+          type: boolean
+        breachReason:
+          type: string
+          nullable: true
+
     ValidationAgentReview:
       type: object
-      required: [status, summary, findings]
+      required: [status, summary, findings, budget]
       properties:
         status:
           $ref: '#/components/schemas/ValidationDecision'
@@ -2867,6 +2927,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ValidationReviewFinding'
+        budget:
+          $ref: '#/components/schemas/ValidationAgentReviewBudget'
 
     ValidationTraderReviewStatus:
       type: string

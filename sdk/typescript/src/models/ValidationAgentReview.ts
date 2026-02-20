@@ -13,6 +13,13 @@
  */
 
 import { mapValues } from '../runtime';
+import type { ValidationAgentReviewBudget } from './ValidationAgentReviewBudget';
+import {
+    ValidationAgentReviewBudgetFromJSON,
+    ValidationAgentReviewBudgetFromJSONTyped,
+    ValidationAgentReviewBudgetToJSON,
+    ValidationAgentReviewBudgetToJSONTyped,
+} from './ValidationAgentReviewBudget';
 import type { ValidationReviewFinding } from './ValidationReviewFinding';
 import {
     ValidationReviewFindingFromJSON,
@@ -52,6 +59,12 @@ export interface ValidationAgentReview {
      * @memberof ValidationAgentReview
      */
     findings: Array<ValidationReviewFinding>;
+    /**
+     * 
+     * @type {ValidationAgentReviewBudget}
+     * @memberof ValidationAgentReview
+     */
+    budget: ValidationAgentReviewBudget;
 }
 
 
@@ -63,6 +76,7 @@ export function instanceOfValidationAgentReview(value: object): value is Validat
     if (!('status' in value) || value['status'] === undefined) return false;
     if (!('summary' in value) || value['summary'] === undefined) return false;
     if (!('findings' in value) || value['findings'] === undefined) return false;
+    if (!('budget' in value) || value['budget'] === undefined) return false;
     return true;
 }
 
@@ -79,6 +93,7 @@ export function ValidationAgentReviewFromJSONTyped(json: any, ignoreDiscriminato
         'status': ValidationDecisionFromJSON(json['status']),
         'summary': json['summary'],
         'findings': ((json['findings'] as Array<any>).map(ValidationReviewFindingFromJSON)),
+        'budget': ValidationAgentReviewBudgetFromJSON(json['budget']),
     };
 }
 
@@ -96,6 +111,7 @@ export function ValidationAgentReviewToJSONTyped(value?: ValidationAgentReview |
         'status': ValidationDecisionToJSON(value['status']),
         'summary': value['summary'],
         'findings': ((value['findings'] as Array<any>).map(ValidationReviewFindingToJSON)),
+        'budget': ValidationAgentReviewBudgetToJSON(value['budget']),
     };
 }
 

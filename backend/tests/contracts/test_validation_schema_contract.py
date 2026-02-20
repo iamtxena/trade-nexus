@@ -201,6 +201,22 @@ def _valid_validation_run_payload() -> dict[str, Any]:
             "status": "pass",
             "summary": "No indicator/render drift detected.",
             "findings": [],
+            "budget": {
+                "profile": "STANDARD",
+                "limits": {
+                    "maxRuntimeSeconds": 1.2,
+                    "maxTokens": 2400,
+                    "maxToolCalls": 4,
+                    "maxFindings": 6,
+                },
+                "usage": {
+                    "runtimeSeconds": 0.12,
+                    "tokensUsed": 512,
+                    "toolCallsUsed": 0,
+                },
+                "withinBudget": True,
+                "breachReason": None,
+            },
         },
         "traderReview": {
             "required": False,
@@ -318,6 +334,14 @@ def test_validation_run_schema_rejects_non_blocking_hard_fail_flags() -> None:
     schema = _load_schema(VALIDATION_RUN_SCHEMA_PATH)
     payload = _valid_validation_run_payload()
     payload["policy"]["hardFailOnMissingIndicators"] = False
+    with pytest.raises(SchemaValidationError):
+        _validate_against_schema(payload, schema)
+
+
+def test_validation_run_schema_rejects_agent_review_without_budget_report() -> None:
+    schema = _load_schema(VALIDATION_RUN_SCHEMA_PATH)
+    payload = _valid_validation_run_payload()
+    del payload["agentReview"]["budget"]
     with pytest.raises(SchemaValidationError):
         _validate_against_schema(payload, schema)
 

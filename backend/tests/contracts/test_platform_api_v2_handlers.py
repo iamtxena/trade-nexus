@@ -437,7 +437,12 @@ def test_validation_v2_routes_wire_deterministic_and_agent_outputs() -> None:
         "tradeCoherence",
         "metricConsistency",
     }
-    assert set(run_artifact["agentReview"]) == {"status", "summary", "findings"}
+    assert set(run_artifact["agentReview"]) == {"status", "summary", "findings", "budget"}
+    budget = run_artifact["agentReview"]["budget"]
+    assert budget["profile"] == "STANDARD"
+    assert set(budget["limits"]) == {"maxRuntimeSeconds", "maxTokens", "maxToolCalls", "maxFindings"}
+    assert set(budget["usage"]) == {"runtimeSeconds", "tokensUsed", "toolCallsUsed"}
+    assert isinstance(budget["withinBudget"], bool)
     assert run_artifact["finalDecision"] in {"pass", "conditional_pass", "fail"}
 
 

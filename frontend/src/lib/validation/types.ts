@@ -78,10 +78,32 @@ export interface ValidationReviewFinding {
   evidenceRefs: string[];
 }
 
+export interface ValidationAgentReviewBudgetLimits {
+  maxRuntimeSeconds: number;
+  maxTokens: number;
+  maxToolCalls: number;
+  maxFindings: number;
+}
+
+export interface ValidationAgentReviewBudgetUsage {
+  runtimeSeconds: number;
+  tokensUsed: number;
+  toolCallsUsed: number;
+}
+
+export interface ValidationAgentReviewBudget {
+  profile: ValidationProfile;
+  limits: ValidationAgentReviewBudgetLimits;
+  usage: ValidationAgentReviewBudgetUsage;
+  withinBudget: boolean;
+  breachReason: string | null;
+}
+
 export interface ValidationAgentReview {
   status: ValidationDecision;
   summary: string;
   findings: ValidationReviewFinding[];
+  budget: ValidationAgentReviewBudget;
 }
 
 export interface ValidationTraderReview {

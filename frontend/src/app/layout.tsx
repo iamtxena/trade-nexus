@@ -26,13 +26,19 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    <ClerkProvider>
-      <html lang="en">
-        <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-          <Providers>{children}</Providers>
-        </body>
-      </html>
-    </ClerkProvider>
+  const clerkDisabled = process.env.NEXT_PUBLIC_DISABLE_CLERK_UI === '1';
+
+  const content = (
+    <html lang="en">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <Providers>{children}</Providers>
+      </body>
+    </html>
   );
+
+  if (clerkDisabled) {
+    return content;
+  }
+
+  return <ClerkProvider>{content}</ClerkProvider>;
 }

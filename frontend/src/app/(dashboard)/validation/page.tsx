@@ -2,6 +2,7 @@
 
 import {
   CircleAlert,
+  CircleCheck,
   FileCode2,
   FileJson,
   FileText,
@@ -25,11 +26,16 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { resolveTraderReviewLaneState } from '@/lib/validation/review-lane-state';
 import {
-  resolveRunIdForListToDetailTransition,
-  sortValidationRunsByUpdatedAtDesc,
-} from '@/lib/validation/review-run-list-state';
+  type TraderReviewTone,
+  resolveTraderReviewLaneState,
+} from '@/lib/validation/review-lane-state';
+import { readReviewRunHistory, upsertReviewRunHistory } from '@/lib/validation/review-run-history';
+import { resolveRunIdForListToDetailTransition } from '@/lib/validation/review-run-list-state';
+import {
+  type ValidationTimelineEvent,
+  resolveValidationRunTimeline,
+} from '@/lib/validation/review-run-timeline';
 import {
   type CreateValidationRunRequestPayload,
   type ErrorPayload,
@@ -39,7 +45,6 @@ import {
   type ValidationRenderFormat,
   type ValidationRenderResponse,
   type ValidationReviewerType,
-  type ValidationRunListResponse,
   type ValidationRunResponse,
   type ValidationRunReviewRequestPayload,
   type ValidationRunSummary,
@@ -108,7 +113,16 @@ function extractErrorMessage(payload: unknown, fallback: string): string {
   return fallback;
 }
 
-function toneToBadgeVariant(tone: ReturnType<typeof resolveTraderReviewLaneState>['tone']) {
+function formatApiError(payload: unknown, fallback: string): string {
+  const message = extractErrorMessage(payload, fallback);
+  if (!payload || typeof payload !== 'object') {
+    return message;
+  }
+  const maybeError = payload as ErrorPayload;
+  return maybeError.requestId ? `${message} (requestId: ${maybeError.requestId})` : message;
+}
+
+function toneToBadgeVariant(tone: TraderReviewTone) {
   switch (tone) {
     case 'pending':
       return 'secondary';
@@ -129,6 +143,31 @@ function decisionToBadgeVariant(decision: ValidationRunSummary['finalDecision'])
       return 'destructive';
     default:
       return 'secondary';
+  }
+}
+
+function resolveTimelineIcon(tone: ValidationTimelineEvent['tone']) {
+  switch (tone) {
+    case 'success':
+      return {
+        Icon: CircleCheck,
+        className: 'size-3.5 text-emerald-600',
+      };
+    case 'danger':
+      return {
+        Icon: CircleAlert,
+        className: 'size-3.5 text-destructive',
+      };
+    case 'pending':
+      return {
+        Icon: Loader2,
+        className: 'size-3.5 animate-spin text-amber-600',
+      };
+    default:
+      return {
+        Icon: CircleAlert,
+        className: 'size-3.5 text-muted-foreground',
+      };
   }
 }
 
@@ -166,6 +205,13 @@ export default function ValidationPage() {
     return isValidationRunArtifact(artifactResponse.artifact) ? artifactResponse.artifact : null;
   }, [artifactResponse]);
 
+  const runTimeline = useMemo(() => {
+    if (!runResponse || !runArtifact) {
+      return [];
+    }
+    return resolveValidationRunTimeline(runResponse.run, runArtifact);
+  }, [runArtifact, runResponse]);
+
   const traderLaneState = useMemo(() => {
     if (!runArtifact) {
       return null;
@@ -188,43 +234,15 @@ export default function ValidationPage() {
     });
   }, [runArtifact]);
 
-  const loadRunList = useCallback(
-    async (options?: {
-      clearNotice?: boolean;
-      suppressErrors?: boolean;
-    }): Promise<void> => {
-      const clearNotice = options?.clearNotice ?? true;
-      setIsLoadingList(true);
-      if (clearNotice) {
-        setNoticeMessage(null);
-      }
-      try {
-        const response = await fetch('/api/validation/runs');
-        const responsePayload = await response.json().catch(() => null);
-        if (!response.ok) {
-          if (!options?.suppressErrors) {
-            setErrorMessage(
-              extractErrorMessage(responsePayload, `Run list request failed (${response.status})`),
-            );
-          }
-          return;
-        }
-
-        const runsPayload = responsePayload as ValidationRunListResponse;
-        const runs = sortValidationRunsByUpdatedAtDesc(runsPayload.runs ?? []);
-        setRunList(runs);
-      } catch (error) {
-        if (!options?.suppressErrors) {
-          setErrorMessage(
-            error instanceof Error ? error.message : 'Failed to load validation runs.',
-          );
-        }
-      } finally {
-        setIsLoadingList(false);
-      }
-    },
-    [],
-  );
+  const loadRunListFromHistory = useCallback((options?: { clearNotice?: boolean }): void => {
+    const clearNotice = options?.clearNotice ?? true;
+    setIsLoadingList(true);
+    if (clearNotice) {
+      setNoticeMessage(null);
+    }
+    setRunList(readReviewRunHistory());
+    setIsLoadingList(false);
+  }, []);
 
   const loadRunById = useCallback(
     async (
@@ -252,21 +270,23 @@ export default function ValidationPage() {
         ]);
 
         if (!runRes.ok) {
-          setErrorMessage(extractErrorMessage(runPayload, `Run lookup failed (${runRes.status})`));
+          setErrorMessage(formatApiError(runPayload, `Run lookup failed (${runRes.status})`));
           return;
         }
         if (!artifactRes.ok) {
           setErrorMessage(
-            extractErrorMessage(artifactPayload, `Artifact lookup failed (${artifactRes.status})`),
+            formatApiError(artifactPayload, `Artifact lookup failed (${artifactRes.status})`),
           );
           return;
         }
 
-        setRunResponse(runPayload as ValidationRunResponse);
+        const nextRunResponse = runPayload as ValidationRunResponse;
+        setRunResponse(nextRunResponse);
         setArtifactResponse(artifactPayload as ValidationArtifactResponse);
         setActiveRunId(runId);
         setRunLookupId(runId);
         setRenderJobs({});
+        setRunList(upsertReviewRunHistory(nextRunResponse.run));
         setNoticeMessage(successNotice);
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : 'Failed to load validation run.');
@@ -278,8 +298,8 @@ export default function ValidationPage() {
   );
 
   useEffect(() => {
-    void loadRunList({ clearNotice: false, suppressErrors: true });
-  }, [loadRunList]);
+    loadRunListFromHistory({ clearNotice: false });
+  }, [loadRunListFromHistory]);
 
   const loadDeepLinkedRun = useCallback(() => {
     const deepLinkedRunId = new URLSearchParams(window.location.search).get('runId')?.trim() ?? '';
@@ -372,9 +392,7 @@ export default function ValidationPage() {
       });
       const responsePayload = await response.json().catch(() => null);
       if (!response.ok) {
-        setErrorMessage(
-          extractErrorMessage(responsePayload, `Create run failed (${response.status})`),
-        );
+        setErrorMessage(formatApiError(responsePayload, `Create run failed (${response.status})`));
         return;
       }
 
@@ -386,10 +404,6 @@ export default function ValidationPage() {
       await loadRunById(createdRun, {
         clearNotice: false,
         successNotice: createNotice,
-      });
-      void loadRunList({
-        clearNotice: false,
-        suppressErrors: true,
       });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to create validation run.');
@@ -434,7 +448,7 @@ export default function ValidationPage() {
       const responsePayload = await response.json().catch(() => null);
       if (!response.ok) {
         setErrorMessage(
-          extractErrorMessage(responsePayload, `Review submission failed (${response.status})`),
+          formatApiError(responsePayload, `Review submission failed (${response.status})`),
         );
         return;
       }
@@ -444,10 +458,6 @@ export default function ValidationPage() {
       await loadRunById(activeRunId, {
         clearNotice: false,
         successNotice: reviewNotice,
-      });
-      void loadRunList({
-        clearNotice: false,
-        suppressErrors: true,
       });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to submit review.');
@@ -473,7 +483,7 @@ export default function ValidationPage() {
       const responsePayload = await response.json().catch(() => null);
       if (!response.ok) {
         setErrorMessage(
-          extractErrorMessage(responsePayload, `Render request failed (${response.status})`),
+          formatApiError(responsePayload, `Render request failed (${response.status})`),
         );
         return;
       }
@@ -528,14 +538,17 @@ export default function ValidationPage() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>Validation Run List</CardTitle>
-            <CardDescription>Open a run from list to detail review flow.</CardDescription>
+            <CardDescription>
+              Recent run history from this browser session. Open any run to refresh details from
+              Platform API.
+            </CardDescription>
           </div>
           <Button
             type="button"
             variant="outline"
             disabled={isLoadingList}
             onClick={() => {
-              void loadRunList();
+              loadRunListFromHistory();
             }}
           >
             {isLoadingList ? (
@@ -555,7 +568,7 @@ export default function ValidationPage() {
             </div>
           ) : runList.length === 0 ? (
             <div className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
-              No validation runs found for this tenant/user context yet.
+              No locally cached runs yet. Create a run or load one by ID to populate this list.
             </div>
           ) : (
             <div className="space-y-2">
@@ -798,6 +811,44 @@ export default function ValidationPage() {
         </Card>
       ) : null}
 
+      {runTimeline.length ? (
+        <Card className="py-4">
+          <CardHeader>
+            <CardTitle>Run Detail Timeline</CardTitle>
+            <CardDescription>
+              Deterministic checks, review comments, and decision milestones for the active run.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {runTimeline.map((event) => {
+                const icon = resolveTimelineIcon(event.tone);
+                return (
+                  <div
+                    key={event.id}
+                    className="grid gap-2 rounded-md border border-border bg-muted/20 p-3 md:grid-cols-[220px_minmax(0,1fr)_120px]"
+                  >
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(event.timestamp).toLocaleString()}
+                    </div>
+                    <div className="space-y-1">
+                      <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                        <icon.Icon className={icon.className} />
+                        {event.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{event.detail}</p>
+                    </div>
+                    <div className="md:justify-self-end">
+                      <Badge variant={toneToBadgeVariant(event.tone)}>{event.tone}</Badge>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Card className="py-4">
           <CardHeader>
@@ -867,22 +918,48 @@ export default function ValidationPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="decision">Decision</Label>
-                  <Select
-                    value={reviewForm.decision}
-                    onValueChange={(value: ValidationDecision) =>
-                      setReviewForm((previous) => ({ ...previous, decision: value }))
-                    }
-                  >
-                    <SelectTrigger id="decision" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pass">pass</SelectItem>
-                      <SelectItem value="conditional_pass">conditional_pass</SelectItem>
-                      <SelectItem value="fail">fail</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Decision</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      type="button"
+                      variant={reviewForm.decision === 'pass' ? 'default' : 'outline'}
+                      disabled={isSubmittingReview}
+                      onClick={() =>
+                        setReviewForm((previous) => ({
+                          ...previous,
+                          decision: 'pass',
+                        }))
+                      }
+                    >
+                      pass
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={reviewForm.decision === 'conditional_pass' ? 'default' : 'outline'}
+                      disabled={isSubmittingReview}
+                      onClick={() =>
+                        setReviewForm((previous) => ({
+                          ...previous,
+                          decision: 'conditional_pass',
+                        }))
+                      }
+                    >
+                      conditional
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={reviewForm.decision === 'fail' ? 'destructive' : 'outline'}
+                      disabled={isSubmittingReview}
+                      onClick={() =>
+                        setReviewForm((previous) => ({
+                          ...previous,
+                          decision: 'fail',
+                        }))
+                      }
+                    >
+                      fail
+                    </Button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="summary">Summary</Label>
@@ -925,14 +1002,24 @@ export default function ValidationPage() {
                   </div>
                 ) : null}
 
-                <Button type="submit" className="w-full" disabled={isSubmittingReview}>
+                {!activeRunId ? (
+                  <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                    Load a run before submitting comments or a decision.
+                  </div>
+                ) : null}
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isSubmittingReview || !activeRunId || !runArtifact || !traderLaneState}
+                >
                   {isSubmittingReview ? (
                     <>
                       <Loader2 className="size-4 animate-spin" />
                       Submitting…
                     </>
                   ) : (
-                    'Submit Review'
+                    `Submit ${reviewForm.decision}`
                   )}
                 </Button>
               </form>

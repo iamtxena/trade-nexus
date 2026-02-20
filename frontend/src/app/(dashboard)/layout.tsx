@@ -91,6 +91,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const clerkDisabled = process.env.NEXT_PUBLIC_DISABLE_CLERK_UI === '1';
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -122,14 +123,18 @@ export default function DashboardLayout({
                 <div className="size-1.5 rounded-full bg-emerald-500" />
                 <span className="text-xs text-muted-foreground">Live</span>
               </div>
-              <UserButton
-                afterSignOutUrl="/"
-                appearance={{
-                  elements: {
-                    avatarBox: 'size-8',
-                  },
-                }}
-              />
+              {clerkDisabled ? (
+                <div className="size-8 rounded-full border border-border bg-muted" />
+              ) : (
+                <UserButton
+                  afterSignOutUrl="/"
+                  appearance={{
+                    elements: {
+                      avatarBox: 'size-8',
+                    },
+                  }}
+                />
+              )}
             </div>
           </header>
 

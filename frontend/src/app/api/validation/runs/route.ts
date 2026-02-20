@@ -13,13 +13,22 @@ export async function GET(request: NextRequest) {
     return accessResult.response;
   }
 
-  const query = request.nextUrl.searchParams.toString();
-  const path = query ? `/v2/validation-runs?${query}` : '/v2/validation-runs';
-  return proxyValidationPlatformCall({
-    method: 'GET',
-    path,
-    access: accessResult.access,
-  });
+  const requestId = accessResult.access.requestId;
+  return NextResponse.json(
+    {
+      error: {
+        code: 'VALIDATION_RUN_LIST_NOT_AVAILABLE',
+        message:
+          'Run list endpoint is not part of the frozen Platform API contract. Load runs by runId and use local review history for list UX.',
+      },
+      requestId,
+      hint: {
+        getRunStatus: `/api/validation/runs/${request.nextUrl.searchParams.get('runId') ?? ':runId'}`,
+        getRunArtifact: `/api/validation/runs/${request.nextUrl.searchParams.get('runId') ?? ':runId'}/artifact`,
+      },
+    },
+    { status: 405 },
+  );
 }
 
 export async function POST(request: NextRequest) {

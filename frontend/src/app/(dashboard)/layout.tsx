@@ -6,7 +6,16 @@ import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { UserButton } from '@clerk/nextjs';
-import { Activity, Bot, Brain, LayoutDashboard, LineChart, Menu, Wallet } from 'lucide-react';
+import {
+  Activity,
+  Bot,
+  Brain,
+  LayoutDashboard,
+  LineChart,
+  Menu,
+  ShieldCheck,
+  Wallet,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -15,6 +24,7 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/strategist', label: 'Strategist', icon: Brain },
   { href: '/strategies', label: 'Strategies', icon: LineChart },
+  { href: '/validation', label: 'Validation', icon: ShieldCheck },
   { href: '/agents', label: 'Agents', icon: Bot },
   { href: '/portfolio', label: 'Portfolio', icon: Wallet },
 ];

@@ -2,14 +2,6 @@ name: contracts-governance
 
 on:
   pull_request:
-    paths:
-      - "docs/architecture/**"
-      - "docs/portal/**"
-      - "backend/tests/contracts/**"
-      - "backend/src/**"
-      - "contracts/**"
-      - "sdk/typescript/**"
-      - ".github/workflows/contracts-governance.yml"
   push:
     branches:
       - main

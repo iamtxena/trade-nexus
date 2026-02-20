@@ -2,10 +2,6 @@ name: llm-package-governance
 
 on:
   pull_request:
-    paths:
-      - "docs/**"
-      - "scripts/docs/**"
-      - ".github/workflows/llm-package-governance.yml"
   push:
     branches:
       - main

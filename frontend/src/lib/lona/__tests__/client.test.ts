@@ -572,10 +572,10 @@ describe('LonaClient', () => {
         if (callCount === 1) {
           firstBody = JSON.parse(String(options?.body));
           return Promise.resolve(
-            new Response(
-              JSON.stringify({ error: { message: 'Resource already exists' } }),
-              { status: 409, statusText: 'Conflict' },
-            ),
+            new Response(JSON.stringify({ error: { message: 'Resource already exists' } }), {
+              status: 409,
+              statusText: 'Conflict',
+            }),
           );
         }
 

@@ -31,6 +31,7 @@ export interface LonaSymbol {
   name: string;
   description: string;
   is_global: boolean;
+  file_url?: string | null;
   data_range: {
     start_timestamp: string | null;
     end_timestamp: string | null;
@@ -45,6 +46,15 @@ export interface LonaSymbol {
   } | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface OhlcDataPoint {
+  timestamp: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
 }
 
 export interface LonaBacktestRequest {

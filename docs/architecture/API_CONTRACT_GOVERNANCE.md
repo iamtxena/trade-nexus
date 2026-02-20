@@ -145,11 +145,13 @@ The `contracts-governance` GitHub workflow is the required status check for cont
 3. `pytest backend/tests/contracts/test_openapi_contract_v2_baseline.py`
 4. `pytest backend/tests/contracts/test_openapi_contract_v2_validation_freeze.py`
 5. `pytest backend/tests/contracts/test_validation_schema_contract.py`
-6. `pytest backend/tests/contracts --ignore=backend/tests/contracts/test_openapi_contract_baseline.py --ignore=backend/tests/contracts/test_openapi_contract_freeze.py --ignore=backend/tests/contracts/test_openapi_contract_v2_baseline.py --ignore=backend/tests/contracts/test_openapi_contract_v2_validation_freeze.py --ignore=backend/tests/contracts/test_validation_schema_contract.py`
-7. `bash contracts/scripts/verify-sdk-drift.sh`
-8. `bash contracts/scripts/mock-smoke-test.sh`
-9. `bash contracts/scripts/mock-consumer-contract-test.sh`
-10. `bash contracts/scripts/check-breaking-changes.sh`
+6. `pytest backend/tests/contracts/test_sdk_validation_contract_shape.py`
+7. `python -m src.platform_api.validation.release_gate_check`
+8. `pytest backend/tests/contracts --ignore=backend/tests/contracts/test_openapi_contract_baseline.py --ignore=backend/tests/contracts/test_openapi_contract_freeze.py --ignore=backend/tests/contracts/test_openapi_contract_v2_baseline.py --ignore=backend/tests/contracts/test_openapi_contract_v2_validation_freeze.py --ignore=backend/tests/contracts/test_validation_schema_contract.py --ignore=backend/tests/contracts/test_sdk_validation_contract_shape.py`
+9. `bash contracts/scripts/verify-sdk-drift.sh`
+10. `bash contracts/scripts/mock-smoke-test.sh`
+11. `bash contracts/scripts/mock-consumer-contract-test.sh`
+12. `bash contracts/scripts/check-breaking-changes.sh`
 
 This matrix enforces both OpenAPI governance and runtime contract behavior (v1/v2 handlers, risk, orchestrator, adapters, and client lane tests).
 

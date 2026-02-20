@@ -248,10 +248,17 @@ async function exportSymbolData(args: string[]) {
   }
 }
 
+function csvQuote(value: string | number): string {
+  const s = String(value);
+  return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
 function ohlcToCsv(data: OhlcDataPoint[]): string {
   const rows = ['timestamp,open,high,low,close,volume'];
   for (const d of data) {
-    rows.push(`${d.timestamp},${d.open},${d.high},${d.low},${d.close},${d.volume}`);
+    rows.push(
+      [d.timestamp, d.open, d.high, d.low, d.close, d.volume].map(csvQuote).join(','),
+    );
   }
   return rows.join('\n');
 }

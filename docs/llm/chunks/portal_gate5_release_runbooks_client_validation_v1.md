@@ -28,6 +28,7 @@ Run this playbook only when foundational dependencies are complete:
    - `review-governance`
    - `docs-governance`
    - `llm-package-governance`
+   - replay preflight evidence artifact is present (`validation-replay-gate-report.v1`)
 2. Confirm deployment profile remains singular:
    - `/docs/portal/operations/gate5-deployment-profile.md`
 3. Confirm reliability closure evidence is current:
@@ -42,6 +43,12 @@ Run this playbook only when foundational dependencies are complete:
 | Web | OpenAPI + SDK contract compatibility | `cd trade-nexus && bash contracts/scripts/verify-sdk-drift.sh` | SDK in sync with OpenAPI contract |
 | OpenClaw | Platform API lane contract + end-to-end flow | `cd trade-nexus/backend && uv run --with pytest python -m pytest tests/contracts/test_openclaw_client_lane_contract.py tests/contracts/test_openclaw_e2e_flow.py` | both suites pass |
 | Agent runtime | risk/research/reconciliation/orchestrator contracts | `cd trade-nexus/backend && uv run --with pytest python -m pytest tests/contracts` | full contract suite passes |
+
+## Contract Behavior Update (`#281`)
+
+1. Replay preflight now emits machine-readable gate reports using schema `validation-replay-gate-report.v1`.
+2. Contract validation for this report is enforced via `contracts/schemas/validation_replay_gate_report.json`.
+3. Operator evidence must link report artifacts from merge-time and deploy-time workflows.
 
 ## Deployment Promotion And Rollback
 
@@ -77,6 +84,26 @@ Promotion and rollback follow the existing operational runbooks:
 2. Reproduce using lane-specific commands from the compatibility matrix.
 3. Recover: fix contract drift or client expectation mismatch, then rerun lane and governance checks.
 
+### Scenario D: Replay Gate Blocked (`#281`)
+
+1. Trigger:
+   - merge/release preflight reports `gateStatus=blocked` in replay gate artifact output.
+2. Contain:
+   - block merge/deploy promotion immediately,
+   - record failing workflow URL and artifact ID in the child issue.
+3. Verify:
+   - `python -m src.platform_api.validation.release_gate_check`
+   - inspect generated report payload (`validation-replay-gate-report.v1`) for:
+     - `gateStatus`
+     - `gate.id`
+     - `gate.mergeGateStatus`
+     - `gate.releaseGateStatus`
+     - `evidenceRefs`
+4. Recover:
+   - remediate baseline/candidate policy drift,
+   - rerun governance/deploy workflow,
+   - confirm replay gate artifact returns `gateStatus=pass`.
+
 ## Evidence Recording
 
 For each release candidate, capture:
@@ -85,6 +112,10 @@ For each release candidate, capture:
 2. Command output summaries per lane.
 3. Deployment revision and smoke-check outcome.
 4. Any rollback/incident actions executed.
+5. Replay gate evidence (required for `#281`):
+   - artifact path from workflow (`.ops/artifacts/replay-gate-report-*.json`),
+   - report fields (`schemaVersion`, `generatedAt`, `gateStatus`, `gate.mergeGateStatus`, `gate.releaseGateStatus`),
+   - remediation PR link and successful rerun link.
 
 Use:
 
@@ -94,6 +125,7 @@ Use:
 ## Traceability
 
 - Child issue: `#147`
+- Replay gate issue: `#281`
 - Parent epics: `#81`, `#106`
 - Signoff: `#150`
 - Related docs:

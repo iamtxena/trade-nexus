@@ -113,10 +113,10 @@
   },
   {
     "chunk": "docs/llm/chunks/portal_gate5_release_runbooks_client_validation_v1.md",
-    "chunk_hash": "678584f25b014bf270509460e556b0b43074aeed9fef259a12b2fba58a99122b",
+    "chunk_hash": "bbba184ad75c35f4962e0d6b1f320b9d00b7dba41aae6e57eba0992371aa55e0",
     "id": "portal_gate5_release_runbooks_client_validation_v1",
     "source": "docs/portal/operations/gate5-release-runbooks-and-client-validation.md",
-    "source_hash": "170fe1836679a66b3ef7328a51ddc9dab97fc5ae25549d24f6289858a3a2b750"
+    "source_hash": "9cc882552cbf7532d17b72da06f221de3e4de379c25ff404e1328870f14322bd"
   },
   {
     "chunk": "docs/llm/chunks/portal_gate5_reliability_deployment_closure_v1.md",

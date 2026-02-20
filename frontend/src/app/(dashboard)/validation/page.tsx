@@ -133,7 +133,7 @@ function decisionToBadgeVariant(decision: ValidationRunSummary['finalDecision'])
 }
 
 export default function ValidationPage() {
-  const [hasConsumedDeepLinkRunId, setHasConsumedDeepLinkRunId] = useState(false);
+  const [lastDeepLinkedRunId, setLastDeepLinkedRunId] = useState<string | null>(null);
   const [runLookupId, setRunLookupId] = useState('');
   const [runList, setRunList] = useState<ValidationRunSummary[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -281,23 +281,25 @@ export default function ValidationPage() {
     void loadRunList({ clearNotice: false, suppressErrors: true });
   }, [loadRunList]);
 
-  useEffect(() => {
-    if (hasConsumedDeepLinkRunId) {
-      return;
-    }
-
-    setHasConsumedDeepLinkRunId(true);
+  const loadDeepLinkedRun = useCallback(() => {
     const deepLinkedRunId = new URLSearchParams(window.location.search).get('runId')?.trim() ?? '';
-    if (!deepLinkedRunId) {
+    if (!deepLinkedRunId || deepLinkedRunId === lastDeepLinkedRunId) {
       return;
     }
 
+    setLastDeepLinkedRunId(deepLinkedRunId);
     setRunLookupId(deepLinkedRunId);
     void loadRunById(deepLinkedRunId, {
       clearNotice: false,
       successNotice: `Loaded validation run ${deepLinkedRunId} from URL.`,
     });
-  }, [hasConsumedDeepLinkRunId, loadRunById]);
+  }, [lastDeepLinkedRunId, loadRunById]);
+
+  useEffect(() => {
+    loadDeepLinkedRun();
+    window.addEventListener('popstate', loadDeepLinkedRun);
+    return () => window.removeEventListener('popstate', loadDeepLinkedRun);
+  }, [loadDeepLinkedRun]);
 
   async function handleLoadRun(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

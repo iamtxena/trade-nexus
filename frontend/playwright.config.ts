@@ -24,7 +24,8 @@ export default defineConfig({
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
         process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? 'pk_test_codex',
       CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY ?? 'sk_test_codex',
-      NEXT_PUBLIC_DISABLE_CLERK: process.env.NEXT_PUBLIC_DISABLE_CLERK ?? '1',
+      DISABLE_CLERK_MIDDLEWARE: process.env.DISABLE_CLERK_MIDDLEWARE ?? '1',
+      NEXT_PUBLIC_DISABLE_CLERK_UI: process.env.NEXT_PUBLIC_DISABLE_CLERK_UI ?? '1',
       NEXT_PUBLIC_CLERK_SIGN_IN_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL ?? '/sign-in',
       NEXT_PUBLIC_CLERK_SIGN_UP_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL ?? '/sign-up',
       NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL:

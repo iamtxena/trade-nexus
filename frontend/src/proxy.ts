@@ -26,7 +26,7 @@ async function passthroughMiddleware(_request: NextRequest) {
   return NextResponse.next();
 }
 
-const clerkDisabled = process.env.NEXT_PUBLIC_DISABLE_CLERK === '1';
+const clerkDisabled = process.env.DISABLE_CLERK_MIDDLEWARE === '1';
 
 export default clerkDisabled ? passthroughMiddleware : clerkProtectedMiddleware;
 

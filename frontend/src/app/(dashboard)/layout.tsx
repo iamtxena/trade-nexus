@@ -91,7 +91,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const clerkDisabled = process.env.NEXT_PUBLIC_DISABLE_CLERK === '1';
+  const clerkDisabled = process.env.NEXT_PUBLIC_DISABLE_CLERK_UI === '1';
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 

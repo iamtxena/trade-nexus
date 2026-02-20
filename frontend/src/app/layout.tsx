@@ -26,7 +26,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const clerkDisabled = process.env.NEXT_PUBLIC_DISABLE_CLERK === '1';
+  const clerkDisabled = process.env.NEXT_PUBLIC_DISABLE_CLERK_UI === '1';
 
   const content = (
     <html lang="en">

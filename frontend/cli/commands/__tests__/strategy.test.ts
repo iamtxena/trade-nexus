@@ -175,4 +175,27 @@ describe('strategy command backtest flags', () => {
     const errorOutput = consoleErrorSpy.mock.calls.map(([line]) => String(line)).join('\n');
     expect(errorOutput).toContain('Conflicting values for --strategy-id and --id');
   });
+
+  test('errors on conflicting symbol flags', async () => {
+    const { strategyCommand } = await import('../strategy');
+
+    await expect(
+      strategyCommand([
+        'backtest',
+        '--strategy-id',
+        'strat-1',
+        '--symbol-id',
+        'sym-primary',
+        '--data',
+        'sym-legacy',
+        '--start',
+        '2025-01-01',
+        '--end',
+        '2025-02-01',
+      ]),
+    ).rejects.toThrow('process.exit(1)');
+
+    const errorOutput = consoleErrorSpy.mock.calls.map(([line]) => String(line)).join('\n');
+    expect(errorOutput).toContain('Conflicting values for --symbol-id and --data');
+  });
 });

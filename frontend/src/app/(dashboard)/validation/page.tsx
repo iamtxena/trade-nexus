@@ -28,10 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { resolveTraderReviewLaneState } from '@/lib/validation/review-lane-state';
 import { readReviewRunHistory, upsertReviewRunHistory } from '@/lib/validation/review-run-history';
-import {
-  resolveRunIdForListToDetailTransition,
-  sortValidationRunsByUpdatedAtDesc,
-} from '@/lib/validation/review-run-list-state';
+import { resolveRunIdForListToDetailTransition } from '@/lib/validation/review-run-list-state';
 import {
   type ValidationTimelineEvent,
   resolveValidationRunTimeline,
@@ -159,6 +156,31 @@ function timelineToneToBadgeVariant(tone: ValidationTimelineEvent['tone']) {
   }
 }
 
+function resolveTimelineIcon(tone: ValidationTimelineEvent['tone']) {
+  switch (tone) {
+    case 'success':
+      return {
+        Icon: CircleCheck,
+        className: 'size-3.5 text-emerald-600',
+      };
+    case 'danger':
+      return {
+        Icon: CircleAlert,
+        className: 'size-3.5 text-destructive',
+      };
+    case 'pending':
+      return {
+        Icon: Loader2,
+        className: 'size-3.5 animate-spin text-amber-600',
+      };
+    default:
+      return {
+        Icon: CircleAlert,
+        className: 'size-3.5 text-muted-foreground',
+      };
+  }
+}
+
 export default function ValidationPage() {
   const [lastDeepLinkedRunId, setLastDeepLinkedRunId] = useState<string | null>(null);
   const [runLookupId, setRunLookupId] = useState('');
@@ -228,8 +250,7 @@ export default function ValidationPage() {
     if (clearNotice) {
       setNoticeMessage(null);
     }
-    const historyRuns = sortValidationRunsByUpdatedAtDesc(readReviewRunHistory());
-    setRunList(historyRuns);
+    setRunList(readReviewRunHistory());
     setIsLoadingList(false);
   }, []);
 
@@ -810,26 +831,29 @@ export default function ValidationPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {runTimeline.map((event) => (
-                <div
-                  key={event.id}
-                  className="grid gap-2 rounded-md border border-border bg-muted/20 p-3 md:grid-cols-[220px_minmax(0,1fr)_120px]"
-                >
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(event.timestamp).toLocaleString()}
+              {runTimeline.map((event) => {
+                const icon = resolveTimelineIcon(event.tone);
+                return (
+                  <div
+                    key={event.id}
+                    className="grid gap-2 rounded-md border border-border bg-muted/20 p-3 md:grid-cols-[220px_minmax(0,1fr)_120px]"
+                  >
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(event.timestamp).toLocaleString()}
+                    </div>
+                    <div className="space-y-1">
+                      <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                        <icon.Icon className={icon.className} />
+                        {event.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{event.detail}</p>
+                    </div>
+                    <div className="md:justify-self-end">
+                      <Badge variant={timelineToneToBadgeVariant(event.tone)}>{event.tone}</Badge>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      <CircleCheck className="size-3.5 text-primary" />
-                      {event.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{event.detail}</p>
-                  </div>
-                  <div className="md:justify-self-end">
-                    <Badge variant={timelineToneToBadgeVariant(event.tone)}>{event.tone}</Badge>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>

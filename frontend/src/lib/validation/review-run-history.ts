@@ -1,3 +1,4 @@
+import { sortValidationRunsByUpdatedAtDesc } from '@/lib/validation/review-run-list-state';
 import type { ValidationRunSummary } from '@/lib/validation/types';
 
 const REVIEW_RUN_HISTORY_STORAGE_KEY = 'trade-nexus.validation.review.run-history.v1';
@@ -18,12 +19,6 @@ function resolveStorage(candidate?: RunHistoryStorage | null): RunHistoryStorage
 function toTimestamp(value: string): number {
   const timestamp = Date.parse(value);
   return Number.isNaN(timestamp) ? 0 : timestamp;
-}
-
-function sortRunsByUpdatedAtDesc(runs: ValidationRunSummary[]): ValidationRunSummary[] {
-  return [...runs].sort(
-    (left, right) => toTimestamp(right.updatedAt) - toTimestamp(left.updatedAt),
-  );
 }
 
 function isValidationRunSummary(value: unknown): value is ValidationRunSummary {
@@ -75,7 +70,7 @@ export function readReviewRunHistory(
         deduplicated.set(item.id, item);
       }
     }
-    return sortRunsByUpdatedAtDesc(Array.from(deduplicated.values())).slice(
+    return sortValidationRunsByUpdatedAtDesc(Array.from(deduplicated.values())).slice(
       0,
       REVIEW_RUN_HISTORY_LIMIT,
     );
@@ -91,7 +86,10 @@ export function upsertReviewRunHistory(
   const storage = resolveStorage(storageCandidate);
   const existing = readReviewRunHistory(storage);
   const deduplicated = [run, ...existing.filter((item) => item.id !== run.id)];
-  const nextRuns = sortRunsByUpdatedAtDesc(deduplicated).slice(0, REVIEW_RUN_HISTORY_LIMIT);
+  const nextRuns = sortValidationRunsByUpdatedAtDesc(deduplicated).slice(
+    0,
+    REVIEW_RUN_HISTORY_LIMIT,
+  );
   if (storage) {
     persistRunHistory(nextRuns, storage);
   }

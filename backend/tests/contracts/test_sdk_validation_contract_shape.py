@@ -18,6 +18,7 @@ def _read(path: Path) -> str:
 def test_validation_api_is_generated_with_all_validation_operations() -> None:
     api = _read(SDK_API)
     for operation in (
+        "listValidationRunsV2(",
         "createValidationRunV2(",
         "getValidationRunV2(",
         "getValidationRunArtifactV2(",
@@ -47,9 +48,26 @@ def test_validation_policy_model_exposes_frozen_profile_and_blocking_flags() -> 
 def test_validation_artifact_models_are_exported() -> None:
     index = _read(SDK_INDEX)
     for model in (
+        "ValidationRunListResponse",
         "ValidationRunArtifact",
         "ValidationLlmSnapshotArtifact",
         "ValidationArtifactResponse",
         "ValidationRunResponse",
     ):
         assert f"export * from './{model}';" in index
+
+
+def test_validation_write_request_types_expose_idempotency_key() -> None:
+    api = _read(SDK_API)
+    for request_type in (
+        "CreateValidationRunV2Request",
+        "SubmitValidationRunReviewV2Request",
+        "CreateValidationRunRenderV2Request",
+        "CreateValidationBaselineV2Request",
+        "ReplayValidationRegressionV2Request",
+    ):
+        request_block = api.split(f"export interface {request_type}", maxsplit=1)[1].split(
+            "}\n",
+            maxsplit=1,
+        )[0]
+        assert "idempotencyKey: string;" in request_block

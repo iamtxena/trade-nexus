@@ -25,6 +25,7 @@ import type {
   ValidationBaselineResponse,
   ValidationRegressionReplayResponse,
   ValidationRenderResponse,
+  ValidationRunListResponse,
   ValidationRunResponse,
   ValidationRunReviewResponse,
 } from '../models/index';
@@ -49,6 +50,8 @@ import {
     ValidationRegressionReplayResponseToJSON,
     ValidationRenderResponseFromJSON,
     ValidationRenderResponseToJSON,
+    ValidationRunListResponseFromJSON,
+    ValidationRunListResponseToJSON,
     ValidationRunResponseFromJSON,
     ValidationRunResponseToJSON,
     ValidationRunReviewResponseFromJSON,
@@ -56,17 +59,20 @@ import {
 } from '../models/index';
 
 export interface CreateValidationBaselineV2Request {
+    idempotencyKey: string;
     createValidationBaselineRequest: CreateValidationBaselineRequest;
     xRequestId?: string;
 }
 
 export interface CreateValidationRunRenderV2Request {
     runId: string;
+    idempotencyKey: string;
     createValidationRenderRequest: CreateValidationRenderRequest;
     xRequestId?: string;
 }
 
 export interface CreateValidationRunV2Request {
+    idempotencyKey: string;
     createValidationRunRequest: CreateValidationRunRequest;
     xRequestId?: string;
 }
@@ -81,13 +87,19 @@ export interface GetValidationRunV2Request {
     xRequestId?: string;
 }
 
+export interface ListValidationRunsV2Request {
+    xRequestId?: string;
+}
+
 export interface ReplayValidationRegressionV2Request {
+    idempotencyKey: string;
     createValidationRegressionReplayRequest: CreateValidationRegressionReplayRequest;
     xRequestId?: string;
 }
 
 export interface SubmitValidationRunReviewV2Request {
     runId: string;
+    idempotencyKey: string;
     createValidationRunReviewRequest: CreateValidationRunReviewRequest;
     xRequestId?: string;
 }
@@ -102,6 +114,7 @@ export interface ValidationApiInterface {
     /**
      * 
      * @summary Promote validation run as baseline
+     * @param {string} idempotencyKey Required for idempotent write operations.
      * @param {CreateValidationBaselineRequest} createValidationBaselineRequest 
      * @param {string} [xRequestId] Caller-provided request id for trace correlation.
      * @param {*} [options] Override http request option.
@@ -119,6 +132,7 @@ export interface ValidationApiInterface {
      * 
      * @summary Create optional html/pdf validation render artifact
      * @param {string} runId 
+     * @param {string} idempotencyKey Required for idempotent write operations.
      * @param {CreateValidationRenderRequest} createValidationRenderRequest 
      * @param {string} [xRequestId] Caller-provided request id for trace correlation.
      * @param {*} [options] Override http request option.
@@ -135,6 +149,7 @@ export interface ValidationApiInterface {
     /**
      * 
      * @summary Start validation run for strategy artifacts
+     * @param {string} idempotencyKey Required for idempotent write operations.
      * @param {CreateValidationRunRequest} createValidationRunRequest 
      * @param {string} [xRequestId] Caller-provided request id for trace correlation.
      * @param {*} [options] Override http request option.
@@ -182,7 +197,23 @@ export interface ValidationApiInterface {
 
     /**
      * 
+     * @summary List validation runs for authenticated identity scope
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    listValidationRunsV2Raw(requestParameters: ListValidationRunsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationRunListResponse>>;
+
+    /**
+     * List validation runs for authenticated identity scope
+     */
+    listValidationRunsV2(requestParameters: ListValidationRunsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationRunListResponse>;
+
+    /**
+     * 
      * @summary Replay validation regression against stored baseline
+     * @param {string} idempotencyKey Required for idempotent write operations.
      * @param {CreateValidationRegressionReplayRequest} createValidationRegressionReplayRequest 
      * @param {string} [xRequestId] Caller-provided request id for trace correlation.
      * @param {*} [options] Override http request option.
@@ -200,6 +231,7 @@ export interface ValidationApiInterface {
      * 
      * @summary Submit validation review decision
      * @param {string} runId 
+     * @param {string} idempotencyKey Required for idempotent write operations.
      * @param {CreateValidationRunReviewRequest} createValidationRunReviewRequest 
      * @param {string} [xRequestId] Caller-provided request id for trace correlation.
      * @param {*} [options] Override http request option.
@@ -224,6 +256,13 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
      * Promote validation run as baseline
      */
     async createValidationBaselineV2Raw(requestParameters: CreateValidationBaselineV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationBaselineResponse>> {
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling createValidationBaselineV2().'
+            );
+        }
+
         if (requestParameters['createValidationBaselineRequest'] == null) {
             throw new runtime.RequiredError(
                 'createValidationBaselineRequest',
@@ -239,6 +278,10 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
 
         if (requestParameters['xRequestId'] != null) {
             headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
         }
 
         if (this.configuration && this.configuration.apiKey) {
@@ -286,6 +329,13 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
             );
         }
 
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling createValidationRunRenderV2().'
+            );
+        }
+
         if (requestParameters['createValidationRenderRequest'] == null) {
             throw new runtime.RequiredError(
                 'createValidationRenderRequest',
@@ -301,6 +351,10 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
 
         if (requestParameters['xRequestId'] != null) {
             headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
         }
 
         if (this.configuration && this.configuration.apiKey) {
@@ -342,6 +396,13 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
      * Start validation run for strategy artifacts
      */
     async createValidationRunV2Raw(requestParameters: CreateValidationRunV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationRunResponse>> {
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling createValidationRunV2().'
+            );
+        }
+
         if (requestParameters['createValidationRunRequest'] == null) {
             throw new runtime.RequiredError(
                 'createValidationRunRequest',
@@ -357,6 +418,10 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
 
         if (requestParameters['xRequestId'] != null) {
             headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
         }
 
         if (this.configuration && this.configuration.apiKey) {
@@ -500,9 +565,61 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
     }
 
     /**
+     * List validation runs for authenticated identity scope
+     */
+    async listValidationRunsV2Raw(requestParameters: ListValidationRunsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationRunListResponse>> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-runs`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationRunListResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * List validation runs for authenticated identity scope
+     */
+    async listValidationRunsV2(requestParameters: ListValidationRunsV2Request = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationRunListResponse> {
+        const response = await this.listValidationRunsV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Replay validation regression against stored baseline
      */
     async replayValidationRegressionV2Raw(requestParameters: ReplayValidationRegressionV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationRegressionReplayResponse>> {
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling replayValidationRegressionV2().'
+            );
+        }
+
         if (requestParameters['createValidationRegressionReplayRequest'] == null) {
             throw new runtime.RequiredError(
                 'createValidationRegressionReplayRequest',
@@ -518,6 +635,10 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
 
         if (requestParameters['xRequestId'] != null) {
             headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
         }
 
         if (this.configuration && this.configuration.apiKey) {
@@ -565,6 +686,13 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
             );
         }
 
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling submitValidationRunReviewV2().'
+            );
+        }
+
         if (requestParameters['createValidationRunReviewRequest'] == null) {
             throw new runtime.RequiredError(
                 'createValidationRunReviewRequest',
@@ -580,6 +708,10 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
 
         if (requestParameters['xRequestId'] != null) {
             headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
         }
 
         if (this.configuration && this.configuration.apiKey) {

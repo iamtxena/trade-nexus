@@ -27,6 +27,7 @@ from src.platform_api.schemas_v2 import (
     ValidationRenderJob,
     ValidationRenderResponse,
     ValidationRun,
+    ValidationRunListResponse,
     ValidationRunArtifact,
     ValidationRunReviewResponse,
     ValidationRunResponse,
@@ -347,6 +348,18 @@ class ValidationV2Service:
             finalDecision=final_decision,
         )
         return response
+
+    async def list_validation_runs(self, *, context: RequestContext) -> ValidationRunListResponse:
+        runs = [
+            record.run.model_copy()
+            for record in self._runs.values()
+            if record.tenant_id == context.tenant_id and record.user_id == context.user_id
+        ]
+        runs.sort(key=lambda run: run.updatedAt, reverse=True)
+        return ValidationRunListResponse(
+            requestId=context.request_id,
+            runs=runs,
+        )
 
     async def get_validation_run(self, *, run_id: str, context: RequestContext) -> ValidationRunResponse:
         record = self._require_run(run_id=run_id, context=context)

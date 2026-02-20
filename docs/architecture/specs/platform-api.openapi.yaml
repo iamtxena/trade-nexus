@@ -1272,12 +1272,45 @@ paths:
           $ref: '#/components/responses/Error404'
 
   /v2/validation-runs:
+    get:
+      tags: [Validation]
+      summary: List validation runs for authenticated identity scope
+      operationId: listValidationRunsV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Validation run list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationRunListResponse'
+              example:
+                requestId: req-validation-run-list-001
+                runs:
+                  - id: valrun-20260217-0002
+                    status: completed
+                    profile: STANDARD
+                    schemaVersion: validation-run.v1
+                    finalDecision: pass
+                    createdAt: '2026-02-17T10:30:00Z'
+                    updatedAt: '2026-02-17T10:35:00Z'
+                  - id: valrun-20260217-0001
+                    status: queued
+                    profile: STANDARD
+                    schemaVersion: validation-run.v1
+                    finalDecision: pending
+                    createdAt: '2026-02-17T10:20:00Z'
+                    updatedAt: '2026-02-17T10:20:00Z'
+        '401':
+          $ref: '#/components/responses/Error401'
     post:
       tags: [Validation]
       summary: Start validation run for strategy artifacts
       operationId: createValidationRunV2
       parameters:
         - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1433,6 +1466,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/ValidationRunId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1471,6 +1505,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/ValidationRunId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1507,6 +1542,7 @@ paths:
       operationId: createValidationBaselineV2
       parameters:
         - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1544,6 +1580,7 @@ paths:
       operationId: replayValidationRegressionV2
       parameters:
         - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -2743,6 +2780,17 @@ components:
           type: string
         run:
           $ref: '#/components/schemas/ValidationRun'
+
+    ValidationRunListResponse:
+      type: object
+      required: [requestId, runs]
+      properties:
+        requestId:
+          type: string
+        runs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationRun'
 
     ValidationStrategyRef:
       type: object

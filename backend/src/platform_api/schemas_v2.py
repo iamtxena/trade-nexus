@@ -189,6 +189,11 @@ class ValidationRunResponse(BaseModel):
     run: ValidationRun
 
 
+class ValidationRunListResponse(BaseModel):
+    requestId: str
+    runs: list[ValidationRun] = Field(default_factory=list)
+
+
 class ValidationStrategyRef(BaseModel):
     strategyId: str
     provider: Literal["lona"]

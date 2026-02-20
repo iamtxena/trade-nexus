@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.platform_api.auth_identity import resolve_validation_identity
 from src.platform_api.errors import (
     PlatformAPIError,
     platform_api_error_handler,
@@ -74,6 +75,10 @@ def _is_platform_request(path: str) -> bool:
     return path.startswith("/v1/") or path.startswith("/v2/")
 
 
+def _is_v2_validation_request(path: str) -> bool:
+    return path.startswith("/v2/validation")
+
+
 def _header_or_fallback(request: Request, *, header: str, fallback: str) -> str:
     value = request.headers.get(header)
     if isinstance(value, str) and value.strip():
@@ -86,8 +91,43 @@ async def platform_api_observability_context_middleware(request: Request, call_n
     """Attach request correlation identifiers and emit structured request logs."""
     if _is_platform_request(request.url.path):
         request.state.request_id = request.headers.get("X-Request-Id") or f"req-{uuid4()}"
-        request.state.tenant_id = _header_or_fallback(request, header="X-Tenant-Id", fallback="tenant-local")
-        request.state.user_id = _header_or_fallback(request, header="X-User-Id", fallback="user-local")
+        if _is_v2_validation_request(request.url.path):
+            try:
+                identity = resolve_validation_identity(
+                    authorization=request.headers.get("Authorization"),
+                    api_key=request.headers.get("X-API-Key"),
+                    tenant_header=request.headers.get("X-Tenant-Id"),
+                    user_header=request.headers.get("X-User-Id"),
+                    request_id=request.state.request_id,
+                )
+            except PlatformAPIError as exc:
+                request.state.tenant_id = "tenant-unauthenticated"
+                request.state.user_id = "user-unauthenticated"
+                log_request_event(
+                    logger,
+                    level=logging.WARNING,
+                    message="Platform API validation request rejected.",
+                    request=request,
+                    component="api",
+                    operation="request_rejected",
+                    status_code=exc.status_code,
+                    errorCode=exc.code,
+                    method=request.method,
+                )
+                return await platform_api_error_handler(request, exc)
+            request.state.tenant_id = identity.tenant_id
+            request.state.user_id = identity.user_id
+        else:
+            request.state.tenant_id = _header_or_fallback(
+                request,
+                header="X-Tenant-Id",
+                fallback="tenant-local",
+            )
+            request.state.user_id = _header_or_fallback(
+                request,
+                header="X-User-Id",
+                fallback="user-local",
+            )
         log_request_event(
             logger,
             level=logging.INFO,

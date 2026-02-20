@@ -42,6 +42,10 @@ const COMMANDS: Record<
     description: 'Strategy management (list, create, backtest, score)',
     handler: lazyLoad('strategy'),
   },
+  backtest: {
+    description: 'Run a strategy backtest (alias for `strategy backtest`)',
+    handler: lazyLoad('backtest'),
+  },
   data: {
     description: 'Market data management (list symbols, download)',
     handler: lazyLoad('data'),
@@ -104,6 +108,9 @@ function printHelp() {
   console.log(`  ${dim('nexus research --assets crypto,stocks')}     Research markets`);
   console.log(`  ${dim('nexus strategy list')}                       List strategies`);
   console.log(`  ${dim('nexus strategy create --description "..."')} Create strategy`);
+  console.log(
+    `  ${dim('nexus backtest --strategy-id <id> --symbol-id <id> --start ... --end ...')} Run backtest`,
+  );
   console.log(`  ${dim('nexus data list --global')}                  List global symbols`);
   console.log(`  ${dim('nexus deploy --strategy-id <id>')}           Deploy to paper trading`);
   console.log(`  ${dim('nexus portfolio list')}                      List portfolios`);

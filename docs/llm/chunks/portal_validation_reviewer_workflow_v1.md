@@ -33,9 +33,30 @@ Define the production reviewer flow for validation decisions in the web lane, wi
    - `POST /api/validation/runs/{runId}/render`
    - body `{"format":"html"}` or `{"format":"pdf"}`
 
+## Deep-Link Flow (`#279`)
+
+CLI and external tooling may open review-web directly with `runId` in query params:
+
+- `/validation?runId=<runId>`
+
+Workflow expectations:
+
+1. Reviewer verifies the loaded run matches the CLI-provided `runId`.
+2. Deep-link load uses existing read routes only:
+   - `GET /v2/validation-runs/{runId}`
+   - `GET /v2/validation-runs/{runId}/artifact`
+3. If `runId` is absent, `/validation` falls back to manual run lookup without behavior change.
+
+Operator notes:
+
+1. No new Platform API route is introduced for deep-link support.
+2. Deep-link failures do not bypass auth-derived identity controls.
+3. Release evidence should include one successful deep-link open sample (`runId`, `requestId`, decision state).
+
 ## Optional API/CLI Lane
 
-Until dedicated CLI review commands from `#279` are merged, use SDK or direct Platform API requests.
+CLI output for `#279` can include a direct reviewer URL (`/validation?runId=<runId>`).
+When running outside the CLI flow, use SDK or direct Platform API requests.
 
 ```bash
 export API_BASE="https://api.trade-nexus.io"

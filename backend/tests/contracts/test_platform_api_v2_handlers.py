@@ -5,13 +5,12 @@ from __future__ import annotations
 import asyncio
 import copy
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from src.main import app
 from src.platform_api import router_v1 as router_v1_module
 from src.platform_api import router_v2 as router_v2_module
-
 
 HEADERS = {
     "Authorization": "Bearer test-token",
@@ -439,6 +438,148 @@ def test_validation_v2_routes_wire_deterministic_and_agent_outputs() -> None:
     }
     assert set(run_artifact["agentReview"]) == {"status", "summary", "findings"}
     assert run_artifact["finalDecision"] in {"pass", "conditional_pass", "fail"}
+
+
+def test_validation_v2_render_persists_optional_html_pdf_artifacts() -> None:
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-render-001",
+        "X-Tenant-Id": "tenant-v2-validation-render",
+        "X-User-Id": "user-v2-validation-render",
+    }
+    run_payload = {
+        "strategyId": "strat-001",
+        "providerRefId": "lona-strategy-123",
+        "prompt": "Renderable validation run for html/pdf artifacts.",
+        "requestedIndicators": ["zigzag", "ema"],
+        "datasetIds": ["dataset-btc-1h-2025"],
+        "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+        "policy": {
+            "profile": "STANDARD",
+            "blockMergeOnFail": True,
+            "blockReleaseOnFail": True,
+            "blockMergeOnAgentFail": True,
+            "blockReleaseOnAgentFail": False,
+            "requireTraderReview": False,
+            "hardFailOnMissingIndicators": True,
+            "failClosedOnEvidenceUnavailable": True,
+        },
+    }
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-render-run-001"},
+        json=run_payload,
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    render_html = client.post(
+        f"/v2/validation-runs/{run_id}/render",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-render-html-001"},
+        json={"format": "html"},
+    )
+    assert render_html.status_code == 202
+    render_html_payload = render_html.json()["render"]
+    assert render_html_payload["status"] == "completed"
+    assert render_html_payload["artifactRef"] == f"blob://validation/{run_id}/report.html"
+
+    render_pdf = client.post(
+        f"/v2/validation-runs/{run_id}/render",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-render-pdf-001"},
+        json={"format": "pdf"},
+    )
+    assert render_pdf.status_code == 202
+    render_pdf_payload = render_pdf.json()["render"]
+    assert render_pdf_payload["status"] == "completed"
+    assert render_pdf_payload["artifactRef"] == f"blob://validation/{run_id}/report.pdf"
+
+    persisted = asyncio.run(
+        router_v2_module._validation_service._validation_storage.get_run(  # noqa: SLF001
+            run_id=run_id,
+            tenant_id=headers["X-Tenant-Id"],
+            user_id=headers["X-User-Id"],
+        )
+    )
+    assert persisted is not None
+    refs = {item.kind: item for item in persisted.blob_refs}
+    assert refs["render_html"].ref == render_html_payload["artifactRef"]
+    assert refs["render_html"].content_type == "text/html; charset=utf-8"
+    assert refs["render_pdf"].ref == render_pdf_payload["artifactRef"]
+    assert refs["render_pdf"].content_type == "application/pdf"
+
+
+def test_validation_v2_render_failure_is_auditable_and_non_blocking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FailingRenderer:
+        def render(self, *, artifact: object, output_format: str) -> object:
+            _ = (artifact, output_format)
+            raise RuntimeError("simulated-render-failure")
+
+    monkeypatch.setattr(router_v2_module._validation_service, "_renderer", _FailingRenderer())  # noqa: SLF001
+
+    client = _client()
+    headers = {
+        **HEADERS,
+        "X-Request-Id": "req-v2-validation-render-fail-001",
+        "X-Tenant-Id": "tenant-v2-validation-render-fail",
+        "X-User-Id": "user-v2-validation-render-fail",
+    }
+    run_payload = {
+        "strategyId": "strat-001",
+        "providerRefId": "lona-strategy-123",
+        "prompt": "Validation run where optional renderer fails.",
+        "requestedIndicators": ["zigzag", "ema"],
+        "datasetIds": ["dataset-btc-1h-2025"],
+        "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+        "policy": {
+            "profile": "STANDARD",
+            "blockMergeOnFail": True,
+            "blockReleaseOnFail": True,
+            "blockMergeOnAgentFail": True,
+            "blockReleaseOnAgentFail": False,
+            "requireTraderReview": False,
+            "hardFailOnMissingIndicators": True,
+            "failClosedOnEvidenceUnavailable": True,
+        },
+    }
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-render-fail-run-001"},
+        json=run_payload,
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    render_response = client.post(
+        f"/v2/validation-runs/{run_id}/render",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-render-fail-html-001"},
+        json={"format": "html"},
+    )
+    assert render_response.status_code == 202
+    render_payload = render_response.json()["render"]
+    assert render_payload["status"] == "failed"
+    assert render_payload["artifactRef"] == f"blob://validation/{run_id}/render-html-failure.json"
+
+    artifact_response = client.get(f"/v2/validation-runs/{run_id}/artifact", headers=headers)
+    assert artifact_response.status_code == 200
+    assert artifact_response.json()["artifactType"] == "validation_run"
+
+    persisted = asyncio.run(
+        router_v2_module._validation_service._validation_storage.get_run(  # noqa: SLF001
+            run_id=run_id,
+            tenant_id=headers["X-Tenant-Id"],
+            user_id=headers["X-User-Id"],
+        )
+    )
+    assert persisted is not None
+    refs = {item.kind: item for item in persisted.blob_refs}
+    assert refs["render_html"].ref == render_payload["artifactRef"]
+    assert refs["render_html"].content_type == "application/json"
+    assert "backtest_report" in refs
 
 
 def test_validation_v2_trader_conditional_pass_is_reviewed_but_not_fully_passed() -> None:

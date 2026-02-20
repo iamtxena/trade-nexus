@@ -138,5 +138,26 @@
     "id": "portal_gate5_structured_observability_v1",
     "source": "docs/portal/operations/gate5-structured-observability.md",
     "source_hash": "8ddfab927bcb3e472c645da2d7aff342e40e003ba0a3d56a034df21fb4a37369"
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_validation_review_api_semantics_v1.md",
+    "chunk_hash": "90b085e9d845625dfdd92f5377ad5cd80f7b0573902f1c1383e177527a560383",
+    "id": "portal_validation_review_api_semantics_v1",
+    "source": "docs/portal/api/validation-review-api-semantics.md",
+    "source_hash": "2d22f0cbc5370eb6c4bb26937d7d08a2ec995b00451bc4112766c2c8e6e97300"
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_validation_review_incident_runbook_v1.md",
+    "chunk_hash": "169704803ed1c8a549339466bfacccc75a36fdeed422dbcba51ee35930317b74",
+    "id": "portal_validation_review_incident_runbook_v1",
+    "source": "docs/portal/operations/validation-review-incident-runbook.md",
+    "source_hash": "aad96e458a28f2d237ca5362df37a42ebb199e42cc03c2b91cfc0b8f6d461987"
+  },
+  {
+    "chunk": "docs/llm/chunks/portal_validation_reviewer_workflow_v1.md",
+    "chunk_hash": "dbb5107241f8ecee33ae803a34b842db8101a30add91b86abc0691796b17c05d",
+    "id": "portal_validation_reviewer_workflow_v1",
+    "source": "docs/portal/platform/validation-reviewer-workflow.md",
+    "source_hash": "76621ea3538b3bc3cf93280874449de29d830df35ce4d6e6dbc7012d620bfb80"
   }
 ]

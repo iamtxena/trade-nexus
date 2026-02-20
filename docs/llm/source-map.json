@@ -220,6 +220,39 @@
       "workflows": ["release_validation_sequence", "client_lane_compatibility"],
       "owners": ["Team E", "Team F", "Team G"],
       "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/106"
+    },
+    {
+      "id": "portal_validation_review_api_semantics_v1",
+      "title": "Validation Review API Contracts And Response Semantics",
+      "source": "docs/portal/api/validation-review-api-semantics.md",
+      "topic": "api",
+      "concepts": ["validation_api", "response_semantics", "auth_derived_identity", "idempotency"],
+      "endpoints": ["/v2/validation-runs", "/v2/validation-runs/{runId}", "/v2/validation-runs/{runId}/artifact", "/v2/validation-runs/{runId}/review", "/v2/validation-runs/{runId}/render", "/v2/validation-baselines", "/v2/validation-regressions/replay"],
+      "workflows": ["validation_review_web", "contract_first_review"],
+      "owners": ["Validation Review Web Docs"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/282"
+    },
+    {
+      "id": "portal_validation_review_incident_runbook_v1",
+      "title": "Validation Review Incident Runbook",
+      "source": "docs/portal/operations/validation-review-incident-runbook.md",
+      "topic": "operations",
+      "concepts": ["incident_runbook", "render_failure", "auth_failure", "regression_failure"],
+      "endpoints": ["/v1/health", "/v2/validation-runs/{runId}/artifact", "/v2/validation-runs/{runId}/render", "/v2/validation-regressions/replay"],
+      "workflows": ["incident_response", "findings_disposition"],
+      "owners": ["Validation Review Web Docs", "Team F"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/282"
+    },
+    {
+      "id": "portal_validation_reviewer_workflow_v1",
+      "title": "Validation Review Web Reviewer Workflow",
+      "source": "docs/portal/platform/validation-reviewer-workflow.md",
+      "topic": "platform",
+      "concepts": ["reviewer_workflow", "web_lane", "json_canonical", "status_reporting"],
+      "endpoints": ["/v2/validation-runs", "/v2/validation-runs/{runId}", "/v2/validation-runs/{runId}/artifact", "/v2/validation-runs/{runId}/review", "/v2/validation-runs/{runId}/render"],
+      "workflows": ["reviewer_decision_flow", "issue_status_reporting"],
+      "owners": ["Validation Review Web Docs"],
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/282"
     }
   ]
 }

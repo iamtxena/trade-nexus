@@ -6,6 +6,7 @@ from dataclasses import replace
 
 import pytest
 
+from src.platform_api.validation.core.agent_review import ValidationAgentReviewService
 from src.platform_api.services.validation_deterministic_service import (
     DeterministicValidationEngine,
     DeterministicValidationEvidence,
@@ -337,6 +338,37 @@ def test_canonical_artifact_contains_deterministic_output_and_blocks_on_fail() -
 
     schema = _load_schema(VALIDATION_RUN_SCHEMA_PATH)
     _validate_against_schema(artifact, schema)
+
+
+@pytest.mark.parametrize("profile", ["FAST", "STANDARD", "EXPERT"])
+def test_canonical_artifact_uses_agent_review_default_budget_contract(profile: str) -> None:
+    engine = DeterministicValidationEngine()
+    result = engine.evaluate(evidence=_base_evidence(), policy=ValidationPolicyConfig(profile=profile))
+    context = ValidationArtifactContext(
+        run_id="valrun-20260217-0002",
+        request_id="req-validation-run-002",
+        tenant_id="tenant-001",
+        user_id="user-001",
+        strategy_id="strat-001",
+        provider_ref_id="lona-strategy-123",
+        prompt="Build zig-zag strategy for BTC 1h with trend filter",
+        requested_indicators=("zigzag", "ema"),
+        dataset_ids=("dataset-btc-1h-2025",),
+        backtest_report_ref="blob://validation/valrun-20260217-0002/backtest-report.json",
+        strategy_code_ref="blob://validation/valrun-20260217-0002/strategy.py",
+        trades_ref="blob://validation/valrun-20260217-0002/trades.json",
+        execution_logs_ref="blob://validation/valrun-20260217-0002/execution.log",
+        chart_payload_ref="blob://validation/valrun-20260217-0002/chart-payload.json",
+    )
+    artifact = engine.build_canonical_artifact(
+        context=context,
+        result=result,
+        policy=ValidationPolicyConfig(profile=profile),
+        created_at="2026-02-17T10:30:00Z",
+    )
+
+    expected_limits = ValidationAgentReviewService.DEFAULT_PROFILE_BUDGETS[profile].to_contract_payload()
+    assert artifact["agentReview"]["budget"]["limits"] == expected_limits
 
 
 def test_block_reasons_include_trade_coherence_when_combined_trade_status_fails() -> None:

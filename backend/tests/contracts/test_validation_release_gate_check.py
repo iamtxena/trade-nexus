@@ -65,3 +65,13 @@ def test_release_gate_check_fails_for_blocked_candidate(tmp_path) -> None:
         "validation_baseline_id",
         "validation_candidate_run_id",
     ]
+
+
+def test_release_gate_report_schema_accepts_nullable_summary() -> None:
+    replay = asyncio.run(compute_release_gate_replay())
+    replay_with_null_summary = replay.model_copy(update={"summary": None})
+    report = build_release_gate_report(replay=replay_with_null_summary)
+
+    schema = _load_schema(VALIDATION_REPLAY_GATE_REPORT_SCHEMA_PATH)
+    _validate_against_schema(report, schema)
+    assert report["gate"]["summary"] is None

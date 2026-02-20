@@ -122,7 +122,7 @@ export interface ValidationRegressionReplay {
      * @type {string}
      * @memberof ValidationRegressionReplay
      */
-    summary?: string;
+    summary?: string | null;
 }
 
 /**

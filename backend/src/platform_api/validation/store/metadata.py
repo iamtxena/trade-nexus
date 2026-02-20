@@ -26,6 +26,8 @@ ValidationProfile = Literal["FAST", "STANDARD", "EXPERT"]
 ValidationRunStatus = Literal["queued", "running", "completed", "failed"]
 ValidationRunDecision = Literal["pending", "pass", "conditional_pass", "fail"]
 ValidationArtifactType = Literal["validation_run", "validation_llm_snapshot"]
+ValidationReplayDecision = Literal["pass", "conditional_pass", "fail", "unknown"]
+ValidationReplayGateStatus = Literal["pass", "blocked"]
 ValidationBlobKind = Literal[
     "strategy_code",
     "backtest_report",
@@ -44,6 +46,8 @@ _VALID_PROFILES: set[str] = {"FAST", "STANDARD", "EXPERT"}
 _VALID_RUN_STATUSES: set[str] = {"queued", "running", "completed", "failed"}
 _VALID_RUN_DECISIONS: set[str] = {"pending", "pass", "conditional_pass", "fail"}
 _VALID_ARTIFACT_TYPES: set[str] = {"validation_run", "validation_llm_snapshot"}
+_VALID_REPLAY_DECISIONS: set[str] = {"pass", "conditional_pass", "fail", "unknown"}
+_VALID_REPLAY_GATE_STATUSES: set[str] = {"pass", "blocked"}
 _VALID_DECISIONS: set[str] = {"pass", "conditional_pass", "fail"}
 _VALID_TRADER_REVIEW_STATUSES: set[str] = {"not_requested", "requested", "approved", "rejected"}
 _VALID_BLOB_KINDS: set[str] = {
@@ -120,6 +124,18 @@ def _validate_artifact_type(value: str) -> None:
         raise ValueError(f"artifact_type must be one of {sorted(_VALID_ARTIFACT_TYPES)}, got {value!r}.")
 
 
+def _validate_replay_decision(value: str) -> None:
+    if value not in _VALID_REPLAY_DECISIONS:
+        raise ValueError(f"decision must be one of {sorted(_VALID_REPLAY_DECISIONS)}, got {value!r}.")
+
+
+def _validate_replay_gate_status(value: str, *, field_name: str) -> None:
+    if value not in _VALID_REPLAY_GATE_STATUSES:
+        raise ValueError(
+            f"{field_name} must be one of {sorted(_VALID_REPLAY_GATE_STATUSES)}, got {value!r}."
+        )
+
+
 def _validate_decision(value: str, *, field_name: str) -> None:
     if value not in _VALID_DECISIONS:
         raise ValueError(f"{field_name} must be one of {sorted(_VALID_DECISIONS)}, got {value!r}.")
@@ -153,6 +169,15 @@ def _as_bool(row: dict[str, Any], key: str) -> bool:
     if isinstance(raw, bool):
         return raw
     raise ValidationMetadataStoreError(f"Expected boolean for {key}, got {raw!r}.")
+
+
+def _as_float(row: dict[str, Any], key: str) -> float:
+    raw = row.get(key)
+    if isinstance(raw, bool):
+        raise ValidationMetadataStoreError(f"Expected numeric float for {key}, got bool.")
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    raise ValidationMetadataStoreError(f"Expected float for {key}, got {raw!r}.")
 
 
 def _as_str(row: dict[str, Any], key: str) -> str:
@@ -339,6 +364,48 @@ class ValidationBaselineMetadata:
 
 
 @dataclass(frozen=True)
+class ValidationReplayMetadata:
+    replay_id: str
+    baseline_id: str
+    baseline_run_id: str
+    candidate_run_id: str
+    tenant_id: str
+    user_id: str
+    decision: ValidationReplayDecision
+    merge_blocked: bool
+    release_blocked: bool
+    merge_gate_status: ValidationReplayGateStatus
+    release_gate_status: ValidationReplayGateStatus
+    baseline_decision: ValidationDecision
+    candidate_decision: ValidationDecision
+    metric_drift_delta_pct: float
+    metric_drift_threshold_pct: float
+    threshold_breached: bool
+    reasons: tuple[str, ...] = ()
+    summary: str | None = None
+    created_at: str = field(default_factory=utc_now)
+
+    def __post_init__(self) -> None:
+        _require_non_empty(self.replay_id, field_name="replay_id")
+        _require_non_empty(self.baseline_id, field_name="baseline_id")
+        _require_non_empty(self.baseline_run_id, field_name="baseline_run_id")
+        _require_non_empty(self.candidate_run_id, field_name="candidate_run_id")
+        _require_non_empty(self.tenant_id, field_name="tenant_id")
+        _require_non_empty(self.user_id, field_name="user_id")
+        _validate_replay_decision(self.decision)
+        _validate_replay_gate_status(self.merge_gate_status, field_name="merge_gate_status")
+        _validate_replay_gate_status(self.release_gate_status, field_name="release_gate_status")
+        _validate_decision(self.baseline_decision, field_name="baseline_decision")
+        _validate_decision(self.candidate_decision, field_name="candidate_decision")
+        if self.metric_drift_delta_pct < 0:
+            raise ValueError("metric_drift_delta_pct must be >= 0.")
+        if self.metric_drift_threshold_pct < 0:
+            raise ValueError("metric_drift_threshold_pct must be >= 0.")
+        if any(not isinstance(reason, str) or reason.strip() == "" for reason in self.reasons):
+            raise ValueError("reasons must contain non-empty strings.")
+
+
+@dataclass(frozen=True)
 class PersistedValidationRun:
     metadata: ValidationRunMetadata
     review_state: ValidationReviewStateMetadata | None
@@ -396,6 +463,18 @@ class ValidationMetadataStore(Protocol):
         tenant_id: str,
         user_id: str,
     ) -> ValidationBaselineMetadata | None:
+        ...
+
+    async def upsert_replay(self, replay: ValidationReplayMetadata) -> None:
+        ...
+
+    async def get_replay(
+        self,
+        *,
+        replay_id: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> ValidationReplayMetadata | None:
         ...
 
 
@@ -456,6 +535,22 @@ class ValidationStorageService:
             user_id=user_id,
         )
 
+    async def persist_replay(self, replay: ValidationReplayMetadata) -> None:
+        await self._metadata_store.upsert_replay(replay)
+
+    async def get_replay(
+        self,
+        *,
+        replay_id: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> ValidationReplayMetadata | None:
+        return await self._metadata_store.get_replay(
+            replay_id=replay_id,
+            tenant_id=tenant_id,
+            user_id=user_id,
+        )
+
 
 class InMemoryValidationMetadataStore:
     """Deterministic in-process persistence used for local/dev validation flows."""
@@ -463,6 +558,7 @@ class InMemoryValidationMetadataStore:
     def __init__(self) -> None:
         self._runs: dict[str, PersistedValidationRun] = {}
         self._baselines: dict[str, ValidationBaselineMetadata] = {}
+        self._replays: dict[str, ValidationReplayMetadata] = {}
 
     async def upsert_run(
         self,
@@ -508,6 +604,23 @@ class InMemoryValidationMetadataStore:
             return None
         return copy.deepcopy(baseline)
 
+    async def upsert_replay(self, replay: ValidationReplayMetadata) -> None:
+        self._replays[replay.replay_id] = copy.deepcopy(replay)
+
+    async def get_replay(
+        self,
+        *,
+        replay_id: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> ValidationReplayMetadata | None:
+        replay = self._replays.get(replay_id)
+        if replay is None:
+            return None
+        if replay.tenant_id != tenant_id or replay.user_id != user_id:
+            return None
+        return copy.deepcopy(replay)
+
 
 class SupabaseValidationMetadataStore:
     """Supabase-backed metadata persistence for validation runs and baselines."""
@@ -520,12 +633,14 @@ class SupabaseValidationMetadataStore:
         review_table: str = "validation_review_states",
         blob_refs_table: str = "validation_blob_refs",
         baselines_table: str = "validation_baselines",
+        replay_table: str = "validation_replays",
     ) -> None:
         self._client = supabase_client
         self._runs_table = runs_table
         self._review_table = review_table
         self._blob_refs_table = blob_refs_table
         self._baselines_table = baselines_table
+        self._replay_table = replay_table
 
     async def upsert_run(
         self,
@@ -629,6 +744,32 @@ class SupabaseValidationMetadataStore:
         if row is None:
             return None
         return _baseline_metadata_from_row(row)
+
+    async def upsert_replay(self, replay: ValidationReplayMetadata) -> None:
+        await self._upsert(
+            table=self._replay_table,
+            payload=_replay_row_from_metadata(replay),
+            on_conflict="replay_id",
+        )
+
+    async def get_replay(
+        self,
+        *,
+        replay_id: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> ValidationReplayMetadata | None:
+        row = await self._select_one(
+            table=self._replay_table,
+            filters={
+                "replay_id": replay_id,
+                "tenant_id": tenant_id,
+                "user_id": user_id,
+            },
+        )
+        if row is None:
+            return None
+        return _replay_metadata_from_row(row)
 
     async def _upsert(self, *, table: str, payload: Any, on_conflict: str) -> None:
         query = self._table(table).upsert(payload, on_conflict=on_conflict)
@@ -910,6 +1051,64 @@ def _baseline_metadata_from_row(row: dict[str, Any]) -> ValidationBaselineMetada
         name=_as_str(row, "name"),
         profile=cast(ValidationProfile, _as_str(row, "profile")),
         notes=_as_optional_str(row, "notes"),
+        created_at=_as_str(row, "created_at"),
+    )
+
+
+def _replay_row_from_metadata(metadata: ValidationReplayMetadata) -> dict[str, object]:
+    return {
+        "replay_id": metadata.replay_id,
+        "baseline_id": metadata.baseline_id,
+        "baseline_run_id": metadata.baseline_run_id,
+        "candidate_run_id": metadata.candidate_run_id,
+        "tenant_id": metadata.tenant_id,
+        "user_id": metadata.user_id,
+        "decision": metadata.decision,
+        "merge_blocked": metadata.merge_blocked,
+        "release_blocked": metadata.release_blocked,
+        "merge_gate_status": metadata.merge_gate_status,
+        "release_gate_status": metadata.release_gate_status,
+        "baseline_decision": metadata.baseline_decision,
+        "candidate_decision": metadata.candidate_decision,
+        "metric_drift_delta_pct": metadata.metric_drift_delta_pct,
+        "metric_drift_threshold_pct": metadata.metric_drift_threshold_pct,
+        "threshold_breached": metadata.threshold_breached,
+        "reasons": list(metadata.reasons),
+        "summary": metadata.summary,
+        "created_at": metadata.created_at,
+    }
+
+
+def _replay_metadata_from_row(row: dict[str, Any]) -> ValidationReplayMetadata:
+    raw_reasons = row.get("reasons")
+    if raw_reasons is None:
+        reasons: tuple[str, ...] = ()
+    elif isinstance(raw_reasons, list):
+        if not all(isinstance(item, str) for item in raw_reasons):
+            raise ValidationMetadataStoreError("Expected list[str] for reasons.")
+        reasons = tuple(raw_reasons)
+    else:
+        raise ValidationMetadataStoreError(f"Expected optional list for reasons, got {raw_reasons!r}.")
+
+    return ValidationReplayMetadata(
+        replay_id=_as_str(row, "replay_id"),
+        baseline_id=_as_str(row, "baseline_id"),
+        baseline_run_id=_as_str(row, "baseline_run_id"),
+        candidate_run_id=_as_str(row, "candidate_run_id"),
+        tenant_id=_as_str(row, "tenant_id"),
+        user_id=_as_str(row, "user_id"),
+        decision=cast(ValidationReplayDecision, _as_str(row, "decision")),
+        merge_blocked=_as_bool(row, "merge_blocked"),
+        release_blocked=_as_bool(row, "release_blocked"),
+        merge_gate_status=cast(ValidationReplayGateStatus, _as_str(row, "merge_gate_status")),
+        release_gate_status=cast(ValidationReplayGateStatus, _as_str(row, "release_gate_status")),
+        baseline_decision=cast(ValidationDecision, _as_str(row, "baseline_decision")),
+        candidate_decision=cast(ValidationDecision, _as_str(row, "candidate_decision")),
+        metric_drift_delta_pct=_as_float(row, "metric_drift_delta_pct"),
+        metric_drift_threshold_pct=_as_float(row, "metric_drift_threshold_pct"),
+        threshold_breached=_as_bool(row, "threshold_breached"),
+        reasons=reasons,
+        summary=_as_optional_str(row, "summary"),
         created_at=_as_str(row, "created_at"),
     )
 

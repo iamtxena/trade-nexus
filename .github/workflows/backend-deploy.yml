@@ -41,6 +41,9 @@ jobs:
           IMAGE_LATEST="${{ secrets.ACR_LOGIN_SERVER }}/${{ env.CONTAINER_APP }}:latest"
 
           docker build -t $IMAGE_TAG -t $IMAGE_LATEST .
+          docker run --rm $IMAGE_TAG \
+            python -m src.platform_api.validation.release_gate_check
+
           docker push $IMAGE_TAG
           docker push $IMAGE_LATEST
 

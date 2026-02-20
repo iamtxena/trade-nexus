@@ -1566,9 +1566,19 @@ paths:
                   id: valreplay-001
                   baselineId: valbase-001
                   candidateRunId: valrun-20260217-0099
-                  status: queued
-                  decision: unknown
-                  summary: Replay accepted for execution.
+                  status: completed
+                  decision: pass
+                  mergeBlocked: false
+                  releaseBlocked: false
+                  mergeGateStatus: pass
+                  releaseGateStatus: pass
+                  baselineDecision: pass
+                  candidateDecision: pass
+                  metricDriftDeltaPct: 0.18
+                  metricDriftThresholdPct: 0.5
+                  thresholdBreached: false
+                  reasons: []
+                  summary: Replay comparison passed without regression.
         '400':
           $ref: '#/components/responses/Error400'
         '401':
@@ -3168,7 +3178,24 @@ components:
 
     ValidationRegressionReplay:
       type: object
-      required: [id, baselineId, candidateRunId, status, decision]
+      required:
+        [
+          id,
+          baselineId,
+          candidateRunId,
+          status,
+          decision,
+          mergeBlocked,
+          releaseBlocked,
+          mergeGateStatus,
+          releaseGateStatus,
+          baselineDecision,
+          candidateDecision,
+          metricDriftDeltaPct,
+          metricDriftThresholdPct,
+          thresholdBreached,
+          reasons,
+        ]
       properties:
         id:
           type: string
@@ -3182,6 +3209,32 @@ components:
         decision:
           type: string
           enum: [pass, conditional_pass, fail, unknown]
+        mergeBlocked:
+          type: boolean
+        releaseBlocked:
+          type: boolean
+        mergeGateStatus:
+          type: string
+          enum: [pass, blocked]
+        releaseGateStatus:
+          type: string
+          enum: [pass, blocked]
+        baselineDecision:
+          $ref: '#/components/schemas/ValidationDecision'
+        candidateDecision:
+          $ref: '#/components/schemas/ValidationDecision'
+        metricDriftDeltaPct:
+          type: number
+          minimum: 0
+        metricDriftThresholdPct:
+          type: number
+          minimum: 0
+        thresholdBreached:
+          type: boolean
+        reasons:
+          type: array
+          items:
+            type: string
         summary:
           type: string
 

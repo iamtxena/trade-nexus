@@ -204,15 +204,28 @@ async function runBacktest(args: string[]) {
     process.exit(1);
   }
 
-  if (values['symbol-id'] && values.data && values['symbol-id'].trim() !== values.data.trim()) {
-    printError('Conflicting values for --symbol-id and --data. Use only one symbol identifier.');
-    process.exit(1);
+  if (values['symbol-id'] && values.data) {
+    const normalize = (v: string) =>
+      v
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+        .sort()
+        .join(',');
+    if (normalize(values['symbol-id']) !== normalize(values.data)) {
+      printError('Conflicting values for --symbol-id and --data. Use only one symbol identifier.');
+      process.exit(1);
+    }
   }
 
   const strategyId = values['strategy-id']?.trim() || values.id?.trim();
   const symbolId = values['symbol-id']?.trim() || values.data?.trim();
+  const dataIds = symbolId
+    ?.split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 
-  if (!strategyId || !symbolId || !values.start || !values.end) {
+  if (!strategyId || !dataIds || dataIds.length === 0 || !values.start || !values.end) {
     printError(
       'Required: --strategy-id <strategyId> (alias: --id) --symbol-id <dataId> (alias: --data) --start YYYY-MM-DD --end YYYY-MM-DD',
     );
@@ -239,10 +252,7 @@ async function runBacktest(args: string[]) {
   try {
     const { report_id } = await client.runBacktest({
       strategy_id: strategyId,
-      data_ids: symbolId
-        .split(',')
-        .map((value) => value.trim())
-        .filter((value) => value.length > 0),
+      data_ids: dataIds,
       start_date: values.start,
       end_date: values.end,
       simulation_parameters: {

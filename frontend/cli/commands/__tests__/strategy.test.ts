@@ -198,4 +198,47 @@ describe('strategy command backtest flags', () => {
     const errorOutput = consoleErrorSpy.mock.calls.map(([line]) => String(line)).join('\n');
     expect(errorOutput).toContain('Conflicting values for --symbol-id and --data');
   });
+
+  test('allows equivalent comma-separated symbol IDs with different whitespace', async () => {
+    const calls = mockSuccessfulBacktestFetch();
+    const { strategyCommand } = await import('../strategy');
+
+    await strategyCommand([
+      'backtest',
+      '--strategy-id',
+      'strat-1',
+      '--symbol-id',
+      'sym-1, sym-2',
+      '--data',
+      'sym-1,sym-2',
+      '--start',
+      '2025-01-01',
+      '--end',
+      '2025-02-01',
+    ]);
+
+    const runCall = calls.find((call) => call.url.includes('/api/v1/runner/run'));
+    expect(runCall).toBeDefined();
+  });
+
+  test('errors on empty symbol IDs after sanitization', async () => {
+    const { strategyCommand } = await import('../strategy');
+
+    await expect(
+      strategyCommand([
+        'backtest',
+        '--strategy-id',
+        'strat-1',
+        '--symbol-id',
+        ' , ',
+        '--start',
+        '2025-01-01',
+        '--end',
+        '2025-02-01',
+      ]),
+    ).rejects.toThrow('process.exit(1)');
+
+    const errorOutput = consoleErrorSpy.mock.calls.map(([line]) => String(line)).join('\n');
+    expect(errorOutput).toContain('Required:');
+  });
 });

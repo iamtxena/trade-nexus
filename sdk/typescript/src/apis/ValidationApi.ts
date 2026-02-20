@@ -18,16 +18,27 @@ import type {
   CreateValidationBaselineRequest,
   CreateValidationRegressionReplayRequest,
   CreateValidationRenderRequest,
+  CreateValidationReviewCommentRequest,
+  CreateValidationReviewDecisionRequest,
+  CreateValidationReviewRenderRequest,
   CreateValidationRunRequest,
   CreateValidationRunReviewRequest,
   ErrorResponse,
   ValidationArtifactResponse,
   ValidationBaselineResponse,
   ValidationRegressionReplayResponse,
+  ValidationRenderFormat,
   ValidationRenderResponse,
+  ValidationReviewCommentResponse,
+  ValidationReviewDecisionResponse,
+  ValidationReviewRenderResponse,
+  ValidationReviewRunDetailResponse,
+  ValidationReviewRunListResponse,
+  ValidationRunDecision,
   ValidationRunListResponse,
   ValidationRunResponse,
   ValidationRunReviewResponse,
+  ValidationRunStatus,
 } from '../models/index';
 import {
     CreateValidationBaselineRequestFromJSON,
@@ -36,6 +47,12 @@ import {
     CreateValidationRegressionReplayRequestToJSON,
     CreateValidationRenderRequestFromJSON,
     CreateValidationRenderRequestToJSON,
+    CreateValidationReviewCommentRequestFromJSON,
+    CreateValidationReviewCommentRequestToJSON,
+    CreateValidationReviewDecisionRequestFromJSON,
+    CreateValidationReviewDecisionRequestToJSON,
+    CreateValidationReviewRenderRequestFromJSON,
+    CreateValidationReviewRenderRequestToJSON,
     CreateValidationRunRequestFromJSON,
     CreateValidationRunRequestToJSON,
     CreateValidationRunReviewRequestFromJSON,
@@ -48,19 +65,56 @@ import {
     ValidationBaselineResponseToJSON,
     ValidationRegressionReplayResponseFromJSON,
     ValidationRegressionReplayResponseToJSON,
+    ValidationRenderFormatFromJSON,
+    ValidationRenderFormatToJSON,
     ValidationRenderResponseFromJSON,
     ValidationRenderResponseToJSON,
+    ValidationReviewCommentResponseFromJSON,
+    ValidationReviewCommentResponseToJSON,
+    ValidationReviewDecisionResponseFromJSON,
+    ValidationReviewDecisionResponseToJSON,
+    ValidationReviewRenderResponseFromJSON,
+    ValidationReviewRenderResponseToJSON,
+    ValidationReviewRunDetailResponseFromJSON,
+    ValidationReviewRunDetailResponseToJSON,
+    ValidationReviewRunListResponseFromJSON,
+    ValidationReviewRunListResponseToJSON,
+    ValidationRunDecisionFromJSON,
+    ValidationRunDecisionToJSON,
     ValidationRunListResponseFromJSON,
     ValidationRunListResponseToJSON,
     ValidationRunResponseFromJSON,
     ValidationRunResponseToJSON,
     ValidationRunReviewResponseFromJSON,
     ValidationRunReviewResponseToJSON,
+    ValidationRunStatusFromJSON,
+    ValidationRunStatusToJSON,
 } from '../models/index';
 
 export interface CreateValidationBaselineV2Request {
     idempotencyKey: string;
     createValidationBaselineRequest: CreateValidationBaselineRequest;
+    xRequestId?: string;
+}
+
+export interface CreateValidationReviewCommentV2Request {
+    runId: string;
+    idempotencyKey: string;
+    createValidationReviewCommentRequest: CreateValidationReviewCommentRequest;
+    xRequestId?: string;
+}
+
+export interface CreateValidationReviewDecisionV2Request {
+    runId: string;
+    idempotencyKey: string;
+    createValidationReviewDecisionRequest: CreateValidationReviewDecisionRequest;
+    xRequestId?: string;
+}
+
+export interface CreateValidationReviewRenderV2Request {
+    runId: string;
+    idempotencyKey: string;
+    createValidationReviewRenderRequest: CreateValidationReviewRenderRequest;
     xRequestId?: string;
 }
 
@@ -77,6 +131,17 @@ export interface CreateValidationRunV2Request {
     xRequestId?: string;
 }
 
+export interface GetValidationReviewRenderV2Request {
+    runId: string;
+    format: ValidationRenderFormat;
+    xRequestId?: string;
+}
+
+export interface GetValidationReviewRunV2Request {
+    runId: string;
+    xRequestId?: string;
+}
+
 export interface GetValidationRunArtifactV2Request {
     runId: string;
     xRequestId?: string;
@@ -85,6 +150,14 @@ export interface GetValidationRunArtifactV2Request {
 export interface GetValidationRunV2Request {
     runId: string;
     xRequestId?: string;
+}
+
+export interface ListValidationReviewRunsV2Request {
+    xRequestId?: string;
+    status?: ValidationRunStatus;
+    finalDecision?: ValidationRunDecision;
+    cursor?: string;
+    limit?: number;
 }
 
 export interface ListValidationRunsV2Request {
@@ -130,6 +203,60 @@ export interface ValidationApiInterface {
 
     /**
      * 
+     * @summary Append review comment to a validation run
+     * @param {string} runId 
+     * @param {string} idempotencyKey Required for idempotent write operations.
+     * @param {CreateValidationReviewCommentRequest} createValidationReviewCommentRequest 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    createValidationReviewCommentV2Raw(requestParameters: CreateValidationReviewCommentV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewCommentResponse>>;
+
+    /**
+     * Append review comment to a validation run
+     */
+    createValidationReviewCommentV2(requestParameters: CreateValidationReviewCommentV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewCommentResponse>;
+
+    /**
+     * 
+     * @summary Submit approval or rejection decision for a validation run
+     * @param {string} runId 
+     * @param {string} idempotencyKey Required for idempotent write operations.
+     * @param {CreateValidationReviewDecisionRequest} createValidationReviewDecisionRequest 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    createValidationReviewDecisionV2Raw(requestParameters: CreateValidationReviewDecisionV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewDecisionResponse>>;
+
+    /**
+     * Submit approval or rejection decision for a validation run
+     */
+    createValidationReviewDecisionV2(requestParameters: CreateValidationReviewDecisionV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewDecisionResponse>;
+
+    /**
+     * 
+     * @summary Trigger optional html/pdf review render artifact generation
+     * @param {string} runId 
+     * @param {string} idempotencyKey Required for idempotent write operations.
+     * @param {CreateValidationReviewRenderRequest} createValidationReviewRenderRequest 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    createValidationReviewRenderV2Raw(requestParameters: CreateValidationReviewRenderV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewRenderResponse>>;
+
+    /**
+     * Trigger optional html/pdf review render artifact generation
+     */
+    createValidationReviewRenderV2(requestParameters: CreateValidationReviewRenderV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewRenderResponse>;
+
+    /**
+     * 
      * @summary Create optional html/pdf validation render artifact
      * @param {string} runId 
      * @param {string} idempotencyKey Required for idempotent write operations.
@@ -165,6 +292,39 @@ export interface ValidationApiInterface {
 
     /**
      * 
+     * @summary Get review render status and download metadata
+     * @param {string} runId 
+     * @param {ValidationRenderFormat} format 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    getValidationReviewRenderV2Raw(requestParameters: GetValidationReviewRenderV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewRenderResponse>>;
+
+    /**
+     * Get review render status and download metadata
+     */
+    getValidationReviewRenderV2(requestParameters: GetValidationReviewRenderV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewRenderResponse>;
+
+    /**
+     * 
+     * @summary Get canonical JSON review artifact for a validation run
+     * @param {string} runId 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    getValidationReviewRunV2Raw(requestParameters: GetValidationReviewRunV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewRunDetailResponse>>;
+
+    /**
+     * Get canonical JSON review artifact for a validation run
+     */
+    getValidationReviewRunV2(requestParameters: GetValidationReviewRunV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewRunDetailResponse>;
+
+    /**
+     * 
      * @summary Get validation artifact payload
      * @param {string} runId 
      * @param {string} [xRequestId] Caller-provided request id for trace correlation.
@@ -194,6 +354,25 @@ export interface ValidationApiInterface {
      * Get validation run status
      */
     getValidationRunV2(requestParameters: GetValidationRunV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationRunResponse>;
+
+    /**
+     * 
+     * @summary List validation runs for trader review web
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {ValidationRunStatus} [status] 
+     * @param {ValidationRunDecision} [finalDecision] 
+     * @param {string} [cursor] 
+     * @param {number} [limit] 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    listValidationReviewRunsV2Raw(requestParameters: ListValidationReviewRunsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewRunListResponse>>;
+
+    /**
+     * List validation runs for trader review web
+     */
+    listValidationReviewRunsV2(requestParameters: ListValidationReviewRunsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewRunListResponse>;
 
     /**
      * 
@@ -315,6 +494,228 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
      */
     async createValidationBaselineV2(requestParameters: CreateValidationBaselineV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationBaselineResponse> {
         const response = await this.createValidationBaselineV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Append review comment to a validation run
+     */
+    async createValidationReviewCommentV2Raw(requestParameters: CreateValidationReviewCommentV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewCommentResponse>> {
+        if (requestParameters['runId'] == null) {
+            throw new runtime.RequiredError(
+                'runId',
+                'Required parameter "runId" was null or undefined when calling createValidationReviewCommentV2().'
+            );
+        }
+
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling createValidationReviewCommentV2().'
+            );
+        }
+
+        if (requestParameters['createValidationReviewCommentRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createValidationReviewCommentRequest',
+                'Required parameter "createValidationReviewCommentRequest" was null or undefined when calling createValidationReviewCommentV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-review/runs/{runId}/comments`;
+        urlPath = urlPath.replace(`{${"runId"}}`, encodeURIComponent(String(requestParameters['runId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateValidationReviewCommentRequestToJSON(requestParameters['createValidationReviewCommentRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationReviewCommentResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Append review comment to a validation run
+     */
+    async createValidationReviewCommentV2(requestParameters: CreateValidationReviewCommentV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewCommentResponse> {
+        const response = await this.createValidationReviewCommentV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Submit approval or rejection decision for a validation run
+     */
+    async createValidationReviewDecisionV2Raw(requestParameters: CreateValidationReviewDecisionV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewDecisionResponse>> {
+        if (requestParameters['runId'] == null) {
+            throw new runtime.RequiredError(
+                'runId',
+                'Required parameter "runId" was null or undefined when calling createValidationReviewDecisionV2().'
+            );
+        }
+
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling createValidationReviewDecisionV2().'
+            );
+        }
+
+        if (requestParameters['createValidationReviewDecisionRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createValidationReviewDecisionRequest',
+                'Required parameter "createValidationReviewDecisionRequest" was null or undefined when calling createValidationReviewDecisionV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-review/runs/{runId}/decisions`;
+        urlPath = urlPath.replace(`{${"runId"}}`, encodeURIComponent(String(requestParameters['runId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateValidationReviewDecisionRequestToJSON(requestParameters['createValidationReviewDecisionRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationReviewDecisionResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Submit approval or rejection decision for a validation run
+     */
+    async createValidationReviewDecisionV2(requestParameters: CreateValidationReviewDecisionV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewDecisionResponse> {
+        const response = await this.createValidationReviewDecisionV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Trigger optional html/pdf review render artifact generation
+     */
+    async createValidationReviewRenderV2Raw(requestParameters: CreateValidationReviewRenderV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewRenderResponse>> {
+        if (requestParameters['runId'] == null) {
+            throw new runtime.RequiredError(
+                'runId',
+                'Required parameter "runId" was null or undefined when calling createValidationReviewRenderV2().'
+            );
+        }
+
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling createValidationReviewRenderV2().'
+            );
+        }
+
+        if (requestParameters['createValidationReviewRenderRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createValidationReviewRenderRequest',
+                'Required parameter "createValidationReviewRenderRequest" was null or undefined when calling createValidationReviewRenderV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-review/runs/{runId}/renders`;
+        urlPath = urlPath.replace(`{${"runId"}}`, encodeURIComponent(String(requestParameters['runId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateValidationReviewRenderRequestToJSON(requestParameters['createValidationReviewRenderRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationReviewRenderResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Trigger optional html/pdf review render artifact generation
+     */
+    async createValidationReviewRenderV2(requestParameters: CreateValidationReviewRenderV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewRenderResponse> {
+        const response = await this.createValidationReviewRenderV2Raw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -459,6 +860,120 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
     }
 
     /**
+     * Get review render status and download metadata
+     */
+    async getValidationReviewRenderV2Raw(requestParameters: GetValidationReviewRenderV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewRenderResponse>> {
+        if (requestParameters['runId'] == null) {
+            throw new runtime.RequiredError(
+                'runId',
+                'Required parameter "runId" was null or undefined when calling getValidationReviewRenderV2().'
+            );
+        }
+
+        if (requestParameters['format'] == null) {
+            throw new runtime.RequiredError(
+                'format',
+                'Required parameter "format" was null or undefined when calling getValidationReviewRenderV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-review/runs/{runId}/renders/{format}`;
+        urlPath = urlPath.replace(`{${"runId"}}`, encodeURIComponent(String(requestParameters['runId'])));
+        urlPath = urlPath.replace(`{${"format"}}`, encodeURIComponent(String(requestParameters['format'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationReviewRenderResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Get review render status and download metadata
+     */
+    async getValidationReviewRenderV2(requestParameters: GetValidationReviewRenderV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewRenderResponse> {
+        const response = await this.getValidationReviewRenderV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Get canonical JSON review artifact for a validation run
+     */
+    async getValidationReviewRunV2Raw(requestParameters: GetValidationReviewRunV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewRunDetailResponse>> {
+        if (requestParameters['runId'] == null) {
+            throw new runtime.RequiredError(
+                'runId',
+                'Required parameter "runId" was null or undefined when calling getValidationReviewRunV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-review/runs/{runId}`;
+        urlPath = urlPath.replace(`{${"runId"}}`, encodeURIComponent(String(requestParameters['runId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationReviewRunDetailResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Get canonical JSON review artifact for a validation run
+     */
+    async getValidationReviewRunV2(requestParameters: GetValidationReviewRunV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewRunDetailResponse> {
+        const response = await this.getValidationReviewRunV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Get validation artifact payload
      */
     async getValidationRunArtifactV2Raw(requestParameters: GetValidationRunArtifactV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationArtifactResponse>> {
@@ -561,6 +1076,67 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
      */
     async getValidationRunV2(requestParameters: GetValidationRunV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationRunResponse> {
         const response = await this.getValidationRunV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * List validation runs for trader review web
+     */
+    async listValidationReviewRunsV2Raw(requestParameters: ListValidationReviewRunsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewRunListResponse>> {
+        const queryParameters: any = {};
+
+        if (requestParameters['status'] != null) {
+            queryParameters['status'] = requestParameters['status'];
+        }
+
+        if (requestParameters['finalDecision'] != null) {
+            queryParameters['finalDecision'] = requestParameters['finalDecision'];
+        }
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-review/runs`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationReviewRunListResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * List validation runs for trader review web
+     */
+    async listValidationReviewRunsV2(requestParameters: ListValidationReviewRunsV2Request = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewRunListResponse> {
+        const response = await this.listValidationReviewRunsV2Raw(requestParameters, initOverrides);
         return await response.value();
     }
 

@@ -1535,6 +1535,347 @@ paths:
         '404':
           $ref: '#/components/responses/Error404'
 
+  /v2/validation-review/runs:
+    get:
+      tags: [Validation]
+      summary: List validation runs for trader review web
+      operationId: listValidationReviewRunsV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ValidationRunStatus'
+        - name: finalDecision
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ValidationRunDecision'
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        '200':
+          description: Validation review runs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationReviewRunListResponse'
+              example:
+                requestId: req-validation-review-list-001
+                items:
+                  - id: valrun-20260217-0001
+                    status: completed
+                    profile: STANDARD
+                    finalDecision: conditional_pass
+                    traderReviewStatus: requested
+                    commentCount: 1
+                    pendingDecision: true
+                    createdAt: '2026-02-17T10:30:00Z'
+                    updatedAt: '2026-02-17T10:35:00Z'
+                nextCursor: null
+        '401':
+          $ref: '#/components/responses/Error401'
+
+  /v2/validation-review/runs/{runId}:
+    get:
+      tags: [Validation]
+      summary: Get canonical JSON review artifact for a validation run
+      operationId: getValidationReviewRunV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/ValidationRunId'
+      responses:
+        '200':
+          description: Canonical validation review artifact payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationReviewRunDetailResponse'
+              example:
+                requestId: req-validation-review-run-001
+                artifact:
+                  schemaVersion: validation-review.v1
+                  run:
+                    id: valrun-20260217-0001
+                    status: completed
+                    profile: STANDARD
+                    schemaVersion: validation-run.v1
+                    finalDecision: conditional_pass
+                    createdAt: '2026-02-17T10:30:00Z'
+                    updatedAt: '2026-02-17T10:40:00Z'
+                  artifact:
+                    schemaVersion: validation-run.v1
+                    runId: valrun-20260217-0001
+                    createdAt: '2026-02-17T10:30:00Z'
+                    requestId: req-validation-run-001
+                    tenantId: tenant-001
+                    userId: user-001
+                    strategyRef:
+                      strategyId: strat-001
+                      provider: lona
+                      providerRefId: lona-strategy-123
+                    inputs:
+                      prompt: Build zig-zag strategy for BTC 1h with trend filter
+                      requestedIndicators: [zigzag, ema]
+                      datasetIds: [dataset-btc-1h-2025]
+                      backtestReportRef: blob://validation/valrun-20260217-0001/backtest-report.json
+                    outputs:
+                      strategyCodeRef: blob://validation/valrun-20260217-0001/strategy.py
+                      backtestReportRef: blob://validation/valrun-20260217-0001/backtest-report.json
+                      tradesRef: blob://validation/valrun-20260217-0001/trades.json
+                      executionLogsRef: blob://validation/valrun-20260217-0001/execution.log
+                      chartPayloadRef: blob://validation/valrun-20260217-0001/chart-payload.json
+                    deterministicChecks:
+                      indicatorFidelity:
+                        status: pass
+                        missingIndicators: []
+                      tradeCoherence:
+                        status: pass
+                        violations: []
+                      metricConsistency:
+                        status: pass
+                        driftPct: 0.8
+                    agentReview:
+                      status: pass
+                      summary: No indicator/render drift detected.
+                      findings: []
+                    traderReview:
+                      required: true
+                      status: requested
+                      comments: []
+                    policy:
+                      profile: STANDARD
+                      blockMergeOnFail: true
+                      blockReleaseOnFail: true
+                      blockMergeOnAgentFail: true
+                      blockReleaseOnAgentFail: false
+                      requireTraderReview: true
+                      hardFailOnMissingIndicators: true
+                      failClosedOnEvidenceUnavailable: true
+                    finalDecision: conditional_pass
+                  comments:
+                    - id: valcomment-001
+                      runId: valrun-20260217-0001
+                      tenantId: tenant-001
+                      userId: user-001
+                      body: Investigated drawdown drift; acceptable with tighter controls.
+                      evidenceRefs:
+                        - blob://validation/valrun-20260217-0001/backtest-report.json
+                      createdAt: '2026-02-17T10:36:00Z'
+                  decision:
+                    runId: valrun-20260217-0001
+                    action: approve
+                    decision: conditional_pass
+                    reason: Approved with caution and tighter production risk limits.
+                    evidenceRefs:
+                      - blob://validation/valrun-20260217-0001/backtest-report.json
+                    decidedByTenantId: tenant-001
+                    decidedByUserId: user-001
+                    createdAt: '2026-02-17T10:40:00Z'
+                  renders:
+                    - runId: valrun-20260217-0001
+                      format: html
+                      status: completed
+                      artifactRef: blob://validation/valrun-20260217-0001/review.html
+                      downloadUrl: https://cdn.trade-nexus.io/validation/valrun-20260217-0001/review.html
+                      checksumSha256: 5d41402abc4b2a76b9719d911017c592ad8846f8d1b522f11f2e6f64044f16f8
+                      expiresAt: '2026-02-17T11:40:00Z'
+                      requestedAt: '2026-02-17T10:37:00Z'
+                      updatedAt: '2026-02-17T10:38:00Z'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
+  /v2/validation-review/runs/{runId}/comments:
+    post:
+      tags: [Validation]
+      summary: Append review comment to a validation run
+      operationId: createValidationReviewCommentV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/ValidationRunId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValidationReviewCommentRequest'
+            example:
+              body: Indicator fidelity is acceptable, but monitor drawdown during rollout.
+              evidenceRefs:
+                - blob://validation/valrun-20260217-0001/backtest-report.json
+      responses:
+        '202':
+          description: Review comment accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationReviewCommentResponse'
+              example:
+                requestId: req-validation-review-comment-001
+                runId: valrun-20260217-0001
+                commentAccepted: true
+                comment:
+                  id: valcomment-001
+                  runId: valrun-20260217-0001
+                  tenantId: tenant-001
+                  userId: user-001
+                  body: Indicator fidelity is acceptable, but monitor drawdown during rollout.
+                  evidenceRefs:
+                    - blob://validation/valrun-20260217-0001/backtest-report.json
+                  createdAt: '2026-02-17T10:36:00Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+
+  /v2/validation-review/runs/{runId}/decisions:
+    post:
+      tags: [Validation]
+      summary: Submit approval or rejection decision for a validation run
+      operationId: createValidationReviewDecisionV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/ValidationRunId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValidationReviewDecisionRequest'
+            example:
+              action: approve
+              decision: conditional_pass
+              reason: Approved with caution and tighter production risk limits.
+              evidenceRefs:
+                - blob://validation/valrun-20260217-0001/backtest-report.json
+      responses:
+        '202':
+          description: Review decision accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationReviewDecisionResponse'
+              example:
+                requestId: req-validation-review-decision-001
+                runId: valrun-20260217-0001
+                decisionAccepted: true
+                decision:
+                  runId: valrun-20260217-0001
+                  action: approve
+                  decision: conditional_pass
+                  reason: Approved with caution and tighter production risk limits.
+                  evidenceRefs:
+                    - blob://validation/valrun-20260217-0001/backtest-report.json
+                  decidedByTenantId: tenant-001
+                  decidedByUserId: user-001
+                  createdAt: '2026-02-17T10:40:00Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+
+  /v2/validation-review/runs/{runId}/renders:
+    post:
+      tags: [Validation]
+      summary: Trigger optional html/pdf review render artifact generation
+      operationId: createValidationReviewRenderV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/ValidationRunId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValidationReviewRenderRequest'
+            example:
+              format: html
+      responses:
+        '202':
+          description: Review render accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationReviewRenderResponse'
+              example:
+                requestId: req-validation-review-render-001
+                render:
+                  runId: valrun-20260217-0001
+                  format: html
+                  status: queued
+                  artifactRef: null
+                  downloadUrl: null
+                  checksumSha256: null
+                  expiresAt: null
+                  requestedAt: '2026-02-17T10:37:00Z'
+                  updatedAt: '2026-02-17T10:37:00Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+
+  /v2/validation-review/runs/{runId}/renders/{format}:
+    get:
+      tags: [Validation]
+      summary: Get review render status and download metadata
+      operationId: getValidationReviewRenderV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/ValidationRunId'
+        - $ref: '#/components/parameters/ValidationRenderFormatPath'
+      responses:
+        '200':
+          description: Review render status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationReviewRenderResponse'
+              example:
+                requestId: req-validation-review-render-get-001
+                render:
+                  runId: valrun-20260217-0001
+                  format: html
+                  status: completed
+                  artifactRef: blob://validation/valrun-20260217-0001/review.html
+                  downloadUrl: https://cdn.trade-nexus.io/validation/valrun-20260217-0001/review.html
+                  checksumSha256: 5d41402abc4b2a76b9719d911017c592ad8846f8d1b522f11f2e6f64044f16f8
+                  expiresAt: '2026-02-17T11:40:00Z'
+                  requestedAt: '2026-02-17T10:37:00Z'
+                  updatedAt: '2026-02-17T10:38:00Z'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '404':
+          $ref: '#/components/responses/Error404'
+
   /v2/validation-baselines:
     post:
       tags: [Validation]
@@ -1708,6 +2049,12 @@ components:
       required: true
       schema:
         type: string
+    ValidationRenderFormatPath:
+      name: format
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ValidationRenderFormat'
 
   responses:
     Error400:
@@ -3174,6 +3521,234 @@ components:
           type: string
         render:
           $ref: '#/components/schemas/ValidationRenderJob'
+
+    ValidationReviewRunSummary:
+      type: object
+      required: [id, status, profile, finalDecision, traderReviewStatus, commentCount, pendingDecision, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        status:
+          $ref: '#/components/schemas/ValidationRunStatus'
+        profile:
+          $ref: '#/components/schemas/ValidationProfile'
+        finalDecision:
+          $ref: '#/components/schemas/ValidationRunDecision'
+        traderReviewStatus:
+          $ref: '#/components/schemas/ValidationTraderReviewStatus'
+        commentCount:
+          type: integer
+          minimum: 0
+        pendingDecision:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ValidationReviewRunListResponse:
+      type: object
+      required: [requestId, items]
+      properties:
+        requestId:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationReviewRunSummary'
+        nextCursor:
+          type: string
+          nullable: true
+
+    ValidationReviewComment:
+      type: object
+      required: [id, runId, tenantId, userId, body, evidenceRefs, createdAt]
+      properties:
+        id:
+          type: string
+        runId:
+          type: string
+        tenantId:
+          type: string
+        userId:
+          type: string
+        body:
+          type: string
+          minLength: 1
+        evidenceRefs:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateValidationReviewCommentRequest:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          minLength: 1
+        evidenceRefs:
+          type: array
+          items:
+            type: string
+
+    ValidationReviewCommentResponse:
+      type: object
+      required: [requestId, runId, commentAccepted, comment]
+      properties:
+        requestId:
+          type: string
+        runId:
+          type: string
+        commentAccepted:
+          type: boolean
+        comment:
+          $ref: '#/components/schemas/ValidationReviewComment'
+
+    ValidationReviewDecisionAction:
+      type: string
+      enum: [approve, reject]
+
+    ValidationReviewDecision:
+      type: object
+      required: [runId, action, decision, reason, evidenceRefs, decidedByTenantId, decidedByUserId, createdAt]
+      properties:
+        runId:
+          type: string
+        action:
+          $ref: '#/components/schemas/ValidationReviewDecisionAction'
+        decision:
+          $ref: '#/components/schemas/ValidationDecision'
+        reason:
+          type: string
+          minLength: 1
+        evidenceRefs:
+          type: array
+          items:
+            type: string
+        decidedByTenantId:
+          type: string
+        decidedByUserId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateValidationReviewDecisionRequest:
+      type: object
+      required: [action, decision, reason]
+      properties:
+        action:
+          $ref: '#/components/schemas/ValidationReviewDecisionAction'
+        decision:
+          $ref: '#/components/schemas/ValidationDecision'
+        reason:
+          type: string
+          minLength: 1
+        evidenceRefs:
+          type: array
+          items:
+            type: string
+
+    ValidationReviewDecisionResponse:
+      type: object
+      required: [requestId, runId, decisionAccepted, decision]
+      properties:
+        requestId:
+          type: string
+        runId:
+          type: string
+        decisionAccepted:
+          type: boolean
+        decision:
+          $ref: '#/components/schemas/ValidationReviewDecision'
+
+    CreateValidationReviewRenderRequest:
+      type: object
+      required: [format]
+      properties:
+        format:
+          $ref: '#/components/schemas/ValidationRenderFormat'
+
+    ValidationReviewRenderJob:
+      type: object
+      required: [runId, format, status, requestedAt, updatedAt]
+      properties:
+        runId:
+          type: string
+        format:
+          $ref: '#/components/schemas/ValidationRenderFormat'
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        artifactRef:
+          type: string
+          nullable: true
+        downloadUrl:
+          type: string
+          nullable: true
+        checksumSha256:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        requestedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ValidationReviewRenderResponse:
+      type: object
+      required: [requestId, render]
+      properties:
+        requestId:
+          type: string
+        render:
+          $ref: '#/components/schemas/ValidationReviewRenderJob'
+
+    ValidationReviewArtifact:
+      type: object
+      required: [schemaVersion, run, artifact, comments, renders]
+      properties:
+        schemaVersion:
+          type: string
+          enum: [validation-review.v1]
+        run:
+          $ref: '#/components/schemas/ValidationRun'
+        artifact:
+          $ref: '#/components/schemas/ValidationRunArtifact'
+        comments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationReviewComment'
+        decision:
+          type: object
+          additionalProperties: false
+          allOf:
+            - $ref: '#/components/schemas/ValidationReviewDecision'
+          nullable: true
+        renders:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationReviewRenderJob'
+
+    ValidationReviewRunDetailResponse:
+      type: object
+      required: [requestId, artifact]
+      properties:
+        requestId:
+          type: string
+        artifact:
+          $ref: '#/components/schemas/ValidationReviewArtifact'
 
     CreateValidationBaselineRequest:
       type: object

@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 
-
 HEADERS = {
     "Authorization": "Bearer test-token",
     "X-API-Key": "test-key",
@@ -32,6 +31,12 @@ def test_openapi_v2_routes_are_registered() -> None:
         ("GET", "/v2/validation-runs/{runId}/artifact"),
         ("POST", "/v2/validation-runs/{runId}/review"),
         ("POST", "/v2/validation-runs/{runId}/render"),
+        ("GET", "/v2/validation-review/runs"),
+        ("GET", "/v2/validation-review/runs/{runId}"),
+        ("POST", "/v2/validation-review/runs/{runId}/comments"),
+        ("POST", "/v2/validation-review/runs/{runId}/decisions"),
+        ("POST", "/v2/validation-review/runs/{runId}/renders"),
+        ("GET", "/v2/validation-review/runs/{runId}/renders/{format}"),
         ("POST", "/v2/validation-baselines"),
         ("POST", "/v2/validation-regressions/replay"),
     }
@@ -151,6 +156,44 @@ def test_openapi_v2_runtime_status_codes() -> None:
         ).status_code
         == 202
     )
+    review_list = client.get("/v2/validation-review/runs", headers=HEADERS)
+    assert review_list.status_code == 200
+    assert any(item["id"] == run_id for item in review_list.json().get("items", []))
+
+    assert client.get(f"/v2/validation-review/runs/{run_id}", headers=HEADERS).status_code == 200
+    assert (
+        client.post(
+            f"/v2/validation-review/runs/{run_id}/comments",
+            headers={**HEADERS, "Idempotency-Key": "idem-runtime-v2-validation-comment-001"},
+            json={
+                "body": "Review comment from runtime contract check.",
+                "evidenceRefs": ["blob://validation/runtime/review-comment.json"],
+            },
+        ).status_code
+        == 202
+    )
+    assert (
+        client.post(
+            f"/v2/validation-review/runs/{run_id}/decisions",
+            headers={**HEADERS, "Idempotency-Key": "idem-runtime-v2-validation-decision-001"},
+            json={
+                "action": "approve",
+                "decision": "conditional_pass",
+                "reason": "Approved with runtime contract safeguards.",
+                "evidenceRefs": ["blob://validation/runtime/review-decision.json"],
+            },
+        ).status_code
+        == 202
+    )
+    assert (
+        client.post(
+            f"/v2/validation-review/runs/{run_id}/renders",
+            headers={**HEADERS, "Idempotency-Key": "idem-runtime-v2-validation-review-render-001"},
+            json={"format": "html"},
+        ).status_code
+        == 202
+    )
+    assert client.get(f"/v2/validation-review/runs/{run_id}/renders/html", headers=HEADERS).status_code == 200
 
     create_baseline = client.post(
         "/v2/validation-baselines",
@@ -223,6 +266,31 @@ def test_validation_v2_write_routes_require_idempotency_key_header() -> None:
         json={"format": "html"},
     )
     assert render.status_code == 422
+
+    review_comment = client.post(
+        "/v2/validation-review/runs/valrun-missing/comments",
+        headers=HEADERS,
+        json={"body": "Missing idempotency key should fail."},
+    )
+    assert review_comment.status_code == 422
+
+    review_decision = client.post(
+        "/v2/validation-review/runs/valrun-missing/decisions",
+        headers=HEADERS,
+        json={
+            "action": "reject",
+            "decision": "fail",
+            "reason": "Missing idempotency key should fail.",
+        },
+    )
+    assert review_decision.status_code == 422
+
+    review_render = client.post(
+        "/v2/validation-review/runs/valrun-missing/renders",
+        headers=HEADERS,
+        json={"format": "html"},
+    )
+    assert review_render.status_code == 422
 
     baseline = client.post(
         "/v2/validation-baselines",

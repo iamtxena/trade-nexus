@@ -103,6 +103,35 @@ def main() -> int:
     require_contains(portal_package, "\"check:stale\"", errors)
     require_contains(portal_package, "npm run check:stale", errors)
 
+    reviewer_doc = ROOT / "docs" / "portal" / "platform" / "validation-reviewer-workflow.md"
+    for token in [
+        "/validation",
+        "POST /v2/validation-runs",
+        "POST /v2/validation-runs/{runId}/review",
+        "#288",
+    ]:
+        require_contains(reviewer_doc, token, errors)
+
+    validation_api_doc = ROOT / "docs" / "portal" / "api" / "validation-review-api-semantics.md"
+    for token in [
+        "docs/architecture/specs/platform-api.openapi.yaml",
+        "createValidationRunV2",
+        "submitValidationRunReviewV2",
+        "Idempotency-Key",
+    ]:
+        require_contains(validation_api_doc, token, errors)
+
+    incident_doc = (
+        ROOT / "docs" / "portal" / "operations" / "validation-review-incident-runbook.md"
+    )
+    for token in [
+        "render_failure | auth_failure | regression_failure",
+        "Cursor and Greptile findings",
+        "contracts-governance=<status>",
+        "#288",
+    ]:
+        require_contains(incident_doc, token, errors)
+
     generated_ref = ROOT / "docs" / "portal-site" / "static" / "api" / "platform-api.html"
     if not generated_ref.exists():
         errors.append(f"Missing generated API reference: {generated_ref}")

@@ -9,7 +9,6 @@ import {
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -134,8 +133,6 @@ function decisionToBadgeVariant(decision: ValidationRunSummary['finalDecision'])
 }
 
 export default function ValidationPage() {
-  const searchParams = useSearchParams();
-  const deepLinkedRunId = searchParams.get('runId')?.trim() ?? '';
   const [hasConsumedDeepLinkRunId, setHasConsumedDeepLinkRunId] = useState(false);
   const [runLookupId, setRunLookupId] = useState('');
   const [runList, setRunList] = useState<ValidationRunSummary[]>([]);
@@ -290,6 +287,7 @@ export default function ValidationPage() {
     }
 
     setHasConsumedDeepLinkRunId(true);
+    const deepLinkedRunId = new URLSearchParams(window.location.search).get('runId')?.trim() ?? '';
     if (!deepLinkedRunId) {
       return;
     }
@@ -299,7 +297,7 @@ export default function ValidationPage() {
       clearNotice: false,
       successNotice: `Loaded validation run ${deepLinkedRunId} from URL.`,
     });
-  }, [deepLinkedRunId, hasConsumedDeepLinkRunId, loadRunById]);
+  }, [hasConsumedDeepLinkRunId, loadRunById]);
 
   async function handleLoadRun(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -431,11 +431,14 @@ export class LonaClient {
     const lines = csv.trim().split('\n');
     if (lines.length < 2) return [];
 
-    // Skip header row
+    // Skip header row; handle quoted CSV fields
     return lines.slice(1).map((line) => {
-      const [timestamp, open, high, low, close, volume] = line.split(',');
+      const fields = line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g) ?? [];
+      const [timestamp, open, high, low, close, volume] = fields.map((f) =>
+        f.replace(/^"|"$/g, '').trim(),
+      );
       return {
-        timestamp: timestamp.trim(),
+        timestamp,
         open: Number(open),
         high: Number(high),
         low: Number(low),

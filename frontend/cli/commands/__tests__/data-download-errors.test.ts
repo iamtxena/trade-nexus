@@ -142,12 +142,12 @@ describe('data download improved 404 errors', () => {
     } catch (error) {
       expect((error as Error).message).toBe('process.exit(1)');
       const rendered = consoleErrorSpy.mock.calls.map(([arg]: [unknown]) => String(arg)).join(' ');
-      // Should show the actionable 404 message
-      expect(rendered).toContain('not found');
+      // Non-Binance 404: passes through the Lona error message directly
+      expect(rendered).toContain('404');
     }
   });
 
-  test('download 404 error message suggests checking symbol and date range', async () => {
+  test('download 404 error message preserves Lona error context', async () => {
     fetchMock = mock((url: string, options?: RequestInit) => {
       const method = options?.method ?? 'GET';
       // Binance succeeds
@@ -187,8 +187,8 @@ describe('data download improved 404 errors', () => {
     } catch (error) {
       expect((error as Error).message).toBe('process.exit(1)');
       const rendered = consoleErrorSpy.mock.calls.map(([arg]: [unknown]) => String(arg)).join(' ');
-      // Should show actionable message about symbol/date range
-      expect(rendered).toContain('Symbol not found');
+      // Non-Binance Lona 404: preserves the original error (not Binance hint)
+      expect(rendered).toContain('Not Found');
     }
   });
 });

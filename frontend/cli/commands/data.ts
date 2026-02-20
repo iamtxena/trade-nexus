@@ -172,10 +172,14 @@ async function downloadData(args: string[]) {
     spin.stop();
     if (error instanceof LonaClientError) {
       const msg = error.message;
-      if (error.statusCode === 404) {
+      const isBinanceError =
+        msg.includes('Binance') || msg.includes('klines') || msg.includes('candle');
+      if (error.statusCode === 404 && isBinanceError) {
         printError(
-          `Symbol not found. Ensure the symbol '${values.symbol}' exists on Binance, verify the date range is valid, or try a shorter period.`,
+          `Symbol not found on Binance. Ensure '${values.symbol}' is a valid Binance symbol, verify the date range, or try a shorter period.`,
         );
+      } else if (error.statusCode === 404) {
+        printError(msg);
       } else if (error.statusCode === 400 || msg.includes('not found on Binance')) {
         printError(msg);
         console.log(
@@ -236,9 +240,7 @@ async function exportSymbolData(args: string[]) {
   } catch (error) {
     spin.stop();
     if (error instanceof LonaClientError && error.statusCode === 404) {
-      printError(
-        `Symbol '${values.id}' not found. Run "nexus data list" to see available symbols.`,
-      );
+      printError(error.message);
     } else {
       printError(error instanceof Error ? error.message : String(error));
     }

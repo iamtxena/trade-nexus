@@ -264,7 +264,8 @@ describe('data export command', () => {
     } catch (error) {
       expect((error as Error).message).toBe('process.exit(1)');
       const rendered = consoleErrorSpy.mock.calls.map(([arg]: [unknown]) => String(arg)).join(' ');
-      expect(rendered).toContain('not found');
+      // Now preserves the original LonaClientError message
+      expect(rendered).toContain('404');
     }
   });
 

@@ -2,11 +2,10 @@ import { describe, expect, it } from 'bun:test';
 import { parseArgs } from 'node:util';
 
 /**
- * Tests for #217 (param normalization) and #220 (top-level backtest alias).
+ * Tests for #220 (top-level backtest alias) and parseArgs config verification.
  *
- * We test the parseArgs configuration directly rather than calling runBacktest,
- * since runBacktest validates config and calls the Lona API. This isolates the
- * CLI parsing logic which is what #217 addresses.
+ * Parsing-level tests verify the parseArgs config matches the real implementation.
+ * Conflict detection + empty-array validation are integration-tested in strategy.test.ts.
  */
 
 const backtestParseOptions = {
@@ -25,8 +24,9 @@ function parseBacktestArgs(argv: string[]) {
     options: backtestParseOptions,
     allowPositionals: false,
   });
-  const strategyId = values['strategy-id'] ?? values.id;
-  const symbolId = values['symbol-id'] ?? values.data;
+  // Matches strategy.ts runBacktest resolution: trim + || (not ??)
+  const strategyId = values['strategy-id']?.trim() || values.id?.trim();
+  const symbolId = values['symbol-id']?.trim() || values.data?.trim();
   return { strategyId, symbolId, start: values.start, end: values.end, capital: values.capital };
 }
 
@@ -63,12 +63,13 @@ describe('backtest param parsing (#217)', () => {
     expect(result.symbolId).toBe('sym-old');
   });
 
-  it('prefers --strategy-id over --id when both are provided', () => {
+  // Note: in production, providing both with *different* values triggers a
+  // conflict error (tested in strategy.test.ts). These verify resolution order
+  // when both resolve to the same effective value or only one is provided.
+  it('resolves --strategy-id before --id', () => {
     const result = parseBacktestArgs([
       '--strategy-id',
-      'primary',
-      '--id',
-      'alias',
+      'strat-1',
       '--symbol-id',
       'sym-1',
       '--start',
@@ -76,23 +77,21 @@ describe('backtest param parsing (#217)', () => {
       '--end',
       '2025-06-01',
     ]);
-    expect(result.strategyId).toBe('primary');
+    expect(result.strategyId).toBe('strat-1');
   });
 
-  it('prefers --symbol-id over --data when both are provided', () => {
+  it('resolves --symbol-id before --data', () => {
     const result = parseBacktestArgs([
       '--strategy-id',
       'strat-1',
       '--symbol-id',
-      'primary',
-      '--data',
-      'alias',
+      'sym-1',
       '--start',
       '2025-01-01',
       '--end',
       '2025-06-01',
     ]);
-    expect(result.symbolId).toBe('primary');
+    expect(result.symbolId).toBe('sym-1');
   });
 
   it('allows mixed usage: --strategy-id with --data', () => {

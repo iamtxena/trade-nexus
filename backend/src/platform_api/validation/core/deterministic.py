@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from src.platform_api.state_store import utc_now
+from src.platform_api.validation.core.agent_review import ValidationAgentReviewService
 
 ValidationCheckStatus = Literal["pass", "fail"]
 ValidationDecision = Literal["pass", "fail"]
@@ -19,25 +20,9 @@ _PROFILE_METRIC_TOLERANCE_PCT: dict[ValidationProfile, float] = {
     "EXPERT": 0.25,
 }
 
-_PROFILE_AGENT_REVIEW_BUDGETS: dict[ValidationProfile, dict[str, float | int]] = {
-    "FAST": {
-        "maxRuntimeSeconds": 0.35,
-        "maxTokens": 600,
-        "maxToolCalls": 1,
-        "maxFindings": 3,
-    },
-    "STANDARD": {
-        "maxRuntimeSeconds": 1.2,
-        "maxTokens": 2400,
-        "maxToolCalls": 4,
-        "maxFindings": 6,
-    },
-    "EXPERT": {
-        "maxRuntimeSeconds": 3.5,
-        "maxTokens": 7200,
-        "maxToolCalls": 8,
-        "maxFindings": 12,
-    },
+_PROFILE_AGENT_REVIEW_BUDGETS: dict[ValidationProfile, dict[str, Any]] = {
+    profile: budget.to_contract_payload()
+    for profile, budget in ValidationAgentReviewService.DEFAULT_PROFILE_BUDGETS.items()
 }
 
 _LIFECYCLE_ALIASES: dict[str, str] = {

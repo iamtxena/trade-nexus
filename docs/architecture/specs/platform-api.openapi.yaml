@@ -3270,6 +3270,7 @@ components:
         maxRuntimeSeconds:
           type: number
           minimum: 0
+          exclusiveMinimum: true
         maxTokens:
           type: integer
           minimum: 1
@@ -3922,6 +3923,7 @@ components:
             type: string
         summary:
           type: string
+          nullable: true
 
     ValidationRegressionReplayResponse:
       type: object

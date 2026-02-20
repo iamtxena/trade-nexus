@@ -314,7 +314,7 @@
               "properties": {
                 "maxRuntimeSeconds": {
                   "type": "number",
-                  "minimum": 0
+                  "exclusiveMinimum": 0
                 },
                 "maxTokens": {
                   "type": "integer",

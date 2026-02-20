@@ -130,10 +130,20 @@ def _validate_against_schema(instance: Any, schema: dict[str, Any], *, path: str
             raise SchemaValidationError(f"{path}: expected number, got {type(instance).__name__}")
         minimum = schema.get("minimum")
         maximum = schema.get("maximum")
+        exclusive_minimum = schema.get("exclusiveMinimum")
+        exclusive_maximum = schema.get("exclusiveMaximum")
         if isinstance(minimum, (int, float)) and instance < minimum:
             raise SchemaValidationError(f"{path}: expected number >= {minimum}, got {instance}")
+        if exclusive_minimum is True and isinstance(minimum, (int, float)) and instance <= minimum:
+            raise SchemaValidationError(f"{path}: expected number > {minimum}, got {instance}")
+        if isinstance(exclusive_minimum, (int, float)) and instance <= exclusive_minimum:
+            raise SchemaValidationError(f"{path}: expected number > {exclusive_minimum}, got {instance}")
         if isinstance(maximum, (int, float)) and instance > maximum:
             raise SchemaValidationError(f"{path}: expected number <= {maximum}, got {instance}")
+        if exclusive_maximum is True and isinstance(maximum, (int, float)) and instance >= maximum:
+            raise SchemaValidationError(f"{path}: expected number < {maximum}, got {instance}")
+        if isinstance(exclusive_maximum, (int, float)) and instance >= exclusive_maximum:
+            raise SchemaValidationError(f"{path}: expected number < {exclusive_maximum}, got {instance}")
         return
 
     if schema_type == "integer":
@@ -141,10 +151,20 @@ def _validate_against_schema(instance: Any, schema: dict[str, Any], *, path: str
             raise SchemaValidationError(f"{path}: expected integer, got {type(instance).__name__}")
         minimum = schema.get("minimum")
         maximum = schema.get("maximum")
+        exclusive_minimum = schema.get("exclusiveMinimum")
+        exclusive_maximum = schema.get("exclusiveMaximum")
         if isinstance(minimum, int) and instance < minimum:
             raise SchemaValidationError(f"{path}: expected integer >= {minimum}, got {instance}")
+        if exclusive_minimum is True and isinstance(minimum, int) and instance <= minimum:
+            raise SchemaValidationError(f"{path}: expected integer > {minimum}, got {instance}")
+        if isinstance(exclusive_minimum, int) and instance <= exclusive_minimum:
+            raise SchemaValidationError(f"{path}: expected integer > {exclusive_minimum}, got {instance}")
         if isinstance(maximum, int) and instance > maximum:
             raise SchemaValidationError(f"{path}: expected integer <= {maximum}, got {instance}")
+        if exclusive_maximum is True and isinstance(maximum, int) and instance >= maximum:
+            raise SchemaValidationError(f"{path}: expected integer < {maximum}, got {instance}")
+        if isinstance(exclusive_maximum, int) and instance >= exclusive_maximum:
+            raise SchemaValidationError(f"{path}: expected integer < {exclusive_maximum}, got {instance}")
         return
 
     if schema_type == "boolean":
@@ -346,6 +366,14 @@ def test_validation_run_schema_rejects_agent_review_without_budget_report() -> N
         _validate_against_schema(payload, schema)
 
 
+def test_validation_run_schema_rejects_non_positive_agent_runtime_budget_limit() -> None:
+    schema = _load_schema(VALIDATION_RUN_SCHEMA_PATH)
+    payload = _valid_validation_run_payload()
+    payload["agentReview"]["budget"]["limits"]["maxRuntimeSeconds"] = 0
+    with pytest.raises(SchemaValidationError):
+        _validate_against_schema(payload, schema)
+
+
 def test_validation_llm_snapshot_schema_rejects_additional_properties() -> None:
     schema = _load_schema(VALIDATION_LLM_SNAPSHOT_SCHEMA_PATH)
     payload = _valid_validation_llm_snapshot_payload()
@@ -369,6 +397,14 @@ def test_validation_agent_review_result_schema_accepts_null_breach_reason() -> N
     payload["budget"]["withinBudget"] = True
     payload["budget"]["breachReason"] = None
     _validate_against_schema(payload, schema)
+
+
+def test_validation_agent_review_result_schema_rejects_non_positive_runtime_limit() -> None:
+    schema = _load_schema(VALIDATION_AGENT_REVIEW_RESULT_SCHEMA_PATH)
+    payload = _valid_agent_review_result_payload()
+    payload["budget"]["limits"]["maxRuntimeSeconds"] = 0
+    with pytest.raises(SchemaValidationError):
+        _validate_against_schema(payload, schema)
 
 
 def test_validation_agent_review_result_schema_rejects_non_string_non_null_breach_reason() -> None:

@@ -245,7 +245,7 @@ class ValidationReviewFinding(BaseModel):
 
 
 class ValidationAgentReviewBudgetLimits(BaseModel):
-    maxRuntimeSeconds: float = Field(ge=0)
+    maxRuntimeSeconds: float = Field(gt=0)
     maxTokens: int = Field(ge=1)
     maxToolCalls: int = Field(ge=0)
     maxFindings: int = Field(ge=1)

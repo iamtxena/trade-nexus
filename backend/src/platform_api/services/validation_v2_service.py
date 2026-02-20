@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import html
 import json
 import logging
 from dataclasses import dataclass, field
@@ -57,6 +58,7 @@ from src.platform_api.services.validation_replay_policy import (
     evaluate_replay_policy,
 )
 from src.platform_api.state_store import InMemoryStateStore, utc_now
+from src.platform_api.validation.render import InMemoryValidationRenderer, ValidationRenderPort
 from src.platform_api.validation.storage import (
     InMemoryValidationMetadataStore,
     ValidationBaselineMetadata,
@@ -84,9 +86,17 @@ class _ValidationRunRecord:
     policy: ValidationPolicyConfig
     trader_decision: ValidationDecision | None = None
     render_jobs: dict[str, ValidationRenderJob] = field(default_factory=dict)
+    render_audit_blobs: dict[str, _ValidationRenderBlob] = field(default_factory=dict)
     review_comments: list[ValidationReviewComment] = field(default_factory=list)
     review_decision: ValidationReviewDecision | None = None
     review_render_jobs: dict[str, ValidationReviewRenderJob] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class _ValidationRenderBlob:
+    ref: str
+    content_type: str
+    payload: bytes
 
 
 @dataclass
@@ -111,6 +121,7 @@ class ValidationV2Service:
         *,
         store: InMemoryStateStore,
         validation_storage: ValidationStorageService | None = None,
+        renderer: ValidationRenderPort | None = None,
         deterministic_engine: DeterministicValidationEngine | None = None,
         agent_review_service: ValidationAgentReviewService | None = None,
     ) -> None:
@@ -118,6 +129,7 @@ class ValidationV2Service:
         self._validation_storage = validation_storage or ValidationStorageService(
             metadata_store=InMemoryValidationMetadataStore()
         )
+        self._renderer = renderer or InMemoryValidationRenderer()
         self._deterministic_engine = deterministic_engine or DeterministicValidationEngine()
         self._agent_review_service = agent_review_service or ValidationAgentReviewService()
 
@@ -871,17 +883,38 @@ class ValidationV2Service:
                 request_id=context.request_id,
                 details={"format": request.format},
             )
+        format_name = cast(Literal["html", "pdf"], requested_format)
 
         record = self._require_run(run_id=run_id, context=context)
-        render_job = record.render_jobs.get(requested_format)
-        if render_job is None:
-            render_job = ValidationRenderJob(
-                runId=run_id,
-                format=cast(Literal["html", "pdf"], requested_format),
-                status="queued",
-                artifactRef=None,
+        render_job, audit_blob = self._execute_optional_render(
+            run_id=run_id,
+            output_format=format_name,
+            record=record,
+            context=context,
+        )
+        record.render_jobs[format_name] = render_job
+        record.render_audit_blobs[format_name] = audit_blob
+        try:
+            await self._persist_run_metadata(record=record)
+        except Exception:
+            logger.warning(
+                "Validation render metadata persistence failed for run %s format %s.",
+                run_id,
+                format_name,
+                exc_info=True,
             )
-            record.render_jobs[requested_format] = render_job
+            log_context_event(
+                logger,
+                level=logging.WARNING,
+                message="Validation render metadata persistence failed.",
+                context=context,
+                component="validation",
+                operation="create_validation_render",
+                resource_type="validation_run",
+                resource_id=run_id,
+                renderFormat=format_name,
+                renderStatus=render_job.status,
+            )
 
         response = ValidationRenderResponse(requestId=context.request_id, render=render_job)
         self._save_idempotent_response(
@@ -1123,6 +1156,233 @@ class ValidationV2Service:
         )
         return response
 
+    def _execute_optional_render(
+        self,
+        *,
+        run_id: str,
+        output_format: Literal["html", "pdf"],
+        record: _ValidationRunRecord,
+        context: RequestContext,
+    ) -> tuple[ValidationRenderJob, _ValidationRenderBlob]:
+        artifact_payload = record.artifact.model_dump(mode="json")
+        try:
+            rendered_artifact = self._renderer.render(
+                artifact=artifact_payload,
+                output_format=output_format,
+            )
+            if rendered_artifact is None:
+                raise RuntimeError("Validation renderer returned no artifact output.")
+            if rendered_artifact.output_format != output_format:
+                raise RuntimeError(
+                    "Validation renderer output format mismatch: "
+                    f"expected {output_format}, got {rendered_artifact.output_format}."
+                )
+            render_ref = rendered_artifact.ref.strip()
+            if not is_valid_blob_reference(render_ref):
+                raise RuntimeError(
+                    "Validation renderer produced an invalid blob reference for audit persistence."
+                )
+
+            success_blob = self._build_success_render_blob(
+                run_id=run_id,
+                output_format=output_format,
+                render_ref=render_ref,
+                artifact_payload=artifact_payload,
+            )
+            render_job = ValidationRenderJob(
+                runId=run_id,
+                format=output_format,
+                status="completed",
+                artifactRef=success_blob.ref,
+            )
+            log_context_event(
+                logger,
+                level=logging.INFO,
+                message="Validation render completed.",
+                context=context,
+                component="validation",
+                operation="create_validation_render",
+                resource_type="validation_run",
+                resource_id=run_id,
+                renderFormat=output_format,
+                renderStatus=render_job.status,
+            )
+            return render_job, success_blob
+        except Exception as exc:
+            failure_blob = self._build_failure_render_blob(
+                run_id=run_id,
+                output_format=output_format,
+                error_message=str(exc),
+            )
+            render_job = ValidationRenderJob(
+                runId=run_id,
+                format=output_format,
+                status="failed",
+                artifactRef=failure_blob.ref,
+            )
+            logger.warning(
+                "Validation render failed for run %s format %s.",
+                run_id,
+                output_format,
+                exc_info=True,
+            )
+            log_context_event(
+                logger,
+                level=logging.WARNING,
+                message="Validation render failed.",
+                context=context,
+                component="validation",
+                operation="create_validation_render",
+                resource_type="validation_run",
+                resource_id=run_id,
+                renderFormat=output_format,
+                renderStatus=render_job.status,
+                errorType=type(exc).__name__,
+                errorMessage=_non_empty(str(exc)) or type(exc).__name__,
+            )
+            return render_job, failure_blob
+
+    def _build_success_render_blob(
+        self,
+        *,
+        run_id: str,
+        output_format: Literal["html", "pdf"],
+        render_ref: str,
+        artifact_payload: dict[str, Any],
+    ) -> _ValidationRenderBlob:
+        if output_format == "html":
+            return _ValidationRenderBlob(
+                ref=render_ref,
+                content_type="text/html; charset=utf-8",
+                payload=self._build_html_render_payload(
+                    run_id=run_id,
+                    artifact_payload=artifact_payload,
+                ),
+            )
+        return _ValidationRenderBlob(
+            ref=render_ref,
+            content_type="application/pdf",
+            payload=self._build_pdf_render_payload(
+                run_id=run_id,
+                artifact_payload=artifact_payload,
+            ),
+        )
+
+    def _build_failure_render_blob(
+        self,
+        *,
+        run_id: str,
+        output_format: Literal["html", "pdf"],
+        error_message: str,
+    ) -> _ValidationRenderBlob:
+        failure_ref = f"blob://validation/{run_id}/render-{output_format}-failure.json"
+        failure_payload = {
+            "runId": run_id,
+            "format": output_format,
+            "status": "failed",
+            "failedAt": utc_now(),
+            "error": {
+                "code": "VALIDATION_RENDER_EXECUTION_FAILED",
+                "message": _non_empty(error_message) or "Validation render failed.",
+            },
+        }
+        return _ValidationRenderBlob(
+            ref=failure_ref,
+            content_type="application/json",
+            payload=json.dumps(failure_payload, sort_keys=True).encode("utf-8"),
+        )
+
+    @staticmethod
+    def _build_html_render_payload(*, run_id: str, artifact_payload: dict[str, Any]) -> bytes:
+        artifact_json = json.dumps(artifact_payload, sort_keys=True, indent=2)
+        escaped_json = html.escape(artifact_json)
+        final_decision = html.escape(str(artifact_payload.get("finalDecision", "unknown")))
+        html_payload = (
+            "<!doctype html>\n"
+            "<html lang=\"en\">\n"
+            "<head>\n"
+            "  <meta charset=\"utf-8\" />\n"
+            f"  <title>Validation Report {html.escape(run_id)}</title>\n"
+            "</head>\n"
+            "<body>\n"
+            f"  <h1>Validation Report {html.escape(run_id)}</h1>\n"
+            f"  <p>Final decision: {final_decision}</p>\n"
+            "  <pre>\n"
+            f"{escaped_json}\n"
+            "  </pre>\n"
+            "</body>\n"
+            "</html>\n"
+        )
+        return html_payload.encode("utf-8")
+
+    @staticmethod
+    def _build_pdf_render_payload(*, run_id: str, artifact_payload: dict[str, Any]) -> bytes:
+        decision = str(artifact_payload.get("finalDecision", "unknown"))
+        policy_payload = artifact_payload.get("policy")
+        profile = "unknown"
+        if isinstance(policy_payload, dict):
+            profile = str(policy_payload.get("profile", "unknown"))
+        lines = [
+            f"Validation Report: {run_id}",
+            f"Final Decision: {decision}",
+            f"Policy Profile: {profile}",
+        ]
+        line_commands: list[str] = []
+        for line in lines:
+            escaped_line = ValidationV2Service._escape_pdf_text(line)
+            line_commands.append(f"({escaped_line}) Tj")
+            line_commands.append("0 -16 Td")
+        content_stream = "BT\n/F1 12 Tf\n72 720 Td\n" + "\n".join(line_commands) + "\nET"
+        content_payload = content_stream.encode("utf-8")
+
+        objects: list[bytes] = [
+            b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+            b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+            (
+                b"3 0 obj\n"
+                b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+                b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\n"
+                b"endobj\n"
+            ),
+            b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+            (
+                f"5 0 obj\n<< /Length {len(content_payload)} >>\nstream\n".encode("ascii")
+                + content_payload
+                + b"\nendstream\nendobj\n"
+            ),
+        ]
+
+        header = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"
+        parts: list[bytes] = [header]
+        offsets: list[int] = []
+        cursor = len(header)
+        for item in objects:
+            offsets.append(cursor)
+            parts.append(item)
+            cursor += len(item)
+
+        xref_start = cursor
+        xref_rows = [b"0000000000 65535 f \n"]
+        for offset in offsets:
+            xref_rows.append(f"{offset:010d} 00000 n \n".encode("ascii"))
+        xref = b"xref\n0 6\n" + b"".join(xref_rows)
+        trailer = (
+            b"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n"
+            + str(xref_start).encode("ascii")
+            + b"\n%%EOF\n"
+        )
+        parts.append(xref)
+        parts.append(trailer)
+        return b"".join(parts)
+
+    @staticmethod
+    def _escape_pdf_text(value: str) -> str:
+        return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+    @staticmethod
+    def _render_blob_kind(*, output_format: Literal["html", "pdf"]) -> Literal["render_html", "render_pdf"]:
+        return "render_html" if output_format == "html" else "render_pdf"
+
     def _build_evidence(self, *, request: CreateValidationRunRequest) -> DeterministicValidationEvidence:
         backtest = next(
             (
@@ -1351,6 +1611,19 @@ class ValidationV2Service:
                 content_type="application/json",
             ),
         ]
+        for output_format, render_blob in sorted(record.render_audit_blobs.items()):
+            if output_format not in {"html", "pdf"}:
+                continue
+            normalized_format = cast(Literal["html", "pdf"], output_format)
+            blob_refs.append(
+                ValidationBlobReferenceMetadata.from_payload(
+                    run_id=run_id,
+                    kind=self._render_blob_kind(output_format=normalized_format),
+                    ref=render_blob.ref,
+                    payload=render_blob.payload,
+                    content_type=render_blob.content_type,
+                )
+            )
 
         review = artifact.agentReview
         trader = artifact.traderReview

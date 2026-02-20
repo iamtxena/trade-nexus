@@ -14,8 +14,8 @@
 | Drill | Endpoint | Status | Latency | Timestamp |
 |-------|----------|--------|---------|-----------|
 | Cold start | `GET /v1/health` | 200 OK | **89.78s** | 2026-02-20T17:16:14Z |
-| Warm request | `GET /v1/health` | 200 OK | **0.14s** | 2026-02-20T17:23:XX |
-| Root health | `GET /health` | 200 OK | 90.42s (cold) | 2026-02-20T17:14:XX |
+| Warm request | `GET /v1/health` | 200 OK | **0.14s** | 2026-02-20T17:23:42Z |
+| Root health | `GET /health` | 200 OK | 90.42s (cold) | 2026-02-20T17:14:33Z |
 
 **Response (warm)**:
 ```json
@@ -166,7 +166,7 @@ curl https://trade-nexus-backend.whitecliff-198cd26a.westeurope.azurecontainerap
 
 **Note**: Review-web tables are additive (no ALTER on existing tables), so rollback is zero-risk to existing functionality.
 
-See `vops-vw-01-env-secrets-readiness.md` section 3.4 for detailed rollback SQL.
+See `docs/operations/vops-vw-01-env-secrets-readiness.md` (PR #293) section 3.4 for detailed rollback SQL.
 
 ---
 

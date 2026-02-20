@@ -180,7 +180,7 @@ async function getStrategyCode(args: string[]) {
   console.log(`\n${code}\n`);
 }
 
-async function runBacktest(args: string[]) {
+export async function runBacktest(args: string[]) {
   const { values } = parseArgs({
     args,
     options: {

@@ -980,13 +980,62 @@ class ValidationV2Service:
         profile = "unknown"
         if isinstance(policy_payload, dict):
             profile = str(policy_payload.get("profile", "unknown"))
-        summary = (
-            f"Validation Report: {run_id}\n"
-            f"Final Decision: {decision}\n"
-            f"Policy Profile: {profile}\n"
+        lines = [
+            f"Validation Report: {run_id}",
+            f"Final Decision: {decision}",
+            f"Policy Profile: {profile}",
+        ]
+        line_commands: list[str] = []
+        for line in lines:
+            escaped_line = ValidationV2Service._escape_pdf_text(line)
+            line_commands.append(f"({escaped_line}) Tj")
+            line_commands.append("0 -16 Td")
+        content_stream = "BT\n/F1 12 Tf\n72 720 Td\n" + "\n".join(line_commands) + "\nET"
+        content_payload = content_stream.encode("utf-8")
+
+        objects: list[bytes] = [
+            b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+            b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+            (
+                b"3 0 obj\n"
+                b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+                b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\n"
+                b"endobj\n"
+            ),
+            b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+            (
+                f"5 0 obj\n<< /Length {len(content_payload)} >>\nstream\n".encode("ascii")
+                + content_payload
+                + b"\nendstream\nendobj\n"
+            ),
+        ]
+
+        header = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"
+        parts: list[bytes] = [header]
+        offsets: list[int] = []
+        cursor = len(header)
+        for item in objects:
+            offsets.append(cursor)
+            parts.append(item)
+            cursor += len(item)
+
+        xref_start = cursor
+        xref_rows = [b"0000000000 65535 f \n"]
+        for offset in offsets:
+            xref_rows.append(f"{offset:010d} 00000 n \n".encode("ascii"))
+        xref = b"xref\n0 6\n" + b"".join(xref_rows)
+        trailer = (
+            b"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n"
+            + str(xref_start).encode("ascii")
+            + b"\n%%EOF\n"
         )
-        pdf_payload = "%PDF-1.4\n% trade-nexus validation render\n" + summary + "%%EOF\n"
-        return pdf_payload.encode("utf-8")
+        parts.append(xref)
+        parts.append(trailer)
+        return b"".join(parts)
+
+    @staticmethod
+    def _escape_pdf_text(value: str) -> str:
+        return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
     @staticmethod
     def _render_blob_kind(*, output_format: Literal["html", "pdf"]) -> Literal["render_html", "render_pdf"]:

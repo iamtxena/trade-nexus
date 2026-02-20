@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import copy
+import json
 
 from fastapi.testclient import TestClient
 import pytest
@@ -22,6 +24,35 @@ HEADERS = {
 
 def _client() -> TestClient:
     return TestClient(app)
+
+
+def _jwt_segment(payload: dict[str, str]) -> str:
+    encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(encoded).decode("utf-8").rstrip("=")
+
+
+def _validation_headers(
+    *,
+    request_id: str,
+    tenant_id: str,
+    user_id: str,
+    include_identity_headers: bool = True,
+    spoof_tenant_id: str | None = None,
+    spoof_user_id: str | None = None,
+) -> dict[str, str]:
+    token = (
+        f"{_jwt_segment({'alg': 'none', 'typ': 'JWT'})}."
+        f"{_jwt_segment({'sub': user_id, 'tenant_id': tenant_id})}."
+    )
+    headers: dict[str, str] = {
+        "Authorization": f"Bearer {token}",
+        "X-API-Key": HEADERS["X-API-Key"],
+        "X-Request-Id": request_id,
+    }
+    if include_identity_headers:
+        headers["X-Tenant-Id"] = spoof_tenant_id if spoof_tenant_id is not None else tenant_id
+        headers["X-User-Id"] = spoof_user_id if spoof_user_id is not None else user_id
+    return headers
 
 
 @pytest.fixture(autouse=True)
@@ -390,12 +421,11 @@ def test_conversation_v2_routes() -> None:
 
 def test_validation_v2_routes_wire_deterministic_and_agent_outputs() -> None:
     client = _client()
-    headers = {
-        **HEADERS,
-        "X-Request-Id": "req-v2-validation-wire-001",
-        "X-Tenant-Id": "tenant-v2-validation",
-        "X-User-Id": "user-v2-validation",
-    }
+    headers = _validation_headers(
+        request_id="req-v2-validation-wire-001",
+        tenant_id="tenant-v2-validation",
+        user_id="user-v2-validation",
+    )
 
     create_run = client.post(
         "/v2/validation-runs",
@@ -441,14 +471,185 @@ def test_validation_v2_routes_wire_deterministic_and_agent_outputs() -> None:
     assert run_artifact["finalDecision"] in {"pass", "conditional_pass", "fail"}
 
 
+def test_validation_v2_requires_authentication() -> None:
+    client = _client()
+
+    response = client.post(
+        "/v2/validation-runs",
+        headers={"X-Request-Id": "req-v2-validation-unauth-001"},
+        json={
+            "strategyId": "strat-001",
+            "providerRefId": "lona-strategy-123",
+            "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+            "requestedIndicators": ["zigzag", "ema"],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+            "policy": {
+                "profile": "STANDARD",
+                "blockMergeOnFail": True,
+                "blockReleaseOnFail": True,
+                "blockMergeOnAgentFail": True,
+                "blockReleaseOnAgentFail": False,
+                "requireTraderReview": False,
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": True,
+            },
+        },
+    )
+
+    assert response.status_code == 401
+    payload = response.json()
+    assert payload["requestId"] == "req-v2-validation-unauth-001"
+    assert payload["error"]["code"] == "AUTH_UNAUTHORIZED"
+
+
+def test_validation_v2_rejects_identity_header_spoofing() -> None:
+    client = _client()
+    headers = _validation_headers(
+        request_id="req-v2-validation-spoof-001",
+        tenant_id="tenant-v2-validation-spoof",
+        user_id="user-v2-validation-spoof",
+        spoof_tenant_id="tenant-v2-validation-other",
+    )
+
+    response = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-spoof-001"},
+        json={
+            "strategyId": "strat-001",
+            "providerRefId": "lona-strategy-123",
+            "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+            "requestedIndicators": ["zigzag", "ema"],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+            "policy": {
+                "profile": "STANDARD",
+                "blockMergeOnFail": True,
+                "blockReleaseOnFail": True,
+                "blockMergeOnAgentFail": True,
+                "blockReleaseOnAgentFail": False,
+                "requireTraderReview": False,
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": True,
+            },
+        },
+    )
+
+    assert response.status_code == 401
+    payload = response.json()
+    assert payload["requestId"] == "req-v2-validation-spoof-001"
+    assert payload["error"]["code"] == "AUTH_IDENTITY_MISMATCH"
+    details = payload["error"].get("details", {})
+    assert details.get("header") == "X-Tenant-Id"
+    assert details.get("reason") == "identity_header_mismatch"
+    assert "expected" not in details
+    assert "received" not in details
+
+
+def test_validation_v2_uses_auth_claim_identity_without_identity_headers() -> None:
+    client = _client()
+    tenant_id = "tenant-v2-validation-claims"
+    user_id = "user-v2-validation-claims"
+    headers = _validation_headers(
+        request_id="req-v2-validation-claims-001",
+        tenant_id=tenant_id,
+        user_id=user_id,
+        include_identity_headers=False,
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-claims-001"},
+        json={
+            "strategyId": "strat-001",
+            "providerRefId": "lona-strategy-123",
+            "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+            "requestedIndicators": ["zigzag", "ema"],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+            "policy": {
+                "profile": "STANDARD",
+                "blockMergeOnFail": True,
+                "blockReleaseOnFail": True,
+                "blockMergeOnAgentFail": True,
+                "blockReleaseOnAgentFail": False,
+                "requireTraderReview": False,
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": True,
+            },
+        },
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    artifact = client.get(f"/v2/validation-runs/{run_id}/artifact", headers=headers)
+    assert artifact.status_code == 200
+    payload = artifact.json()["artifact"]
+    assert payload["tenantId"] == tenant_id
+    assert payload["userId"] == user_id
+
+
+def test_validation_v2_list_runs_is_identity_scoped() -> None:
+    client = _client()
+    scoped_headers = _validation_headers(
+        request_id="req-v2-validation-list-001",
+        tenant_id="tenant-v2-validation-list",
+        user_id="user-v2-validation-list",
+    )
+    other_headers = _validation_headers(
+        request_id="req-v2-validation-list-002",
+        tenant_id="tenant-v2-validation-list-other",
+        user_id="user-v2-validation-list-other",
+    )
+    payload = {
+        "strategyId": "strat-001",
+        "providerRefId": "lona-strategy-123",
+        "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+        "requestedIndicators": ["zigzag", "ema"],
+        "datasetIds": ["dataset-btc-1h-2025"],
+        "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+        "policy": {
+            "profile": "STANDARD",
+            "blockMergeOnFail": True,
+            "blockReleaseOnFail": True,
+            "blockMergeOnAgentFail": True,
+            "blockReleaseOnAgentFail": False,
+            "requireTraderReview": False,
+            "hardFailOnMissingIndicators": True,
+            "failClosedOnEvidenceUnavailable": True,
+        },
+    }
+
+    scoped_create = client.post(
+        "/v2/validation-runs",
+        headers={**scoped_headers, "Idempotency-Key": "idem-v2-validation-list-001"},
+        json=payload,
+    )
+    assert scoped_create.status_code == 202
+    scoped_run_id = scoped_create.json()["run"]["id"]
+
+    other_create = client.post(
+        "/v2/validation-runs",
+        headers={**other_headers, "Idempotency-Key": "idem-v2-validation-list-002"},
+        json=payload,
+    )
+    assert other_create.status_code == 202
+    other_run_id = other_create.json()["run"]["id"]
+
+    list_response = client.get("/v2/validation-runs", headers=scoped_headers)
+    assert list_response.status_code == 200
+    listed_ids = {item["id"] for item in list_response.json()["runs"]}
+    assert scoped_run_id in listed_ids
+    assert other_run_id not in listed_ids
+
+
 def test_validation_v2_trader_conditional_pass_is_reviewed_but_not_fully_passed() -> None:
     client = _client()
-    headers = {
-        **HEADERS,
-        "X-Request-Id": "req-v2-validation-trader-001",
-        "X-Tenant-Id": "tenant-v2-validation-trader",
-        "X-User-Id": "user-v2-validation-trader",
-    }
+    headers = _validation_headers(
+        request_id="req-v2-validation-trader-001",
+        tenant_id="tenant-v2-validation-trader",
+        user_id="user-v2-validation-trader",
+    )
 
     create_run = client.post(
         "/v2/validation-runs",
@@ -522,13 +723,12 @@ def test_validation_v2_trader_conditional_pass_is_reviewed_but_not_fully_passed(
 
 def test_validation_v2_create_run_idempotency_and_conflict() -> None:
     client = _client()
-    headers = {
-        **HEADERS,
-        "X-Request-Id": "req-v2-validation-idem-001",
-        "X-Tenant-Id": "tenant-v2-validation-idem",
-        "X-User-Id": "user-v2-validation-idem",
-        "Idempotency-Key": "idem-v2-validation-run-001",
-    }
+    headers = _validation_headers(
+        request_id="req-v2-validation-idem-001",
+        tenant_id="tenant-v2-validation-idem",
+        user_id="user-v2-validation-idem",
+    )
+    headers["Idempotency-Key"] = "idem-v2-validation-run-001"
     payload = {
         "strategyId": "strat-001",
         "providerRefId": "lona-strategy-123",
@@ -565,12 +765,11 @@ def test_validation_v2_create_run_idempotency_and_conflict() -> None:
 
 def test_validation_v2_rejects_invalid_policy_profile_and_state() -> None:
     client = _client()
-    headers = {
-        **HEADERS,
-        "X-Request-Id": "req-v2-validation-neg-001",
-        "X-Tenant-Id": "tenant-v2-validation-neg",
-        "X-User-Id": "user-v2-validation-neg",
-    }
+    headers = _validation_headers(
+        request_id="req-v2-validation-neg-001",
+        tenant_id="tenant-v2-validation-neg",
+        user_id="user-v2-validation-neg",
+    )
     base_payload = {
         "strategyId": "strat-001",
         "providerRefId": "lona-strategy-123",
@@ -651,12 +850,11 @@ def test_validation_v2_rejects_invalid_policy_profile_and_state() -> None:
 
 def test_validation_v2_rejects_widened_enum_and_nullable_inputs() -> None:
     client = _client()
-    headers = {
-        **HEADERS,
-        "X-Request-Id": "req-v2-validation-inputs-001",
-        "X-Tenant-Id": "tenant-v2-validation-inputs",
-        "X-User-Id": "user-v2-validation-inputs",
-    }
+    headers = _validation_headers(
+        request_id="req-v2-validation-inputs-001",
+        tenant_id="tenant-v2-validation-inputs",
+        user_id="user-v2-validation-inputs",
+    )
     base_payload = {
         "strategyId": "strat-001",
         "providerRefId": "lona-strategy-123",
@@ -747,12 +945,11 @@ def test_validation_v2_rejects_widened_enum_and_nullable_inputs() -> None:
 
 def test_validation_v2_blocks_provider_ref_bypass() -> None:
     client = _client()
-    headers = {
-        **HEADERS,
-        "X-Request-Id": "req-v2-validation-provider-001",
-        "X-Tenant-Id": "tenant-v2-validation-provider",
-        "X-User-Id": "user-v2-validation-provider",
-    }
+    headers = _validation_headers(
+        request_id="req-v2-validation-provider-001",
+        tenant_id="tenant-v2-validation-provider",
+        user_id="user-v2-validation-provider",
+    )
 
     response = client.post(
         "/v2/validation-runs",
@@ -784,12 +981,11 @@ def test_validation_v2_blocks_provider_ref_bypass() -> None:
 
 def test_validation_v2_replay_treats_candidate_improvement_as_pass() -> None:
     client = _client()
-    headers = {
-        **HEADERS,
-        "X-Request-Id": "req-v2-validation-replay-001",
-        "X-Tenant-Id": "tenant-v2-validation-replay",
-        "X-User-Id": "user-v2-validation-replay",
-    }
+    headers = _validation_headers(
+        request_id="req-v2-validation-replay-001",
+        tenant_id="tenant-v2-validation-replay",
+        user_id="user-v2-validation-replay",
+    )
     run_payload = {
         "strategyId": "strat-001",
         "providerRefId": "lona-strategy-123",
@@ -886,12 +1082,11 @@ def test_validation_v2_replay_treats_candidate_improvement_as_pass() -> None:
 
 def test_validation_v2_replay_failure_blocks_merge_and_release_by_policy() -> None:
     client = _client()
-    headers = {
-        **HEADERS,
-        "X-Request-Id": "req-v2-validation-replay-gates-001",
-        "X-Tenant-Id": "tenant-v2-validation-replay-gates",
-        "X-User-Id": "user-v2-validation-replay-gates",
-    }
+    headers = _validation_headers(
+        request_id="req-v2-validation-replay-gates-001",
+        tenant_id="tenant-v2-validation-replay-gates",
+        user_id="user-v2-validation-replay-gates",
+    )
 
     baseline_run_response = client.post(
         "/v2/validation-runs",

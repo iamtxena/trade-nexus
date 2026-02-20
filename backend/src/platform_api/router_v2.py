@@ -31,6 +31,7 @@ from src.platform_api.schemas_v2 import (
     ValidationRegressionReplayResponse,
     ValidationRenderResponse,
     ValidationRunResponse,
+    ValidationRunListResponse,
     ValidationRunReviewResponse,
 )
 from src.platform_api.services.conversation_service import ConversationService
@@ -60,12 +61,8 @@ async def _request_context(
     request.state.request_id = request_id
     state_tenant_id = getattr(request.state, "tenant_id", None)
     state_user_id = getattr(request.state, "user_id", None)
-    tenant_id = request.headers.get("X-Tenant-Id")
-    user_id = request.headers.get("X-User-Id")
-    if not isinstance(tenant_id, str) or not tenant_id.strip():
-        tenant_id = state_tenant_id if isinstance(state_tenant_id, str) and state_tenant_id.strip() else "tenant-local"
-    if not isinstance(user_id, str) or not user_id.strip():
-        user_id = state_user_id if isinstance(state_user_id, str) and state_user_id.strip() else "user-local"
+    tenant_id = state_tenant_id if isinstance(state_tenant_id, str) and state_tenant_id.strip() else "tenant-local"
+    user_id = state_user_id if isinstance(state_user_id, str) and state_user_id.strip() else "user-local"
     request.state.tenant_id = tenant_id
     request.state.user_id = user_id
     return RequestContext(
@@ -177,6 +174,13 @@ async def create_conversation_turn_v2(
     return await _conversation_service.create_turn(session_id=sessionId, request=request, context=context)
 
 
+@router.get("/validation-runs", response_model=ValidationRunListResponse, tags=["Validation"])
+async def list_validation_runs_v2(
+    context: ContextDep,
+) -> ValidationRunListResponse:
+    return await _validation_service.list_validation_runs(context=context)
+
+
 @router.post(
     "/validation-runs",
     response_model=ValidationRunResponse,
@@ -186,7 +190,7 @@ async def create_conversation_turn_v2(
 async def create_validation_run_v2(
     request: CreateValidationRunRequest,
     context: ContextDep,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> ValidationRunResponse:
     return await _validation_service.create_validation_run(
         request=request,
@@ -225,7 +229,7 @@ async def submit_validation_run_review_v2(
     runId: str,
     request: CreateValidationRunReviewRequest,
     context: ContextDep,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> ValidationRunReviewResponse:
     return await _validation_service.submit_validation_run_review(
         run_id=runId,
@@ -245,7 +249,7 @@ async def create_validation_run_render_v2(
     runId: str,
     request: CreateValidationRenderRequest,
     context: ContextDep,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> ValidationRenderResponse:
     return await _validation_service.create_validation_render(
         run_id=runId,
@@ -264,7 +268,7 @@ async def create_validation_run_render_v2(
 async def create_validation_baseline_v2(
     request: CreateValidationBaselineRequest,
     context: ContextDep,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> ValidationBaselineResponse:
     return await _validation_service.create_validation_baseline(
         request=request,
@@ -282,7 +286,7 @@ async def create_validation_baseline_v2(
 async def replay_validation_regression_v2(
     request: CreateValidationRegressionReplayRequest,
     context: ContextDep,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> ValidationRegressionReplayResponse:
     return await _validation_service.replay_validation_regression(
         request=request,

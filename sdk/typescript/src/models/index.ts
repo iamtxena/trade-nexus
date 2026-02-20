@@ -102,6 +102,7 @@ export * from './ValidationRun';
 export * from './ValidationRunArtifact';
 export * from './ValidationRunDecision';
 export * from './ValidationRunInputs';
+export * from './ValidationRunListResponse';
 export * from './ValidationRunOutputs';
 export * from './ValidationRunResponse';
 export * from './ValidationRunReviewResponse';

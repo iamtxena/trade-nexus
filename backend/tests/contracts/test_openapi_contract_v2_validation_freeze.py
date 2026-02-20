@@ -20,6 +20,7 @@ EXPECTED_VALIDATION_V2_PATHS = {
 }
 
 EXPECTED_VALIDATION_V2_OPERATION_IDS = {
+    "listValidationRunsV2",
     "createValidationRunV2",
     "getValidationRunV2",
     "getValidationRunArtifactV2",
@@ -32,6 +33,13 @@ EXPECTED_VALIDATION_V2_OPERATION_IDS = {
 
 def _spec_text() -> str:
     return OPENAPI_SPEC.read_text(encoding="utf-8")
+
+
+def _operation_block(spec: str, operation_id: str) -> str:
+    return spec.split(f"operationId: {operation_id}", maxsplit=1)[1].split(
+        "\n      responses:",
+        maxsplit=1,
+    )[0]
 
 
 def test_validation_v2_path_set_is_frozen() -> None:
@@ -58,3 +66,16 @@ def test_validation_contract_is_json_first_with_optional_html_pdf_render_only() 
     assert "enum: [html, pdf]" in render_format_component
     assert "enum: [html, pdf, json]" not in render_format_component
     assert "ValidationArtifactResponse:" in spec
+
+
+def test_validation_v2_write_operations_reference_idempotency_parameter() -> None:
+    spec = _spec_text()
+    for operation_id in (
+        "createValidationRunV2",
+        "submitValidationRunReviewV2",
+        "createValidationRunRenderV2",
+        "createValidationBaselineV2",
+        "replayValidationRegressionV2",
+    ):
+        block = _operation_block(spec, operation_id)
+        assert "#/components/parameters/IdempotencyKey" in block

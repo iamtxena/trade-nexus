@@ -52,7 +52,13 @@ BASE_URL = sys.argv[1].rstrip("/")
 FIXTURES_DIR = Path(sys.argv[2])
 
 
-def request(method: str, path: str, *, body: dict | None = None) -> tuple[int, dict]:
+def request(
+    method: str,
+    path: str,
+    *,
+    body: dict | None = None,
+    idempotency_key: str | None = None,
+) -> tuple[int, dict]:
     payload: bytes | None = None
     headers = {
         "Authorization": "Bearer mock-token",
@@ -62,6 +68,8 @@ def request(method: str, path: str, *, body: dict | None = None) -> tuple[int, d
     if body is not None:
         payload = json.dumps(body).encode("utf-8")
         headers["Content-Type"] = "application/json"
+    if idempotency_key is not None:
+        headers["Idempotency-Key"] = idempotency_key
 
     req = urllib.request.Request(
         f"{BASE_URL}{path}",
@@ -157,6 +165,7 @@ status, create_validation_run_payload = request(
     "POST",
     "/v2/validation-runs",
     body=validation_run_request,
+    idempotency_key="idem-consumer-validation-run-001",
 )
 if status != 202:
     raise AssertionError(

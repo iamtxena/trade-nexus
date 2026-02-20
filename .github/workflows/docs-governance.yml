@@ -2,12 +2,6 @@ name: docs-governance
 
 on:
   pull_request:
-    paths:
-      - "docs/**"
-      - "docs/portal-site/**"
-      - "scripts/docs/**"
-      - "CONTRIBUTING.md"
-      - ".github/workflows/docs-governance.yml"
   push:
     branches:
       - main

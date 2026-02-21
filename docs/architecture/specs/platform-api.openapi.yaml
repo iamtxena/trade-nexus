@@ -1702,7 +1702,7 @@ paths:
                       format: html
                       status: completed
                       artifactRef: blob://validation/valrun-20260217-0001/review.html
-                      downloadUrl: https://cdn.trade-nexus.io/validation/valrun-20260217-0001/review.html
+                      downloadUrl: https://cdn.trade-nexus.lona.agency/validation/valrun-20260217-0001/review.html
                       checksumSha256: 5d41402abc4b2a76b9719d911017c592ad8846f8d1b522f11f2e6f64044f16f8
                       expiresAt: '2026-02-17T11:40:00Z'
                       requestedAt: '2026-02-17T10:37:00Z'
@@ -1879,7 +1879,7 @@ paths:
                   format: html
                   status: completed
                   artifactRef: blob://validation/valrun-20260217-0001/review.html
-                  downloadUrl: https://cdn.trade-nexus.io/validation/valrun-20260217-0001/review.html
+                  downloadUrl: https://cdn.trade-nexus.lona.agency/validation/valrun-20260217-0001/review.html
                   checksumSha256: 5d41402abc4b2a76b9719d911017c592ad8846f8d1b522f11f2e6f64044f16f8
                   expiresAt: '2026-02-17T11:40:00Z'
                   requestedAt: '2026-02-17T10:37:00Z'

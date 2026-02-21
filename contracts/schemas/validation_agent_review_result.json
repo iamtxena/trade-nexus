@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trade-nexus.io/schemas/validation_agent_review_result.json",
+  "$id": "https://trade-nexus.lona.agency/schemas/validation_agent_review_result.json",
   "title": "Trade Nexus Validation Agent Review Result",
   "type": "object",
   "additionalProperties": false,

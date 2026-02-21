@@ -159,7 +159,7 @@ backend/
 
 ## Production Deployment
 
-**Backend URL**: https://trade-nexus-backend.whitecliff-198cd26a.westeurope.azurecontainerapps.io/
+**Backend URL**: https://api-nexus.lona.agency/
 
 **Health Check**: `GET /health`
 

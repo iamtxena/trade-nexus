@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trade-nexus.io/schemas/validation_replay_gate_report.json",
+  "$id": "https://trade-nexus.lona.agency/schemas/validation_replay_gate_report.json",
   "title": "Trade Nexus Validation Replay Gate Report",
   "type": "object",
   "additionalProperties": false,

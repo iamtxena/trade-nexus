@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trade-nexus.io/schemas/risk-policy.v1.schema.json",
+  "$id": "https://trade-nexus.lona.agency/schemas/risk-policy.v1.schema.json",
   "title": "Trade Nexus Risk Policy v1",
   "type": "object",
   "additionalProperties": false,

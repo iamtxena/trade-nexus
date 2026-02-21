@@ -251,4 +251,4 @@ If the deploy workflow fails:
 1. **Cold start mitigation**: Set `minReplicas: 1` on Azure Container Apps for the review-web release to avoid 90s cold starts during trader review flows.
 2. **Live Engine health route**: Add `GET /api/health` to live-engine for monitoring parity.
 3. **Review endpoint SLO**: Add explicit SLO for review-web endpoints when #275 contracts are frozen.
-4. **Credentials leak**: See #286 for critical `.azure-secrets.md` remediation.
+4. **Credentials rotation**: `.azure-secrets.md` remediation completed — credentials rotated, file relocated, deploy verified green (see VOPS-VW-01 §2.1).

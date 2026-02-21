@@ -66,29 +66,23 @@
 
 ## 2. Security Audit & Findings
 
-### 2.1 LOCAL-ONLY: Plaintext Credentials File
+### 2.1 RESOLVED: Local Credentials File
 
-**File**: `.azure-secrets.md` (local workspace only)
+**File**: `.azure-secrets.md` (was local workspace only, never committed)
 
 **Verified status** (2026-02-20):
 - `.gitignore` line 72 excludes the file
-- **Not tracked** in git index
-- **0 commits** found in reachable history (`git rev-list --all`)
-- **0 matches** across 25 remote branches
-- GitHub content API returns **404** (not in remote)
-- GitHub secret-scanning alerts: **none**
-- Local file permissions tightened to **600**
+- Not tracked in git index; 0 commits in reachable history
+- GitHub content API returns 404; secret-scanning alerts: none
 
-**Finding**: The file contains plaintext Azure credentials (ACR passwords, SP client secret, subscription/tenant IDs) but has never been committed. Risk is local-only.
+**Resolution** (2026-02-20, completed):
+1. ACR password rotated (`az acr credential renew`)
+2. SP client secret rotated (`az ad sp credential reset`)
+3. GitHub Actions secrets updated (`ACR_PASSWORD`, `AZURE_CREDENTIALS`)
+4. Deploy verified green: [Run 22235235309](https://github.com/iamtxena/trade-nexus/actions/runs/22235235309)
+5. File moved out of repo workspace to `~/.azure-secrets-trade-nexus.md`
 
-**Required actions** (precautionary):
-1. Rotate ACR password: `az acr credential renew --name tradenexusacr`
-2. Rotate SP client secret: `az ad sp credential reset --id <client-id>`
-3. Update GitHub Actions secrets (`ACR_PASSWORD`, `AZURE_CREDENTIALS`) with rotated values
-4. Move `.azure-secrets.md` out of repo workspace into a vault or password manager
-5. Resume normal rollout only after rotation confirmation
-
-**Owner**: Cloud Ops
+**Status**: Closed — no residual risk.
 
 ### 2.2 Secret Rotation Rules
 

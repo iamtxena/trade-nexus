@@ -34,6 +34,13 @@ import {
     ValidationRunOutputsToJSON,
     ValidationRunOutputsToJSONTyped,
 } from './ValidationRunOutputs';
+import type { ValidationRunActorMetadata } from './ValidationRunActorMetadata';
+import {
+    ValidationRunActorMetadataFromJSON,
+    ValidationRunActorMetadataFromJSONTyped,
+    ValidationRunActorMetadataToJSON,
+    ValidationRunActorMetadataToJSONTyped,
+} from './ValidationRunActorMetadata';
 import type { ValidationDeterministicChecks } from './ValidationDeterministicChecks';
 import {
     ValidationDeterministicChecksFromJSON,
@@ -112,6 +119,12 @@ export interface ValidationRunArtifact {
      * @memberof ValidationRunArtifact
      */
     userId: string;
+    /**
+     * 
+     * @type {ValidationRunActorMetadata}
+     * @memberof ValidationRunArtifact
+     */
+    actor?: ValidationRunActorMetadata;
     /**
      * 
      * @type {ValidationStrategyRef}
@@ -208,6 +221,7 @@ export function ValidationRunArtifactFromJSONTyped(json: any, ignoreDiscriminato
         'requestId': json['requestId'],
         'tenantId': json['tenantId'],
         'userId': json['userId'],
+        'actor': json['actor'] == null ? undefined : ValidationRunActorMetadataFromJSON(json['actor']),
         'strategyRef': ValidationStrategyRefFromJSON(json['strategyRef']),
         'inputs': ValidationRunInputsFromJSON(json['inputs']),
         'outputs': ValidationRunOutputsFromJSON(json['outputs']),
@@ -236,6 +250,7 @@ export function ValidationRunArtifactToJSONTyped(value?: ValidationRunArtifact |
         'requestId': value['requestId'],
         'tenantId': value['tenantId'],
         'userId': value['userId'],
+        'actor': ValidationRunActorMetadataToJSON(value['actor']),
         'strategyRef': ValidationStrategyRefToJSON(value['strategyRef']),
         'inputs': ValidationRunInputsToJSON(value['inputs']),
         'outputs': ValidationRunOutputsToJSON(value['outputs']),

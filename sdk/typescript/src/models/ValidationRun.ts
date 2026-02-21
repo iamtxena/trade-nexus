@@ -20,6 +20,13 @@ import {
     ValidationProfileToJSON,
     ValidationProfileToJSONTyped,
 } from './ValidationProfile';
+import type { ValidationRunActorMetadata } from './ValidationRunActorMetadata';
+import {
+    ValidationRunActorMetadataFromJSON,
+    ValidationRunActorMetadataFromJSONTyped,
+    ValidationRunActorMetadataToJSON,
+    ValidationRunActorMetadataToJSONTyped,
+} from './ValidationRunActorMetadata';
 import type { ValidationRunStatus } from './ValidationRunStatus';
 import {
     ValidationRunStatusFromJSON,
@@ -73,6 +80,12 @@ export interface ValidationRun {
     finalDecision: ValidationRunDecision;
     /**
      * 
+     * @type {ValidationRunActorMetadata}
+     * @memberof ValidationRun
+     */
+    actor?: ValidationRunActorMetadata;
+    /**
+     * 
      * @type {Date}
      * @memberof ValidationRun
      */
@@ -123,6 +136,7 @@ export function ValidationRunFromJSONTyped(json: any, ignoreDiscriminator: boole
         'profile': ValidationProfileFromJSON(json['profile']),
         'schemaVersion': json['schemaVersion'],
         'finalDecision': ValidationRunDecisionFromJSON(json['finalDecision']),
+        'actor': json['actor'] == null ? undefined : ValidationRunActorMetadataFromJSON(json['actor']),
         'createdAt': (new Date(json['createdAt'])),
         'updatedAt': (new Date(json['updatedAt'])),
     };
@@ -144,6 +158,7 @@ export function ValidationRunToJSONTyped(value?: ValidationRun | null, ignoreDis
         'profile': ValidationProfileToJSON(value['profile']),
         'schemaVersion': value['schemaVersion'],
         'finalDecision': ValidationRunDecisionToJSON(value['finalDecision']),
+        'actor': ValidationRunActorMetadataToJSON(value['actor']),
         'createdAt': ((value['createdAt']).toISOString()),
         'updatedAt': ((value['updatedAt']).toISOString()),
     };

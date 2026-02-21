@@ -26,6 +26,14 @@ def test_validation_api_is_generated_with_all_validation_operations() -> None:
         "createValidationRunRenderV2(",
         "createValidationBaselineV2(",
         "replayValidationRegressionV2(",
+        "registerValidationBotInviteCodeV2(",
+        "registerValidationBotPartnerBootstrapV2(",
+        "rotateValidationBotKeyV2(",
+        "revokeValidationBotKeyV2(",
+        "listValidationRunInvitesV2(",
+        "createValidationRunInviteV2(",
+        "revokeValidationInviteV2(",
+        "acceptValidationInviteOnLoginV2(",
     ):
         assert operation in api, f"Missing SDK validation operation: {operation}"
 
@@ -53,6 +61,12 @@ def test_validation_artifact_models_are_exported() -> None:
         "ValidationLlmSnapshotArtifact",
         "ValidationArtifactResponse",
         "ValidationRunResponse",
+        "Bot",
+        "BotRegistration",
+        "BotKeyMetadata",
+        "ValidationInvite",
+        "ValidationRunShare",
+        "ValidationRunActorMetadata",
     ):
         assert f"export * from './{model}';" in index
 
@@ -65,6 +79,13 @@ def test_validation_write_request_types_expose_idempotency_key() -> None:
         "CreateValidationRunRenderV2Request",
         "CreateValidationBaselineV2Request",
         "ReplayValidationRegressionV2Request",
+        "RegisterValidationBotInviteCodeV2Request",
+        "RegisterValidationBotPartnerBootstrapV2Request",
+        "RotateValidationBotKeyV2Request",
+        "RevokeValidationBotKeyV2Request",
+        "CreateValidationRunInviteV2Request",
+        "RevokeValidationInviteV2Request",
+        "AcceptValidationInviteOnLoginV2Request",
     ):
         request_block = api.split(f"export interface {request_type}", maxsplit=1)[1].split(
             "}\n",

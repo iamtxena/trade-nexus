@@ -15,7 +15,16 @@
 
 import * as runtime from '../runtime';
 import type {
+  AcceptValidationInviteRequest,
+  BotKeyMetadataResponse,
+  BotKeyRotationResponse,
+  BotRegistrationResponse,
+  CreateBotInviteRegistrationRequest,
+  CreateBotKeyRevocationRequest,
+  CreateBotKeyRotationRequest,
+  CreateBotPartnerBootstrapRequest,
   CreateValidationBaselineRequest,
+  CreateValidationInviteRequest,
   CreateValidationRegressionReplayRequest,
   CreateValidationRenderRequest,
   CreateValidationReviewCommentRequest,
@@ -26,6 +35,9 @@ import type {
   ErrorResponse,
   ValidationArtifactResponse,
   ValidationBaselineResponse,
+  ValidationInviteAcceptanceResponse,
+  ValidationInviteListResponse,
+  ValidationInviteResponse,
   ValidationRegressionReplayResponse,
   ValidationRenderFormat,
   ValidationRenderResponse,
@@ -41,8 +53,26 @@ import type {
   ValidationRunStatus,
 } from '../models/index';
 import {
+    AcceptValidationInviteRequestFromJSON,
+    AcceptValidationInviteRequestToJSON,
+    BotKeyMetadataResponseFromJSON,
+    BotKeyMetadataResponseToJSON,
+    BotKeyRotationResponseFromJSON,
+    BotKeyRotationResponseToJSON,
+    BotRegistrationResponseFromJSON,
+    BotRegistrationResponseToJSON,
+    CreateBotInviteRegistrationRequestFromJSON,
+    CreateBotInviteRegistrationRequestToJSON,
+    CreateBotKeyRevocationRequestFromJSON,
+    CreateBotKeyRevocationRequestToJSON,
+    CreateBotKeyRotationRequestFromJSON,
+    CreateBotKeyRotationRequestToJSON,
+    CreateBotPartnerBootstrapRequestFromJSON,
+    CreateBotPartnerBootstrapRequestToJSON,
     CreateValidationBaselineRequestFromJSON,
     CreateValidationBaselineRequestToJSON,
+    CreateValidationInviteRequestFromJSON,
+    CreateValidationInviteRequestToJSON,
     CreateValidationRegressionReplayRequestFromJSON,
     CreateValidationRegressionReplayRequestToJSON,
     CreateValidationRenderRequestFromJSON,
@@ -63,6 +93,12 @@ import {
     ValidationArtifactResponseToJSON,
     ValidationBaselineResponseFromJSON,
     ValidationBaselineResponseToJSON,
+    ValidationInviteAcceptanceResponseFromJSON,
+    ValidationInviteAcceptanceResponseToJSON,
+    ValidationInviteListResponseFromJSON,
+    ValidationInviteListResponseToJSON,
+    ValidationInviteResponseFromJSON,
+    ValidationInviteResponseToJSON,
     ValidationRegressionReplayResponseFromJSON,
     ValidationRegressionReplayResponseToJSON,
     ValidationRenderFormatFromJSON,
@@ -91,6 +127,13 @@ import {
     ValidationRunStatusToJSON,
 } from '../models/index';
 
+export interface AcceptValidationInviteOnLoginV2Request {
+    inviteId: string;
+    idempotencyKey: string;
+    acceptValidationInviteRequest: AcceptValidationInviteRequest;
+    xRequestId?: string;
+}
+
 export interface CreateValidationBaselineV2Request {
     idempotencyKey: string;
     createValidationBaselineRequest: CreateValidationBaselineRequest;
@@ -115,6 +158,13 @@ export interface CreateValidationReviewRenderV2Request {
     runId: string;
     idempotencyKey: string;
     createValidationReviewRenderRequest: CreateValidationReviewRenderRequest;
+    xRequestId?: string;
+}
+
+export interface CreateValidationRunInviteV2Request {
+    runId: string;
+    idempotencyKey: string;
+    createValidationInviteRequest: CreateValidationInviteRequest;
     xRequestId?: string;
 }
 
@@ -160,7 +210,26 @@ export interface ListValidationReviewRunsV2Request {
     limit?: number;
 }
 
+export interface ListValidationRunInvitesV2Request {
+    runId: string;
+    xRequestId?: string;
+    cursor?: string;
+    limit?: number;
+}
+
 export interface ListValidationRunsV2Request {
+    xRequestId?: string;
+}
+
+export interface RegisterValidationBotInviteCodeV2Request {
+    idempotencyKey: string;
+    createBotInviteRegistrationRequest: CreateBotInviteRegistrationRequest;
+    xRequestId?: string;
+}
+
+export interface RegisterValidationBotPartnerBootstrapV2Request {
+    idempotencyKey: string;
+    createBotPartnerBootstrapRequest: CreateBotPartnerBootstrapRequest;
     xRequestId?: string;
 }
 
@@ -168,6 +237,27 @@ export interface ReplayValidationRegressionV2Request {
     idempotencyKey: string;
     createValidationRegressionReplayRequest: CreateValidationRegressionReplayRequest;
     xRequestId?: string;
+}
+
+export interface RevokeValidationBotKeyV2Request {
+    botId: string;
+    keyId: string;
+    idempotencyKey: string;
+    xRequestId?: string;
+    createBotKeyRevocationRequest?: CreateBotKeyRevocationRequest;
+}
+
+export interface RevokeValidationInviteV2Request {
+    inviteId: string;
+    idempotencyKey: string;
+    xRequestId?: string;
+}
+
+export interface RotateValidationBotKeyV2Request {
+    botId: string;
+    idempotencyKey: string;
+    xRequestId?: string;
+    createBotKeyRotationRequest?: CreateBotKeyRotationRequest;
 }
 
 export interface SubmitValidationRunReviewV2Request {
@@ -184,6 +274,24 @@ export interface SubmitValidationRunReviewV2Request {
  * @interface ValidationApiInterface
  */
 export interface ValidationApiInterface {
+    /**
+     * 
+     * @summary Accept validation invite during login flow into Shared Validation
+     * @param {string} inviteId 
+     * @param {string} idempotencyKey Required for idempotent write operations.
+     * @param {AcceptValidationInviteRequest} acceptValidationInviteRequest 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    acceptValidationInviteOnLoginV2Raw(requestParameters: AcceptValidationInviteOnLoginV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationInviteAcceptanceResponse>>;
+
+    /**
+     * Accept validation invite during login flow into Shared Validation
+     */
+    acceptValidationInviteOnLoginV2(requestParameters: AcceptValidationInviteOnLoginV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationInviteAcceptanceResponse>;
+
     /**
      * 
      * @summary Promote validation run as baseline
@@ -254,6 +362,24 @@ export interface ValidationApiInterface {
      * Trigger optional html/pdf review render artifact generation
      */
     createValidationReviewRenderV2(requestParameters: CreateValidationReviewRenderV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewRenderResponse>;
+
+    /**
+     * 
+     * @summary Create run-level validation invite by email
+     * @param {string} runId 
+     * @param {string} idempotencyKey Required for idempotent write operations.
+     * @param {CreateValidationInviteRequest} createValidationInviteRequest 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    createValidationRunInviteV2Raw(requestParameters: CreateValidationRunInviteV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationInviteResponse>>;
+
+    /**
+     * Create run-level validation invite by email
+     */
+    createValidationRunInviteV2(requestParameters: CreateValidationRunInviteV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationInviteResponse>;
 
     /**
      * 
@@ -376,6 +502,24 @@ export interface ValidationApiInterface {
 
     /**
      * 
+     * @summary List run-level validation invites by email
+     * @param {string} runId 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {string} [cursor] 
+     * @param {number} [limit] 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    listValidationRunInvitesV2Raw(requestParameters: ListValidationRunInvitesV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationInviteListResponse>>;
+
+    /**
+     * List run-level validation invites by email
+     */
+    listValidationRunInvitesV2(requestParameters: ListValidationRunInvitesV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationInviteListResponse>;
+
+    /**
+     * 
      * @summary List validation runs for authenticated identity scope
      * @param {string} [xRequestId] Caller-provided request id for trace correlation.
      * @param {*} [options] Override http request option.
@@ -388,6 +532,40 @@ export interface ValidationApiInterface {
      * List validation runs for authenticated identity scope
      */
     listValidationRunsV2(requestParameters: ListValidationRunsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationRunListResponse>;
+
+    /**
+     * 
+     * @summary Self-register bot via rate-limited invite-code trial path
+     * @param {string} idempotencyKey Required for idempotent write operations.
+     * @param {CreateBotInviteRegistrationRequest} createBotInviteRegistrationRequest 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    registerValidationBotInviteCodeV2Raw(requestParameters: RegisterValidationBotInviteCodeV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<BotRegistrationResponse>>;
+
+    /**
+     * Self-register bot via rate-limited invite-code trial path
+     */
+    registerValidationBotInviteCodeV2(requestParameters: RegisterValidationBotInviteCodeV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BotRegistrationResponse>;
+
+    /**
+     * 
+     * @summary Self-register bot via partner key/secret bootstrap path
+     * @param {string} idempotencyKey Required for idempotent write operations.
+     * @param {CreateBotPartnerBootstrapRequest} createBotPartnerBootstrapRequest 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    registerValidationBotPartnerBootstrapV2Raw(requestParameters: RegisterValidationBotPartnerBootstrapV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<BotRegistrationResponse>>;
+
+    /**
+     * Self-register bot via partner key/secret bootstrap path
+     */
+    registerValidationBotPartnerBootstrapV2(requestParameters: RegisterValidationBotPartnerBootstrapV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BotRegistrationResponse>;
 
     /**
      * 
@@ -405,6 +583,60 @@ export interface ValidationApiInterface {
      * Replay validation regression against stored baseline
      */
     replayValidationRegressionV2(requestParameters: ReplayValidationRegressionV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationRegressionReplayResponse>;
+
+    /**
+     * 
+     * @summary Revoke bot API key metadata without exposing raw key
+     * @param {string} botId 
+     * @param {string} keyId 
+     * @param {string} idempotencyKey Required for idempotent write operations.
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {CreateBotKeyRevocationRequest} [createBotKeyRevocationRequest] 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    revokeValidationBotKeyV2Raw(requestParameters: RevokeValidationBotKeyV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<BotKeyMetadataResponse>>;
+
+    /**
+     * Revoke bot API key metadata without exposing raw key
+     */
+    revokeValidationBotKeyV2(requestParameters: RevokeValidationBotKeyV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BotKeyMetadataResponse>;
+
+    /**
+     * 
+     * @summary Revoke run-level validation invite by email
+     * @param {string} inviteId 
+     * @param {string} idempotencyKey Required for idempotent write operations.
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    revokeValidationInviteV2Raw(requestParameters: RevokeValidationInviteV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationInviteResponse>>;
+
+    /**
+     * Revoke run-level validation invite by email
+     */
+    revokeValidationInviteV2(requestParameters: RevokeValidationInviteV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationInviteResponse>;
+
+    /**
+     * 
+     * @summary Rotate bot API key and return raw key once
+     * @param {string} botId 
+     * @param {string} idempotencyKey Required for idempotent write operations.
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {CreateBotKeyRotationRequest} [createBotKeyRotationRequest] 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    rotateValidationBotKeyV2Raw(requestParameters: RotateValidationBotKeyV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<BotKeyRotationResponse>>;
+
+    /**
+     * Rotate bot API key and return raw key once
+     */
+    rotateValidationBotKeyV2(requestParameters: RotateValidationBotKeyV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BotKeyRotationResponse>;
 
     /**
      * 
@@ -430,6 +662,80 @@ export interface ValidationApiInterface {
  * 
  */
 export class ValidationApi extends runtime.BaseAPI implements ValidationApiInterface {
+
+    /**
+     * Accept validation invite during login flow into Shared Validation
+     */
+    async acceptValidationInviteOnLoginV2Raw(requestParameters: AcceptValidationInviteOnLoginV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationInviteAcceptanceResponse>> {
+        if (requestParameters['inviteId'] == null) {
+            throw new runtime.RequiredError(
+                'inviteId',
+                'Required parameter "inviteId" was null or undefined when calling acceptValidationInviteOnLoginV2().'
+            );
+        }
+
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling acceptValidationInviteOnLoginV2().'
+            );
+        }
+
+        if (requestParameters['acceptValidationInviteRequest'] == null) {
+            throw new runtime.RequiredError(
+                'acceptValidationInviteRequest',
+                'Required parameter "acceptValidationInviteRequest" was null or undefined when calling acceptValidationInviteOnLoginV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-sharing/invites/{inviteId}/accept`;
+        urlPath = urlPath.replace(`{${"inviteId"}}`, encodeURIComponent(String(requestParameters['inviteId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: AcceptValidationInviteRequestToJSON(requestParameters['acceptValidationInviteRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationInviteAcceptanceResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Accept validation invite during login flow into Shared Validation
+     */
+    async acceptValidationInviteOnLoginV2(requestParameters: AcceptValidationInviteOnLoginV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationInviteAcceptanceResponse> {
+        const response = await this.acceptValidationInviteOnLoginV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Promote validation run as baseline
@@ -716,6 +1022,80 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
      */
     async createValidationReviewRenderV2(requestParameters: CreateValidationReviewRenderV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewRenderResponse> {
         const response = await this.createValidationReviewRenderV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Create run-level validation invite by email
+     */
+    async createValidationRunInviteV2Raw(requestParameters: CreateValidationRunInviteV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationInviteResponse>> {
+        if (requestParameters['runId'] == null) {
+            throw new runtime.RequiredError(
+                'runId',
+                'Required parameter "runId" was null or undefined when calling createValidationRunInviteV2().'
+            );
+        }
+
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling createValidationRunInviteV2().'
+            );
+        }
+
+        if (requestParameters['createValidationInviteRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createValidationInviteRequest',
+                'Required parameter "createValidationInviteRequest" was null or undefined when calling createValidationRunInviteV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-sharing/runs/{runId}/invites`;
+        urlPath = urlPath.replace(`{${"runId"}}`, encodeURIComponent(String(requestParameters['runId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateValidationInviteRequestToJSON(requestParameters['createValidationInviteRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationInviteResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Create run-level validation invite by email
+     */
+    async createValidationRunInviteV2(requestParameters: CreateValidationRunInviteV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationInviteResponse> {
+        const response = await this.createValidationRunInviteV2Raw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -1141,6 +1521,67 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
     }
 
     /**
+     * List run-level validation invites by email
+     */
+    async listValidationRunInvitesV2Raw(requestParameters: ListValidationRunInvitesV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationInviteListResponse>> {
+        if (requestParameters['runId'] == null) {
+            throw new runtime.RequiredError(
+                'runId',
+                'Required parameter "runId" was null or undefined when calling listValidationRunInvitesV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-sharing/runs/{runId}/invites`;
+        urlPath = urlPath.replace(`{${"runId"}}`, encodeURIComponent(String(requestParameters['runId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationInviteListResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * List run-level validation invites by email
+     */
+    async listValidationRunInvitesV2(requestParameters: ListValidationRunInvitesV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationInviteListResponse> {
+        const response = await this.listValidationRunInvitesV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * List validation runs for authenticated identity scope
      */
     async listValidationRunsV2Raw(requestParameters: ListValidationRunsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationRunListResponse>> {
@@ -1182,6 +1623,114 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
      */
     async listValidationRunsV2(requestParameters: ListValidationRunsV2Request = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationRunListResponse> {
         const response = await this.listValidationRunsV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Self-register bot via rate-limited invite-code trial path
+     */
+    async registerValidationBotInviteCodeV2Raw(requestParameters: RegisterValidationBotInviteCodeV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<BotRegistrationResponse>> {
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling registerValidationBotInviteCodeV2().'
+            );
+        }
+
+        if (requestParameters['createBotInviteRegistrationRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createBotInviteRegistrationRequest',
+                'Required parameter "createBotInviteRegistrationRequest" was null or undefined when calling registerValidationBotInviteCodeV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+
+        let urlPath = `/v2/validation-bots/registrations/invite-code`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateBotInviteRegistrationRequestToJSON(requestParameters['createBotInviteRegistrationRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => BotRegistrationResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Self-register bot via rate-limited invite-code trial path
+     */
+    async registerValidationBotInviteCodeV2(requestParameters: RegisterValidationBotInviteCodeV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BotRegistrationResponse> {
+        const response = await this.registerValidationBotInviteCodeV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Self-register bot via partner key/secret bootstrap path
+     */
+    async registerValidationBotPartnerBootstrapV2Raw(requestParameters: RegisterValidationBotPartnerBootstrapV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<BotRegistrationResponse>> {
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling registerValidationBotPartnerBootstrapV2().'
+            );
+        }
+
+        if (requestParameters['createBotPartnerBootstrapRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createBotPartnerBootstrapRequest',
+                'Required parameter "createBotPartnerBootstrapRequest" was null or undefined when calling registerValidationBotPartnerBootstrapV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+
+        let urlPath = `/v2/validation-bots/registrations/partner-bootstrap`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateBotPartnerBootstrapRequestToJSON(requestParameters['createBotPartnerBootstrapRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => BotRegistrationResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Self-register bot via partner key/secret bootstrap path
+     */
+    async registerValidationBotPartnerBootstrapV2(requestParameters: RegisterValidationBotPartnerBootstrapV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BotRegistrationResponse> {
+        const response = await this.registerValidationBotPartnerBootstrapV2Raw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -1248,6 +1797,212 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
      */
     async replayValidationRegressionV2(requestParameters: ReplayValidationRegressionV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationRegressionReplayResponse> {
         const response = await this.replayValidationRegressionV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Revoke bot API key metadata without exposing raw key
+     */
+    async revokeValidationBotKeyV2Raw(requestParameters: RevokeValidationBotKeyV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<BotKeyMetadataResponse>> {
+        if (requestParameters['botId'] == null) {
+            throw new runtime.RequiredError(
+                'botId',
+                'Required parameter "botId" was null or undefined when calling revokeValidationBotKeyV2().'
+            );
+        }
+
+        if (requestParameters['keyId'] == null) {
+            throw new runtime.RequiredError(
+                'keyId',
+                'Required parameter "keyId" was null or undefined when calling revokeValidationBotKeyV2().'
+            );
+        }
+
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling revokeValidationBotKeyV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-bots/{botId}/keys/{keyId}/revoke`;
+        urlPath = urlPath.replace(`{${"botId"}}`, encodeURIComponent(String(requestParameters['botId'])));
+        urlPath = urlPath.replace(`{${"keyId"}}`, encodeURIComponent(String(requestParameters['keyId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateBotKeyRevocationRequestToJSON(requestParameters['createBotKeyRevocationRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => BotKeyMetadataResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Revoke bot API key metadata without exposing raw key
+     */
+    async revokeValidationBotKeyV2(requestParameters: RevokeValidationBotKeyV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BotKeyMetadataResponse> {
+        const response = await this.revokeValidationBotKeyV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Revoke run-level validation invite by email
+     */
+    async revokeValidationInviteV2Raw(requestParameters: RevokeValidationInviteV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationInviteResponse>> {
+        if (requestParameters['inviteId'] == null) {
+            throw new runtime.RequiredError(
+                'inviteId',
+                'Required parameter "inviteId" was null or undefined when calling revokeValidationInviteV2().'
+            );
+        }
+
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling revokeValidationInviteV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-sharing/invites/{inviteId}/revoke`;
+        urlPath = urlPath.replace(`{${"inviteId"}}`, encodeURIComponent(String(requestParameters['inviteId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationInviteResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Revoke run-level validation invite by email
+     */
+    async revokeValidationInviteV2(requestParameters: RevokeValidationInviteV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationInviteResponse> {
+        const response = await this.revokeValidationInviteV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Rotate bot API key and return raw key once
+     */
+    async rotateValidationBotKeyV2Raw(requestParameters: RotateValidationBotKeyV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<BotKeyRotationResponse>> {
+        if (requestParameters['botId'] == null) {
+            throw new runtime.RequiredError(
+                'botId',
+                'Required parameter "botId" was null or undefined when calling rotateValidationBotKeyV2().'
+            );
+        }
+
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling rotateValidationBotKeyV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-bots/{botId}/keys/rotate`;
+        urlPath = urlPath.replace(`{${"botId"}}`, encodeURIComponent(String(requestParameters['botId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateBotKeyRotationRequestToJSON(requestParameters['createBotKeyRotationRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => BotKeyRotationResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Rotate bot API key and return raw key once
+     */
+    async rotateValidationBotKeyV2(requestParameters: RotateValidationBotKeyV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BotKeyRotationResponse> {
+        const response = await this.rotateValidationBotKeyV2Raw(requestParameters, initOverrides);
         return await response.value();
     }
 

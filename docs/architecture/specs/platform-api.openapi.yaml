@@ -9,7 +9,7 @@ info:
     - This file is the source of truth for external consumers.
     - Lona and execution engines are internal provider integrations behind adapters.
 servers:
-  - url: https://api.trade-nexus.io
+  - url: https://api-nexus.lona.agency
     description: Production
   - url: http://localhost:3000
     description: Local development

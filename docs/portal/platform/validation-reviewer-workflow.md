@@ -61,7 +61,7 @@ CLI output for `#279` can include a direct reviewer URL (`/validation?runId=<run
 When running outside the CLI flow, use SDK or direct Platform API requests.
 
 ```bash
-export API_BASE="https://api.trade-nexus.io"
+export API_BASE="https://api-nexus.lona.agency"
 export TOKEN="<bearer-token>"
 export REQUEST_ID="req-validation-review-$(date +%s)"
 export IDEM_KEY="idem-validation-review-$(uuidgen | tr '[:upper:]' '[:lower:]')"

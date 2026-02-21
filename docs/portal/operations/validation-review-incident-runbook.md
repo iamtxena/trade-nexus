@@ -24,7 +24,7 @@ Provide deterministic incident handling for the validation review web program ac
 ```bash
 RUN_ID="<run-id>"
 TOKEN="<bearer-token>"
-API_BASE="https://api.trade-nexus.io"
+API_BASE="https://api-nexus.lona.agency"
 
 curl -sS "$API_BASE/v2/validation-runs/$RUN_ID" \
   -H "Authorization: Bearer $TOKEN" \
@@ -51,7 +51,7 @@ Web proxy or direct API calls return `401 Unauthorized` during run creation/revi
 
 ```bash
 TOKEN="<bearer-token>"
-API_BASE="https://api.trade-nexus.io"
+API_BASE="https://api-nexus.lona.agency"
 
 curl -i "$API_BASE/v2/validation-runs/nonexistent" \
   -H "Authorization: Bearer $TOKEN" \
@@ -97,7 +97,7 @@ Reviewer opens `/validation?runId=<runId>` but run detail/artifact does not reso
 ```bash
 RUN_ID="<run-id>"
 TOKEN="<bearer-token>"
-API_BASE="https://api.trade-nexus.io"
+API_BASE="https://api-nexus.lona.agency"
 
 curl -sS "$API_BASE/v2/validation-runs/$RUN_ID" \
   -H "Authorization: Bearer $TOKEN" \

@@ -230,7 +230,7 @@
       "endpoints": ["/v2/validation-runs", "/v2/validation-runs/{runId}", "/v2/validation-runs/{runId}/artifact", "/v2/validation-runs/{runId}/review", "/v2/validation-runs/{runId}/render", "/v2/validation-baselines", "/v2/validation-regressions/replay"],
       "workflows": ["validation_review_web", "contract_first_review"],
       "owners": ["Validation Review Web Docs"],
-      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/282"
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/313"
     },
     {
       "id": "portal_validation_review_incident_runbook_v1",
@@ -241,7 +241,7 @@
       "endpoints": ["/v1/health", "/v2/validation-runs/{runId}/artifact", "/v2/validation-runs/{runId}/render", "/v2/validation-regressions/replay"],
       "workflows": ["incident_response", "findings_disposition"],
       "owners": ["Validation Review Web Docs", "Team F"],
-      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/282"
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/313"
     },
     {
       "id": "portal_validation_reviewer_workflow_v1",
@@ -252,7 +252,7 @@
       "endpoints": ["/v2/validation-runs", "/v2/validation-runs/{runId}", "/v2/validation-runs/{runId}/artifact", "/v2/validation-runs/{runId}/review", "/v2/validation-runs/{runId}/render"],
       "workflows": ["reviewer_decision_flow", "issue_status_reporting"],
       "owners": ["Validation Review Web Docs"],
-      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/282"
+      "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/313"
     }
   ]
 }

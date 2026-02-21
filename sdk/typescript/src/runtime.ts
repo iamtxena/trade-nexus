@@ -13,7 +13,7 @@
  */
 
 
-export const BASE_PATH = "https://api.trade-nexus.io".replace(/\/+$/, "");
+export const BASE_PATH = "https://api-nexus.lona.agency".replace(/\/+$/, "");
 
 export interface ConfigurationParameters {
     basePath?: string; // override base path

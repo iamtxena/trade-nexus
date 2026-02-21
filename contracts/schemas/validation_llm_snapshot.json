@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trade-nexus.io/schemas/validation_llm_snapshot.json",
+  "$id": "https://trade-nexus.lona.agency/schemas/validation_llm_snapshot.json",
   "title": "Trade Nexus Validation LLM Snapshot Artifact",
   "type": "object",
   "additionalProperties": false,

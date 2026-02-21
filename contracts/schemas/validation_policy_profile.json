@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trade-nexus.io/schemas/validation_policy_profile.json",
+  "$id": "https://trade-nexus.lona.agency/schemas/validation_policy_profile.json",
   "title": "Trade Nexus Validation Policy Profile",
   "type": "object",
   "additionalProperties": false,

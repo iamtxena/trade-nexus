@@ -8,7 +8,7 @@ set -euo pipefail
 # Exit:  0 = all endpoints healthy, 1 = one or more endpoints failed
 # =============================================================================
 
-DEFAULT_URL="https://trade-nexus-backend.whitecliff-198cd26a.westeurope.azurecontainerapps.io"
+DEFAULT_URL="https://api-nexus.lona.agency"
 BASE_URL="${DEFAULT_URL}"
 
 # --- Cleanup / trap --------------------------------------------------------

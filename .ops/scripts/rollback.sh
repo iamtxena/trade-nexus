@@ -13,7 +13,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTAINER_APP="trade-nexus-backend"
 RESOURCE_GROUP="trade-nexus"
-FQDN="trade-nexus-backend.whitecliff-198cd26a.westeurope.azurecontainerapps.io"
+FQDN="api-nexus.lona.agency"
 AUTO_CONFIRM=false
 TARGET_REVISION=""
 

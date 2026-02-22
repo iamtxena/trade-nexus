@@ -100,17 +100,6 @@ alter table validation_runs enable row level security;
 create policy "validation_run_owner_all" on validation_runs
   for all using (auth.jwt() ->> 'sub' = user_id);
 
--- Shared recipients can SELECT runs shared with them (via validation_run_shares)
-create policy "validation_run_shared_select" on validation_runs
-  for select using (
-    exists (
-      select 1 from validation_run_shares
-      where validation_run_shares.run_id = validation_runs.id
-        and validation_run_shares.shared_with_email = auth.jwt() ->> 'email'
-        and validation_run_shares.revoked_at is null
-    )
-  );
-
 -- =============================================================
 -- 4. validation_run_shares — run-level sharing by email only
 --    Per non-negotiable #4: sharing is run-level, invite by email
@@ -135,13 +124,34 @@ create unique index idx_shares_unique on validation_run_shares (run_id, shared_w
 
 alter table validation_run_shares enable row level security;
 
--- Share creator can manage shares they created
+-- Share creator can manage shares, but only for runs they own
 create policy "share_creator_all" on validation_run_shares
-  for all using (auth.jwt() ->> 'sub' = shared_by_user_id);
+  for all using (
+    auth.jwt() ->> 'sub' = shared_by_user_id
+    and exists (
+      select 1 from validation_runs
+      where validation_runs.id = validation_run_shares.run_id
+        and validation_runs.user_id = auth.jwt() ->> 'sub'
+    )
+  );
 
 -- Share recipients can see shares addressed to them
 create policy "share_recipient_select" on validation_run_shares
   for select using (auth.jwt() ->> 'email' = shared_with_email);
+
+-- =============================================================
+-- 4b. Deferred policy: shared recipients can SELECT runs shared with them
+--     Created after validation_run_shares table exists to avoid 42P01
+-- =============================================================
+create policy "validation_run_shared_select" on validation_runs
+  for select using (
+    exists (
+      select 1 from validation_run_shares
+      where validation_run_shares.run_id = validation_runs.id
+        and validation_run_shares.shared_with_email = auth.jwt() ->> 'email'
+        and validation_run_shares.revoked_at is null
+    )
+  );
 
 -- =============================================================
 -- 5. Fix missing RLS on kb_* tables (from migration 002)

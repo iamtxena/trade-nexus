@@ -16,10 +16,10 @@ check() {
   result=$(psql "$DB_URL" -tAc "$query" 2>/dev/null || echo "ERROR")
   if [[ "$result" == "$expected" ]]; then
     echo "  PASS: $desc (got: $result)"
-    ((PASS++))
+    PASS=$((PASS + 1))
   else
     echo "  FAIL: $desc (expected: $expected, got: $result)"
-    ((FAIL++))
+    FAIL=$((FAIL + 1))
   fi
 }
 

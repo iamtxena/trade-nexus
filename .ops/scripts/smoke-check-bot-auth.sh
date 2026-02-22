@@ -28,10 +28,10 @@ smoke() {
 
   if [[ "$status" == "$expected_status" ]]; then
     echo "  PASS: $desc (HTTP $status)"
-    ((PASS++))
+    PASS=$((PASS + 1))
   else
     echo "  FAIL: $desc (expected HTTP $expected_status, got $status)"
-    ((FAIL++))
+    FAIL=$((FAIL + 1))
   fi
 }
 

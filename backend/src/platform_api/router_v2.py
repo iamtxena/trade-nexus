@@ -49,8 +49,6 @@ from src.platform_api.schemas_v2 import (
     ValidationInviteListResponse,
     ValidationInviteResponse,
     ValidationRunShare,
-    RuntimeBotInviteCodeResponse,
-    RequestRuntimeBotInviteCodeRequest,
     ValidationArtifactResponse,
     ValidationBaselineResponse,
     ValidationRegressionReplayResponse,
@@ -92,7 +90,6 @@ async def _request_context(
     request: Request,
     x_request_id: str | None = Header(default=None, alias="X-Request-Id"),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
-    x_user_email: str | None = Header(default=None, alias="X-User-Email"),
 ) -> RequestContext:
     state_request_id = getattr(request.state, "request_id", None)
     request_id = x_request_id or (state_request_id if isinstance(state_request_id, str) and state_request_id.strip() else f"req-{uuid4()}")
@@ -123,10 +120,7 @@ async def _request_context(
 
     state_user_email = getattr(request.state, "user_email", None)
     user_email_authenticated = bool(getattr(request.state, "user_email_authenticated", False))
-    if user_email_authenticated:
-        user_email = state_user_email if isinstance(state_user_email, str) and state_user_email.strip() else None
-    else:
-        user_email = x_user_email
+    user_email = state_user_email if user_email_authenticated and isinstance(state_user_email, str) and state_user_email.strip() else None
 
     request.state.tenant_id = tenant_id
     request.state.user_id = user_id
@@ -139,7 +133,7 @@ async def _request_context(
         actor_id=actor_id,
         user_email=user_email,
     )
-    if context.actor_type == "user":
+    if context.actor_type == "user" and user_email_authenticated:
         _identity_service.activate_email_invites(context=context)
     return context
 
@@ -147,9 +141,7 @@ async def _request_context(
 ContextDep = Annotated[RequestContext, Depends(_request_context)]
 
 
-def _normalized_bot_id(*, bot_name: str, bot_id: str | None) -> str:
-    if isinstance(bot_id, str) and bot_id.strip():
-        return bot_id
+def _normalized_bot_id(*, bot_name: str) -> str:
     normalized = "-".join(part for part in bot_name.lower().strip().split() if part)
     return normalized or "runtime-bot"
 
@@ -313,30 +305,6 @@ async def list_validation_runs_v2(
 
 
 @router.post(
-    "/validation-bots/request-invite",
-    response_model=RuntimeBotInviteCodeResponse,
-    status_code=status.HTTP_201_CREATED,
-    tags=["Validation"],
-)
-async def request_runtime_bot_invite_code_v2(
-    payload: RequestRuntimeBotInviteCodeRequest,
-    context: ContextDep,
-    request: Request,
-) -> RuntimeBotInviteCodeResponse:
-    source_ip = request.headers.get("X-Forwarded-For", "unknown").split(",")[0].strip()
-    invite_code, expires_at = _identity_service.request_invite_code(
-        context=context,
-        bot_id=payload.botId,
-        source_ip=source_ip,
-    )
-    return RuntimeBotInviteCodeResponse(
-        requestId=context.request_id,
-        inviteCode=invite_code,
-        expiresAt=expires_at,
-    )
-
-
-@router.post(
     "/validation-bots/registrations/invite-code",
     response_model=BotRegistrationResponse,
     status_code=status.HTTP_201_CREATED,
@@ -349,7 +317,7 @@ async def register_validation_bot_invite_code_v2(
     idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> BotRegistrationResponse:
     del idempotency_key
-    bot_id = _normalized_bot_id(bot_name=payload.botName, bot_id=payload.botId)
+    bot_id = _normalized_bot_id(bot_name=payload.botName)
     result = _identity_service.register_bot(
         context=context,
         bot_id=bot_id,
@@ -413,7 +381,7 @@ async def register_validation_bot_partner_bootstrap_v2(
     idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> BotRegistrationResponse:
     del idempotency_key
-    bot_id = _normalized_bot_id(bot_name=payload.botName, bot_id=payload.botId)
+    bot_id = _normalized_bot_id(bot_name=payload.botName)
     registration_context = context
     if context.user_id == "user-local":
         owner_email = payload.ownerEmail.strip().lower()
@@ -549,7 +517,7 @@ async def revoke_validation_bot_key_v2(
         key=BotKeyMetadata(
             id=record.key_id,
             botId=record.bot_id,
-            keyPrefix=record.key_id,
+            keyPrefix=_bot_key_prefix(f"tnx.bot.{record.bot_id}.{record.key_id}"),
             status="revoked",
             createdAt=record.created_at,
             lastUsedAt=record.last_used_at,
@@ -787,16 +755,16 @@ async def replay_validation_regression_v2(
 )
 async def create_validation_run_invite_v2(
     runId: str,
-    payload: CreateValidationInviteRequest,
+    request: CreateValidationInviteRequest,
     context: ContextDep,
     idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> ValidationInviteResponse:
     del idempotency_key
     invite = await _validation_service.create_validation_run_invite(
         run_id=runId,
-        invitee_email=payload.email,
-        permission=payload.permission,
-        expires_at=payload.expiresAt,
+        invitee_email=request.email,
+        permission="review",
+        expires_at=request.expiresAt,
         context=context,
     )
     return ValidationInviteResponse(
@@ -860,14 +828,14 @@ async def revoke_validation_invite_v2(
 )
 async def accept_validation_invite_on_login_v2(
     inviteId: str,
-    payload: AcceptValidationInviteRequest,
+    request: AcceptValidationInviteRequest,
     context: ContextDep,
     idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> ValidationInviteAcceptanceResponse:
     del idempotency_key
     invite = await _validation_service.accept_validation_invite_on_login(
         invite_id=inviteId,
-        accepted_email=payload.acceptedEmail,
+        accepted_email=request.acceptedEmail,
         context=context,
     )
     return ValidationInviteAcceptanceResponse(

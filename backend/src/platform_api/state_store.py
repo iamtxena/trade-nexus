@@ -408,6 +408,13 @@ class InMemoryStateStore:
             "validation_review_comments": {},
             "validation_review_decisions": {},
             "validation_review_renders": {},
+            "validation_bot_registrations_invite_code": {},
+            "validation_bot_registrations_partner_bootstrap": {},
+            "validation_bot_key_rotations": {},
+            "validation_bot_key_revocations": {},
+            "validation_run_invites": {},
+            "validation_invite_revocations": {},
+            "validation_invite_acceptance": {},
         }
 
     def next_id(self, scope: str) -> str:

@@ -590,32 +590,18 @@ class CreateBotInviteRegistrationRequest(BaseModel):
     inviteCode: str = Field(min_length=8)
     botName: str = Field(min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
-    # Runtime extension for deterministic bot id in tests.
-    botId: str | None = None
 
 
 class CreateBotPartnerBootstrapRequest(BaseModel):
     partnerKey: str = Field(min_length=8)
     partnerSecret: str = Field(min_length=8)
-    ownerEmail: str = Field(min_length=3)
+    ownerEmail: str
     botName: str = Field(min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
-    # Runtime extension for deterministic bot id in tests.
-    botId: str | None = None
-
-
-class RequestRuntimeBotInviteCodeRequest(BaseModel):
-    botId: str = Field(min_length=1)
-
-
-class RuntimeBotInviteCodeResponse(BaseModel):
-    requestId: str
-    inviteCode: str
-    expiresAt: str
 
 
 class CreateBotKeyRotationRequest(BaseModel):
-    reason: str | None = None
+    reason: str | None = Field(default=None, min_length=1)
 
 
 class BotKeyRotationResponse(BaseModel):
@@ -625,7 +611,7 @@ class BotKeyRotationResponse(BaseModel):
 
 
 class CreateBotKeyRevocationRequest(BaseModel):
-    reason: str | None = None
+    reason: str | None = Field(default=None, min_length=1)
 
 
 class BotKeyMetadataResponse(BaseModel):
@@ -660,11 +646,9 @@ class ValidationRunShare(BaseModel):
 
 
 class CreateValidationInviteRequest(BaseModel):
-    email: str = Field(min_length=3)
+    email: str
     message: str | None = None
     expiresAt: str | None = None
-    # Runtime extension for dedicated shared-validation review surface.
-    permission: Literal["view", "review"] = "review"
 
 
 class ValidationInviteResponse(BaseModel):
@@ -679,8 +663,8 @@ class ValidationInviteListResponse(BaseModel):
 
 
 class AcceptValidationInviteRequest(BaseModel):
-    acceptedEmail: str = Field(min_length=3)
-    loginSessionId: str | None = None
+    acceptedEmail: str
+    loginSessionId: str | None = Field(default=None, min_length=1)
 
 
 class ValidationInviteAcceptanceResponse(BaseModel):

@@ -11,7 +11,21 @@ LLM_DIR = ROOT / "docs" / "llm"
 CHUNKS_DIR = LLM_DIR / "chunks"
 
 OWNER_URL_PATTERN = re.compile(r"^https://github\.com/iamtxena/trade-nexus/issues/\d+$")
-ALLOWED_OWNER_ISSUES = {"76", "77", "78", "79", "80", "81", "106", "282", "283", "288"}
+ALLOWED_OWNER_ISSUES = {
+    "76",
+    "77",
+    "78",
+    "79",
+    "80",
+    "81",
+    "106",
+    "282",
+    "283",
+    "288",
+    "310",
+    "311",
+    "313",
+}
 
 
 def load_json(path: Path):

@@ -15,6 +15,8 @@ import pytest
 from src.main import app
 from src.platform_api import router_v1 as router_v1_module
 from src.platform_api import router_v2 as router_v2_module
+from src.platform_api.errors import PlatformAPIError
+from src.platform_api.schemas_v1 import RequestContext
 
 _JWT_SECRET = os.environ.setdefault("PLATFORM_AUTH_JWT_HS256_SECRET", "test-validation-runtime-secret")
 
@@ -78,6 +80,30 @@ def _validation_run_payload() -> dict[str, object]:
     }
 
 
+def _issue_runtime_invite_code(
+    *,
+    request_id: str,
+    tenant_id: str,
+    user_id: str,
+    bot_id: str,
+    source_ip: str,
+) -> str:
+    context = RequestContext(
+        request_id=request_id,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        owner_user_id=user_id,
+        actor_type="user",
+        actor_id=user_id,
+    )
+    invite_code, _ = router_v2_module._identity_service.request_invite_code(  # noqa: SLF001
+        context=context,
+        bot_id=bot_id,
+        source_ip=source_ip,
+    )
+    return invite_code
+
+
 @pytest.fixture(autouse=True)
 def _reset_runtime_state() -> None:
     identity = router_v2_module._identity_service
@@ -137,7 +163,6 @@ def test_runtime_bot_partner_registration_resolves_actor_identity_for_validation
             "partnerSecret": "partner-secret",
             "ownerEmail": "owner-runtime-bot@example.com",
             "botName": "Runtime Bot 1",
-            "botId": "runtime-bot-1",
         },
     )
     assert register.status_code == 201
@@ -156,7 +181,6 @@ def test_runtime_bot_partner_registration_resolves_actor_identity_for_validation
             "partnerSecret": "partner-secret",
             "ownerEmail": "owner-runtime-bot@example.com",
             "botName": "Runtime Bot 1",
-            "botId": "runtime-bot-1",
         },
     )
     assert rotate.status_code == 201
@@ -187,7 +211,6 @@ def test_runtime_bot_partner_registration_resolves_actor_identity_for_validation
             "partnerSecret": "partner-secret",
             "ownerEmail": "owner-runtime-bot@example.com",
             "botName": "Runtime Bot 1",
-            "botId": "runtime-bot-1",
         },
     )
     assert reissue.status_code == 201
@@ -235,23 +258,22 @@ def test_runtime_bot_partner_registration_resolves_actor_identity_for_validation
 
 def test_runtime_bot_invite_registration_path_is_single_use_and_rate_limited() -> None:
     client = _client()
-
-    headers = {
-        **_auth_headers(
-            request_id="req-runtime-bot-invite-001",
-            tenant_id="tenant-runtime-bot-invite",
-            user_id="owner-runtime-bot-invite",
-        ),
-        "X-Forwarded-For": "198.51.100.21",
-    }
-
-    invite = client.post(
-        "/v2/validation-bots/request-invite",
-        headers=headers,
-        json={"botId": "runtime-bot-invite-1"},
+    tenant_id = "tenant-runtime-bot-invite"
+    user_id = "owner-runtime-bot-invite"
+    source_ip = "198.51.100.21"
+    headers = _auth_headers(
+        request_id="req-runtime-bot-invite-001",
+        tenant_id=tenant_id,
+        user_id=user_id,
     )
-    assert invite.status_code == 201
-    invite_code = invite.json()["inviteCode"]
+
+    invite_code = _issue_runtime_invite_code(
+        request_id="req-runtime-bot-invite-seed-001",
+        tenant_id=tenant_id,
+        user_id=user_id,
+        bot_id="runtime-bot-invite-1",
+        source_ip=source_ip,
+    )
 
     register = client.post(
         "/v2/validation-bots/registrations/invite-code",
@@ -263,7 +285,6 @@ def test_runtime_bot_invite_registration_path_is_single_use_and_rate_limited() -
         json={
             "inviteCode": invite_code,
             "botName": "Runtime Bot Invite 1",
-            "botId": "runtime-bot-invite-1",
         },
     )
     assert register.status_code == 201
@@ -279,31 +300,35 @@ def test_runtime_bot_invite_registration_path_is_single_use_and_rate_limited() -
         json={
             "inviteCode": invite_code,
             "botName": "Runtime Bot Invite 1",
-            "botId": "runtime-bot-invite-1",
         },
     )
     assert reuse.status_code == 401
     assert reuse.json()["error"]["code"] == "BOT_INVITE_INVALID"
 
-    second = client.post(
-        "/v2/validation-bots/request-invite",
-        headers={**headers, "X-Request-Id": "req-runtime-bot-invite-002"},
-        json={"botId": "runtime-bot-invite-2"},
+    _issue_runtime_invite_code(
+        request_id="req-runtime-bot-invite-seed-002",
+        tenant_id=tenant_id,
+        user_id=user_id,
+        bot_id="runtime-bot-invite-2",
+        source_ip=source_ip,
     )
-    third = client.post(
-        "/v2/validation-bots/request-invite",
-        headers={**headers, "X-Request-Id": "req-runtime-bot-invite-003"},
-        json={"botId": "runtime-bot-invite-3"},
+    _issue_runtime_invite_code(
+        request_id="req-runtime-bot-invite-seed-003",
+        tenant_id=tenant_id,
+        user_id=user_id,
+        bot_id="runtime-bot-invite-3",
+        source_ip=source_ip,
     )
-    fourth = client.post(
-        "/v2/validation-bots/request-invite",
-        headers={**headers, "X-Request-Id": "req-runtime-bot-invite-004"},
-        json={"botId": "runtime-bot-invite-4"},
-    )
-    assert second.status_code == 201
-    assert third.status_code == 201
-    assert fourth.status_code == 429
-    assert fourth.json()["error"]["code"] == "BOT_INVITE_RATE_LIMITED"
+    with pytest.raises(PlatformAPIError) as exc:
+        _issue_runtime_invite_code(
+            request_id="req-runtime-bot-invite-seed-004",
+            tenant_id=tenant_id,
+            user_id=user_id,
+            bot_id="runtime-bot-invite-4",
+            source_ip=source_ip,
+        )
+    assert exc.value.status_code == 429
+    assert exc.value.code == "BOT_INVITE_RATE_LIMITED"
 
 
 def test_runtime_identity_routes_require_authenticated_identity() -> None:
@@ -359,7 +384,7 @@ def test_shared_validation_access_owner_invited_and_denied_users() -> None:
             "X-Request-Id": "req-shared-validation-share-001",
             "Idempotency-Key": "idem-shared-validation-share-001",
         },
-        json={"email": "invitee@example.com", "permission": "review"},
+        json={"email": "invitee@example.com"},
     )
     assert share.status_code == 201
 
@@ -438,7 +463,7 @@ def test_shared_invite_auto_accepts_on_authenticated_login_email_match() -> None
             "X-Request-Id": "req-shared-auto-accept-share-001",
             "Idempotency-Key": "idem-shared-auto-accept-share-001",
         },
-        json={"email": "login-user@example.com", "permission": "view"},
+        json={"email": "login-user@example.com"},
     )
     assert share.status_code == 201
 

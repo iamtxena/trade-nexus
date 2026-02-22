@@ -1,16 +1,16 @@
 ---
 title: Validation Review Web Reviewer Workflow
-summary: Web-first reviewer workflow for validation runs, canonical JSON artifacts, and trader decisions.
+summary: Web-first workflow for validation runs, bot identity onboarding, and run-level Shared Validation access.
 owners:
   - Validation Review Web Docs
-updated: 2026-02-20
+updated: 2026-02-21
 ---
 
 # Validation Review Web Reviewer Workflow
 
 ## Objective
 
-Define the production reviewer flow for validation decisions in the web lane, with optional API/CLI execution when needed.
+Define the production flow for validation decisions, bot onboarding, and run-level sharing in the web lane, with optional API/CLI execution when needed.
 
 ## Guardrails
 
@@ -18,11 +18,13 @@ Define the production reviewer flow for validation decisions in the web lane, wi
 2. Platform API is the only client entrypoint for web, SDK, and optional CLI flows.
 3. Identity is auth-derived; reviewer tooling must not treat raw tenant/user headers as trusted identity input.
 4. JSON is canonical (`validation_run` artifact). HTML/PDF are optional derived outputs.
+5. Shared access is run-level only and must route through the dedicated Shared Validation UX flow.
+6. No client-side direct provider calls for this workflow surface.
 
 ## Web Flow (`/validation`)
 
 1. Open `/validation` and authenticate through the dashboard session.
-2. Create a run in the web form.
+2. Create a run in the web form (owner user or owner bot context reflected through run actor metadata).
 3. Confirm the proxy creates the run through `POST /api/validation/runs` -> `POST /v2/validation-runs`.
 4. Load run status and canonical artifact:
    - `GET /api/validation/runs/{runId}`
@@ -34,6 +36,63 @@ Define the production reviewer flow for validation decisions in the web lane, wi
 6. Request render output only when required for external distribution:
    - `POST /api/validation/runs/{runId}/render`
    - body `{"format":"html"}` or `{"format":"pdf"}`
+
+## Bot Onboarding In Shared Validation Program
+
+1. Invite-code registration path (`trial`, rate-limited):
+   - `POST /v2/validation-bots/registrations/invite-code`
+   - request fields: `inviteCode`, `botName`, optional `metadata`
+2. Partner bootstrap registration path:
+   - `POST /v2/validation-bots/registrations/partner-bootstrap`
+   - request fields: `partnerKey`, `partnerSecret`, `ownerEmail`, `botName`, optional `metadata`
+3. Both paths return:
+   - `bot` (user-owned bot record)
+   - `registration` audit record
+   - `issuedKey` with one-time `rawKey`
+
+## Key Lifecycle (Create, Show-Once, Rotate, Revoke)
+
+1. Create:
+   - initial bot registration response includes `issuedKey.rawKey`.
+2. Show once:
+   - raw key is returned only on create/rotate (`BotIssuedApiKey.rawKey`), never through metadata endpoints.
+3. Rotate:
+   - `POST /v2/validation-bots/{botId}/keys/rotate`
+   - returns new `issuedKey.rawKey` and metadata.
+4. Revoke:
+   - `POST /v2/validation-bots/{botId}/keys/{keyId}/revoke`
+   - returns key metadata with `status=revoked`.
+
+## Actor Linkage Model (User vs Bot)
+
+1. Validation run actor identity is explicit:
+   - `ValidationRun.actor.actorType`: `user | bot`
+   - `ValidationRun.actor.actorId` + optional `userId` and `botId`
+2. Invite creator actor identity is explicit:
+   - `ValidationInvite.invitedByActorType`: `user | bot`
+3. Bot ownership remains user-bound (`ownerUserId`) with no brand entity in v1.
+
+## Run-Level Invite Model And Permissions
+
+1. Create invite by email:
+   - `POST /v2/validation-sharing/runs/{runId}/invites`
+   - required field: `email`
+2. List invites for one run:
+   - `GET /v2/validation-sharing/runs/{runId}/invites`
+3. Revoke invite:
+   - `POST /v2/validation-sharing/invites/{inviteId}/revoke`
+4. Accept invite during login/session flow:
+   - `POST /v2/validation-sharing/invites/{inviteId}/accept`
+   - request includes `acceptedEmail`
+5. Permission boundary:
+   - owner-scoped invite management and run-share mutation
+   - accepted invite grants `ValidationRunShare` for that run only
+
+## Dedicated Shared Validation UX Surface
+
+1. Shared users enter through the Shared Validation reviewer flow (current web lane route `/validation`).
+2. Shared run access is established only through invite acceptance path; no ambient cross-run access.
+3. Shared users review canonical JSON first and request HTML/PDF only as derived outputs.
 
 ## Deep-Link Flow (`#279`)
 
@@ -102,12 +161,12 @@ curl -sS "$API_BASE/v2/validation-runs" \
 
 ## PR and Program Status Updates
 
-When opening and merging the PR for `#282`, post status updates in both the child issue and `#288`.
+When opening and merging the PR for `#313`, post status updates in both the child issue and `#310`.
 
 ```md
 Validation Review Web status:
-- Parent: #288
-- Child: #282
+- Parent: #310
+- Child: #313
 - PR: <url>
 - Status: OPEN | IN_REVIEW | MERGED
 - Checks: contracts-governance=<status>, docs-governance=<status>, llm-package-governance=<status>
@@ -117,8 +176,9 @@ Validation Review Web status:
 
 ## Traceability
 
-- Child issue: [#282](https://github.com/iamtxena/trade-nexus/issues/282)
-- Parent issue: [#288](https://github.com/iamtxena/trade-nexus/issues/288)
+- Child issue: [#313](https://github.com/iamtxena/trade-nexus/issues/313)
+- Parent issue: [#310](https://github.com/iamtxena/trade-nexus/issues/310)
+- Prior validation-review parent: [#288](https://github.com/iamtxena/trade-nexus/issues/288)
 - Web lane page: `/frontend/src/app/(dashboard)/validation/page.tsx`
 - Web API proxy: `/frontend/src/app/api/validation/runs/route.ts`
 - Contract source: `/docs/architecture/specs/platform-api.openapi.yaml`

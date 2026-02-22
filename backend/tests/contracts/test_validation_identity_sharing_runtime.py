@@ -708,6 +708,60 @@ def test_runtime_bot_registration_normalizes_special_characters_in_bot_name() ->
     assert rotate.json()["issuedKey"]["key"]["botId"] == "my-bot-v2-0-s"
 
 
+def test_runtime_bot_registration_routes_do_not_override_jwt_identity_with_runtime_key() -> None:
+    client = _client()
+    router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
+
+    owner_b_headers = _auth_headers(
+        request_id="req-runtime-bot-override-owner-b-register-001",
+        tenant_id="tenant-runtime-bot-override-b",
+        user_id="owner-runtime-bot-override-b",
+    )
+    owner_b_register = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={**owner_b_headers, "Idempotency-Key": "idem-runtime-bot-override-owner-b-register-001"},
+        json={
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+            "ownerEmail": "owner-runtime-bot-override-b@example.com",
+            "botName": "Override Donor Bot",
+        },
+    )
+    assert owner_b_register.status_code == 201
+    donor_runtime_key = owner_b_register.json()["issuedKey"]["rawKey"]
+
+    owner_a_tenant = "tenant-runtime-bot-override-a"
+    owner_a_user = "owner-runtime-bot-override-a"
+    invite_code = _issue_runtime_invite_code(
+        request_id="req-runtime-bot-override-owner-a-invite-seed-001",
+        tenant_id=owner_a_tenant,
+        user_id=owner_a_user,
+        bot_id="owner-a-invite-bot",
+        source_ip="203.0.113.41",
+    )
+    owner_a_headers = _auth_headers(
+        request_id="req-runtime-bot-override-owner-a-register-001",
+        tenant_id=owner_a_tenant,
+        user_id=owner_a_user,
+    )
+
+    register = client.post(
+        "/v2/validation-bots/registrations/invite-code",
+        headers={
+            **owner_a_headers,
+            "X-API-Key": donor_runtime_key,
+            "Idempotency-Key": "idem-runtime-bot-override-owner-a-register-001",
+        },
+        json={
+            "inviteCode": invite_code,
+            "botName": "Owner A Invite Bot",
+        },
+    )
+    assert register.status_code == 201
+    assert register.json()["bot"]["tenantId"] == owner_a_tenant
+    assert register.json()["bot"]["ownerUserId"] == owner_a_user
+
+
 def test_runtime_identity_routes_require_authenticated_identity() -> None:
     client = _client()
 

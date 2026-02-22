@@ -166,7 +166,11 @@ def _bot_key_prefix(raw_key: str) -> str:
 
 
 def _is_validation_request_path(path: str) -> bool:
-    return path.startswith("/v2/validation")
+    if not path.startswith("/v2/validation"):
+        return False
+    # Bot registration/management endpoints are user-authenticated control-plane calls.
+    # Do not let runtime bot API keys override verified JWT identity on these routes.
+    return not path.startswith("/v2/validation-bots")
 
 
 def _resolve_idempotency_key(*, context: RequestContext, idempotency_key: str | None) -> str:

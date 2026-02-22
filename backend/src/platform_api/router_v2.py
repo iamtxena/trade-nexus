@@ -12,10 +12,16 @@ from src.platform_api.schemas_v1 import MarketScanRequest, RequestContext
 from src.platform_api.schemas_v2 import (
     BacktestDataExportRequest,
     BacktestDataExportResponse,
+    CreateSharedValidationInviteRequest,
     ConversationSessionResponse,
     ConversationTurnResponse,
     CreateConversationSessionRequest,
     CreateConversationTurnRequest,
+    RegisterRuntimeBotRequest,
+    RegisterRuntimeBotResponse,
+    RequestRuntimeBotInviteCodeRequest,
+    RevokeRuntimeBotKeyRequest,
+    RevokeRuntimeBotKeyResponse,
     CreateValidationBaselineRequest,
     CreateValidationRegressionReplayRequest,
     CreateValidationRenderRequest,
@@ -29,6 +35,9 @@ from src.platform_api.schemas_v2 import (
     KnowledgeSearchRequest,
     KnowledgeSearchResponse,
     MarketScanV2Response,
+    RuntimeBotInviteCodeResponse,
+    SharedValidationInvite,
+    SharedValidationInviteResponse,
     ValidationArtifactResponse,
     ValidationBaselineResponse,
     ValidationRegressionReplayResponse,
@@ -48,6 +57,7 @@ from src.platform_api.services.v2_services import (
     KnowledgeV2Service,
     ResearchV2Service,
 )
+from src.platform_api.services.validation_identity_service import ValidationIdentityService
 from src.platform_api.services.validation_v2_service import ValidationV2Service
 
 router = APIRouter(prefix="/v2")
@@ -61,27 +71,56 @@ _research_service = ResearchV2Service(
     store=router_v1_module._store,
 )
 _conversation_service = ConversationService(store=router_v1_module._store)
-_validation_service = ValidationV2Service(store=router_v1_module._store)
+_identity_service = ValidationIdentityService(store=router_v1_module._store)
+_validation_service = ValidationV2Service(store=router_v1_module._store, identity_service=_identity_service)
 
 
 async def _request_context(
     request: Request,
     x_request_id: str | None = Header(default=None, alias="X-Request-Id"),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+    x_user_email: str | None = Header(default=None, alias="X-User-Email"),
 ) -> RequestContext:
     state_request_id = getattr(request.state, "request_id", None)
     request_id = x_request_id or (state_request_id if isinstance(state_request_id, str) and state_request_id.strip() else f"req-{uuid4()}")
     request.state.request_id = request_id
     state_tenant_id = getattr(request.state, "tenant_id", None)
     state_user_id = getattr(request.state, "user_id", None)
-    tenant_id = state_tenant_id if isinstance(state_tenant_id, str) and state_tenant_id.strip() else "tenant-local"
-    user_id = state_user_id if isinstance(state_user_id, str) and state_user_id.strip() else "user-local"
+    tenant_id = request.headers.get("X-Tenant-Id")
+    user_id = request.headers.get("X-User-Id")
+    if not isinstance(tenant_id, str) or not tenant_id.strip():
+        tenant_id = state_tenant_id if isinstance(state_tenant_id, str) and state_tenant_id.strip() else "tenant-local"
+    if not isinstance(user_id, str) or not user_id.strip():
+        user_id = state_user_id if isinstance(state_user_id, str) and state_user_id.strip() else "user-local"
+
+    actor_identity = _identity_service.resolve_api_key(
+        api_key=x_api_key,
+        tenant_id=tenant_id,
+        request_id=request_id,
+    )
+    owner_user_id = user_id
+    actor_type = "user"
+    actor_id = user_id
+    if actor_identity is not None:
+        owner_user_id = actor_identity.owner_user_id
+        user_id = actor_identity.owner_user_id
+        actor_type = actor_identity.actor_type
+        actor_id = actor_identity.actor_id
+
     request.state.tenant_id = tenant_id
     request.state.user_id = user_id
-    return RequestContext(
+    context = RequestContext(
         request_id=request_id,
         tenant_id=tenant_id,
         user_id=user_id,
+        owner_user_id=owner_user_id,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        user_email=x_user_email,
     )
+    if context.actor_type == "user":
+        _identity_service.activate_email_invites(context=context)
+    return context
 
 
 ContextDep = Annotated[RequestContext, Depends(_request_context)]
@@ -191,6 +230,81 @@ async def list_validation_runs_v2(
     context: ContextDep,
 ) -> ValidationRunListResponse:
     return await _validation_service.list_validation_runs(context=context)
+
+
+@router.post(
+    "/bots/request-invite",
+    response_model=RuntimeBotInviteCodeResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Runtime Identity"],
+)
+async def request_runtime_bot_invite_code_v2(
+    payload: RequestRuntimeBotInviteCodeRequest,
+    context: ContextDep,
+    request: Request,
+) -> RuntimeBotInviteCodeResponse:
+    source_ip = request.headers.get("X-Forwarded-For", "unknown").split(",")[0].strip()
+    invite_code, expires_at = _identity_service.request_invite_code(
+        context=context,
+        bot_id=payload.botId,
+        source_ip=source_ip,
+    )
+    return RuntimeBotInviteCodeResponse(
+        requestId=context.request_id,
+        inviteCode=invite_code,
+        expiresAt=expires_at,
+    )
+
+
+@router.post(
+    "/bots/register",
+    response_model=RegisterRuntimeBotResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Runtime Identity"],
+)
+async def register_runtime_bot_v2(
+    payload: RegisterRuntimeBotRequest,
+    context: ContextDep,
+) -> RegisterRuntimeBotResponse:
+    result = _identity_service.register_bot(
+        context=context,
+        bot_id=payload.botId,
+        invite_code=payload.inviteCode,
+        partner_key=payload.partnerKey,
+        partner_secret=payload.partnerSecret,
+    )
+    return RegisterRuntimeBotResponse(
+        requestId=context.request_id,
+        botId=result.bot_id,
+        ownerUserId=result.owner_user_id,
+        actorType=result.actor_type,
+        actorId=result.actor_id,
+        keyId=result.key_id,
+        runtimeBotKey=result.runtime_bot_key,
+        registrationMethod=result.registration_method,
+    )
+
+
+@router.post(
+    "/bots/{botId}/keys/revoke",
+    response_model=RevokeRuntimeBotKeyResponse,
+    tags=["Runtime Identity"],
+)
+async def revoke_runtime_bot_key_v2(
+    botId: str,
+    payload: RevokeRuntimeBotKeyRequest,
+    context: ContextDep,
+) -> RevokeRuntimeBotKeyResponse:
+    revoked = _identity_service.revoke_bot_key(
+        context=context,
+        bot_id=botId,
+        key_id=payload.keyId,
+    )
+    return RevokeRuntimeBotKeyResponse(
+        requestId=context.request_id,
+        botId=botId,
+        revokedKeyIds=revoked,
+    )
 
 
 @router.post(
@@ -408,6 +522,81 @@ async def replay_validation_regression_v2(
 ) -> ValidationRegressionReplayResponse:
     return await _validation_service.replay_validation_regression(
         request=request,
+        context=context,
+        idempotency_key=idempotency_key,
+    )
+
+
+@router.post(
+    "/shared-validation/runs/{runId}/invites",
+    response_model=SharedValidationInviteResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Shared Validation"],
+)
+async def create_shared_validation_invite_v2(
+    runId: str,
+    payload: CreateSharedValidationInviteRequest,
+    context: ContextDep,
+) -> SharedValidationInviteResponse:
+    invite = await _validation_service.create_shared_validation_invite(
+        run_id=runId,
+        invitee_email=payload.email,
+        permission=payload.permission,
+        context=context,
+    )
+    return SharedValidationInviteResponse(
+        requestId=context.request_id,
+        invite=SharedValidationInvite(
+            id=invite.invite_id,
+            runId=invite.run_id,
+            email=invite.invitee_email,
+            permission=invite.permission,
+            status=invite.status,
+            createdAt=invite.created_at,
+            acceptedAt=invite.accepted_at,
+        ),
+    )
+
+
+@router.get(
+    "/shared-validation/runs/{runId}",
+    response_model=ValidationRunResponse,
+    tags=["Shared Validation"],
+)
+async def get_shared_validation_run_v2(
+    runId: str,
+    context: ContextDep,
+) -> ValidationRunResponse:
+    return await _validation_service.get_shared_validation_run(run_id=runId, context=context)
+
+
+@router.get(
+    "/shared-validation/runs/{runId}/artifact",
+    response_model=ValidationArtifactResponse,
+    tags=["Shared Validation"],
+)
+async def get_shared_validation_artifact_v2(
+    runId: str,
+    context: ContextDep,
+) -> ValidationArtifactResponse:
+    return await _validation_service.get_shared_validation_run_artifact(run_id=runId, context=context)
+
+
+@router.post(
+    "/shared-validation/runs/{runId}/review",
+    response_model=ValidationRunReviewResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Shared Validation"],
+)
+async def submit_shared_validation_review_v2(
+    runId: str,
+    payload: CreateValidationRunReviewRequest,
+    context: ContextDep,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> ValidationRunReviewResponse:
+    return await _validation_service.submit_shared_validation_run_review(
+        run_id=runId,
+        request=payload,
         context=context,
         idempotency_key=idempotency_key,
     )

@@ -522,3 +522,61 @@ class ValidationRegressionReplay(BaseModel):
 class ValidationRegressionReplayResponse(BaseModel):
     requestId: str
     replay: ValidationRegressionReplay
+
+
+class RequestRuntimeBotInviteCodeRequest(BaseModel):
+    botId: str = Field(min_length=1)
+
+
+class RuntimeBotInviteCodeResponse(BaseModel):
+    requestId: str
+    inviteCode: str
+    expiresAt: str
+
+
+class RegisterRuntimeBotRequest(BaseModel):
+    botId: str = Field(min_length=1)
+    inviteCode: str | None = None
+    partnerKey: str | None = None
+    partnerSecret: str | None = None
+
+
+class RegisterRuntimeBotResponse(BaseModel):
+    requestId: str
+    botId: str
+    ownerUserId: str
+    actorType: Literal["bot"]
+    actorId: str
+    keyId: str
+    runtimeBotKey: str
+    registrationMethod: Literal["invite", "partner"]
+
+
+class RevokeRuntimeBotKeyRequest(BaseModel):
+    keyId: str | None = None
+
+
+class RevokeRuntimeBotKeyResponse(BaseModel):
+    requestId: str
+    botId: str
+    revokedKeyIds: list[str] = Field(default_factory=list)
+
+
+class CreateSharedValidationInviteRequest(BaseModel):
+    email: str = Field(min_length=3)
+    permission: Literal["view", "review"] = "view"
+
+
+class SharedValidationInvite(BaseModel):
+    id: str
+    runId: str
+    email: str
+    permission: Literal["view", "review"]
+    status: Literal["pending", "accepted", "revoked"]
+    createdAt: str
+    acceptedAt: str | None = None
+
+
+class SharedValidationInviteResponse(BaseModel):
+    requestId: str
+    invite: SharedValidationInvite

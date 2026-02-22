@@ -1,0 +1,431 @@
+"""Runtime tests for validation identity linkage and shared-run access controls."""
+
+from __future__ import annotations
+
+import asyncio
+
+from fastapi.testclient import TestClient
+import pytest
+
+from src.main import app
+from src.platform_api import router_v1 as router_v1_module
+from src.platform_api import router_v2 as router_v2_module
+
+
+def _client() -> TestClient:
+    return TestClient(app)
+
+
+def _owner_headers(*, request_id: str, tenant_id: str, user_id: str) -> dict[str, str]:
+    return {
+        "Authorization": "Bearer test-token",
+        "X-API-Key": "test-key",
+        "X-Request-Id": request_id,
+        "X-Tenant-Id": tenant_id,
+        "X-User-Id": user_id,
+    }
+
+
+def _validation_run_payload() -> dict[str, object]:
+    return {
+        "strategyId": "strat-001",
+        "providerRefId": "lona-strategy-123",
+        "prompt": "Validate baseline strategy runtime payload.",
+        "requestedIndicators": ["zigzag", "ema"],
+        "datasetIds": ["dataset-btc-1h-2025"],
+        "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+        "policy": {
+            "profile": "STANDARD",
+            "blockMergeOnFail": True,
+            "blockReleaseOnFail": True,
+            "blockMergeOnAgentFail": True,
+            "blockReleaseOnAgentFail": False,
+            "requireTraderReview": False,
+            "hardFailOnMissingIndicators": True,
+            "failClosedOnEvidenceUnavailable": True,
+        },
+    }
+
+
+@pytest.fixture(autouse=True)
+def _reset_runtime_state() -> None:
+    identity = router_v2_module._identity_service
+    validation = router_v2_module._validation_service
+    store = router_v1_module._store
+
+    def _clear() -> None:
+        identity._invite_codes.clear()  # noqa: SLF001
+        identity._bot_keys.clear()  # noqa: SLF001
+        identity._bot_key_index.clear()  # noqa: SLF001
+        identity._invite_rate_limit_index.clear()  # noqa: SLF001
+        identity._share_invites_by_run.clear()  # noqa: SLF001
+        identity._share_grants_by_run.clear()  # noqa: SLF001
+        identity._partner_credentials = {}  # noqa: SLF001
+        identity._invite_counter = 1  # noqa: SLF001
+        identity._key_counter = 1  # noqa: SLF001
+        identity._share_counter = 1  # noqa: SLF001
+
+        validation._runs.clear()  # noqa: SLF001
+        validation._baselines.clear()  # noqa: SLF001
+        validation._replays.clear()  # noqa: SLF001
+        validation._run_counter = 1  # noqa: SLF001
+        validation._baseline_counter = 1  # noqa: SLF001
+        validation._replay_counter = 1  # noqa: SLF001
+
+        for scope in (
+            "validation_runs",
+            "validation_reviews",
+            "validation_renders",
+            "validation_baselines",
+            "validation_replays",
+        ):
+            store._idempotency[scope].clear()  # noqa: SLF001
+
+        store.validation_identity_audit_events.clear()
+
+    _clear()
+    yield
+    _clear()
+
+
+def test_runtime_bot_partner_registration_resolves_actor_identity_for_validation_runs() -> None:
+    client = _client()
+    router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
+
+    headers = _owner_headers(
+        request_id="req-runtime-bot-partner-register-001",
+        tenant_id="tenant-runtime-bot",
+        user_id="owner-runtime-bot",
+    )
+
+    register = client.post(
+        "/v2/bots/register",
+        headers=headers,
+        json={
+            "botId": "runtime-bot-1",
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+        },
+    )
+    assert register.status_code == 201
+    runtime_key = register.json()["runtimeBotKey"]
+
+    rotate = client.post(
+        "/v2/bots/register",
+        headers={**headers, "X-Request-Id": "req-runtime-bot-partner-register-002"},
+        json={
+            "botId": "runtime-bot-1",
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+        },
+    )
+    assert rotate.status_code == 201
+    runtime_key = rotate.json()["runtimeBotKey"]
+
+    revoke = client.post(
+        "/v2/bots/runtime-bot-1/keys/revoke",
+        headers={**headers, "X-Request-Id": "req-runtime-bot-revoke-001"},
+        json={},
+    )
+    assert revoke.status_code == 200
+    assert revoke.json()["revokedKeyIds"]
+
+    reissue = client.post(
+        "/v2/bots/register",
+        headers={**headers, "X-Request-Id": "req-runtime-bot-partner-register-003"},
+        json={
+            "botId": "runtime-bot-1",
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+        },
+    )
+    assert reissue.status_code == 201
+    runtime_key = reissue.json()["runtimeBotKey"]
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={
+            **headers,
+            "X-Request-Id": "req-runtime-bot-create-run-001",
+            "X-API-Key": runtime_key,
+            "X-User-Id": "ignored-by-bot-key",
+            "Idempotency-Key": "idem-runtime-bot-run-001",
+        },
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    artifact = client.get(
+        f"/v2/validation-runs/{run_id}/artifact",
+        headers={**headers, "X-Request-Id": "req-runtime-bot-artifact-001"},
+    )
+    assert artifact.status_code == 200
+    assert artifact.json()["artifact"]["userId"] == "owner-runtime-bot"
+
+    persisted = asyncio.run(
+        router_v2_module._validation_service._validation_storage.get_run(  # noqa: SLF001
+            run_id=run_id,
+            tenant_id="tenant-runtime-bot",
+            user_id="owner-runtime-bot",
+        )
+    )
+    assert persisted is not None
+    assert persisted.metadata.owner_user_id == "owner-runtime-bot"
+    assert persisted.metadata.actor_type == "bot"
+    assert persisted.metadata.actor_id == "runtime-bot-1"
+
+    audit_events = router_v1_module._store.validation_identity_audit_events
+    assert any(item.event_type == "register" for item in audit_events)
+    assert any(item.event_type == "rotate" for item in audit_events)
+    assert any(item.event_type == "revoke" for item in audit_events)
+
+
+def test_runtime_bot_invite_registration_path_is_single_use_and_rate_limited() -> None:
+    client = _client()
+
+    headers = {
+        **_owner_headers(
+            request_id="req-runtime-bot-invite-001",
+            tenant_id="tenant-runtime-bot-invite",
+            user_id="owner-runtime-bot-invite",
+        ),
+        "X-Forwarded-For": "198.51.100.21",
+    }
+
+    invite = client.post(
+        "/v2/bots/request-invite",
+        headers=headers,
+        json={"botId": "runtime-bot-invite-1"},
+    )
+    assert invite.status_code == 201
+    invite_code = invite.json()["inviteCode"]
+
+    register = client.post(
+        "/v2/bots/register",
+        headers={**headers, "X-Request-Id": "req-runtime-bot-invite-register-001"},
+        json={
+            "botId": "runtime-bot-invite-1",
+            "inviteCode": invite_code,
+        },
+    )
+    assert register.status_code == 201
+    assert register.json()["registrationMethod"] == "invite"
+
+    reuse = client.post(
+        "/v2/bots/register",
+        headers={**headers, "X-Request-Id": "req-runtime-bot-invite-register-002"},
+        json={
+            "botId": "runtime-bot-invite-1",
+            "inviteCode": invite_code,
+        },
+    )
+    assert reuse.status_code == 401
+    assert reuse.json()["error"]["code"] == "BOT_INVITE_INVALID"
+
+    second = client.post(
+        "/v2/bots/request-invite",
+        headers={**headers, "X-Request-Id": "req-runtime-bot-invite-002"},
+        json={"botId": "runtime-bot-invite-2"},
+    )
+    third = client.post(
+        "/v2/bots/request-invite",
+        headers={**headers, "X-Request-Id": "req-runtime-bot-invite-003"},
+        json={"botId": "runtime-bot-invite-3"},
+    )
+    fourth = client.post(
+        "/v2/bots/request-invite",
+        headers={**headers, "X-Request-Id": "req-runtime-bot-invite-004"},
+        json={"botId": "runtime-bot-invite-4"},
+    )
+    assert second.status_code == 201
+    assert third.status_code == 201
+    assert fourth.status_code == 429
+    assert fourth.json()["error"]["code"] == "BOT_INVITE_RATE_LIMITED"
+
+
+def test_shared_validation_access_owner_invited_and_denied_users() -> None:
+    client = _client()
+    owner_headers = _owner_headers(
+        request_id="req-shared-validation-owner-001",
+        tenant_id="tenant-shared-validation",
+        user_id="owner-shared-validation",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-validation-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    share = client.post(
+        f"/v2/shared-validation/runs/{run_id}/invites",
+        headers={**owner_headers, "X-Request-Id": "req-shared-validation-share-001"},
+        json={"email": "invitee@example.com", "permission": "review"},
+    )
+    assert share.status_code == 201
+
+    denied = client.get(
+        f"/v2/shared-validation/runs/{run_id}",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-denied-001",
+            "X-User-Id": "denied-user",
+            "X-User-Email": "other@example.com",
+        },
+    )
+    assert denied.status_code == 403
+    assert denied.json()["error"]["code"] == "VALIDATION_RUN_ACCESS_DENIED"
+
+    invited_headers = {
+        **owner_headers,
+        "X-Request-Id": "req-shared-validation-invitee-001",
+        "X-User-Id": "invitee-user",
+        "X-User-Email": "invitee@example.com",
+    }
+    invited_get = client.get(f"/v2/shared-validation/runs/{run_id}", headers=invited_headers)
+    assert invited_get.status_code == 200
+
+    invited_review = client.post(
+        f"/v2/shared-validation/runs/{run_id}/review",
+        headers={**invited_headers, "Idempotency-Key": "idem-shared-validation-review-001"},
+        json={
+            "reviewerType": "agent",
+            "decision": "pass",
+            "summary": "Shared reviewer accepted evidence.",
+            "findings": [],
+            "comments": [],
+        },
+    )
+    assert invited_review.status_code == 202
+
+    owner_surface_for_invitee = client.get(
+        f"/v2/validation-runs/{run_id}",
+        headers={**invited_headers, "X-Request-Id": "req-shared-validation-owner-surface-denied-001"},
+    )
+    assert owner_surface_for_invitee.status_code == 404
+
+    owner_get = client.get(
+        f"/v2/validation-runs/{run_id}",
+        headers={**owner_headers, "X-Request-Id": "req-shared-validation-owner-get-001"},
+    )
+    assert owner_get.status_code == 200
+
+    audit_events = router_v1_module._store.validation_identity_audit_events
+    assert any(item.event_type == "share" for item in audit_events)
+    assert any(item.event_type == "accept" for item in audit_events)
+
+
+def test_shared_invite_auto_accepts_on_authenticated_login_email_match() -> None:
+    client = _client()
+    owner_headers = _owner_headers(
+        request_id="req-shared-auto-accept-owner-001",
+        tenant_id="tenant-shared-auto-accept",
+        user_id="owner-shared-auto-accept",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-auto-accept-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    share = client.post(
+        f"/v2/shared-validation/runs/{run_id}/invites",
+        headers={**owner_headers, "X-Request-Id": "req-shared-auto-accept-share-001"},
+        json={"email": "login-user@example.com", "permission": "view"},
+    )
+    assert share.status_code == 201
+
+    before_login = client.get(
+        f"/v2/shared-validation/runs/{run_id}",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-auto-accept-before-login-001",
+            "X-User-Id": "login-user",
+        },
+    )
+    assert before_login.status_code == 403
+
+    login = client.post(
+        "/v2/knowledge/search",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-auto-accept-login-001",
+            "X-User-Id": "login-user",
+            "X-User-Email": "login-user@example.com",
+        },
+        json={"query": "regime", "assets": ["BTCUSDT"], "limit": 1},
+    )
+    assert login.status_code == 200
+
+    after_login = client.get(
+        f"/v2/shared-validation/runs/{run_id}",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-auto-accept-after-login-001",
+            "X-User-Id": "login-user",
+        },
+    )
+    assert after_login.status_code == 200
+
+
+def test_validation_owner_endpoints_regression_remain_unchanged() -> None:
+    client = _client()
+    headers = _owner_headers(
+        request_id="req-validation-regression-owner-001",
+        tenant_id="tenant-validation-regression",
+        user_id="owner-validation-regression",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-validation-regression-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    run_get = client.get(
+        f"/v2/validation-runs/{run_id}",
+        headers={**headers, "X-Request-Id": "req-validation-regression-run-get-001"},
+    )
+    assert run_get.status_code == 200
+
+    artifact_get = client.get(
+        f"/v2/validation-runs/{run_id}/artifact",
+        headers={**headers, "X-Request-Id": "req-validation-regression-artifact-001"},
+    )
+    assert artifact_get.status_code == 200
+
+    review = client.post(
+        f"/v2/validation-runs/{run_id}/review",
+        headers={
+            **headers,
+            "X-Request-Id": "req-validation-regression-review-001",
+            "Idempotency-Key": "idem-validation-regression-review-001",
+        },
+        json={
+            "reviewerType": "agent",
+            "decision": "pass",
+            "summary": "Regression flow remains stable.",
+            "findings": [],
+            "comments": [],
+        },
+    )
+    assert review.status_code == 202
+
+    render = client.post(
+        f"/v2/validation-runs/{run_id}/render",
+        headers={
+            **headers,
+            "X-Request-Id": "req-validation-regression-render-001",
+            "Idempotency-Key": "idem-validation-regression-render-001",
+        },
+        json={"format": "html"},
+    )
+    assert render.status_code == 202

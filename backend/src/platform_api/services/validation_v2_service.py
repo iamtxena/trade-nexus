@@ -53,6 +53,11 @@ from src.platform_api.services.validation_deterministic_service import (
     ValidationArtifactContext,
     ValidationPolicyConfig,
 )
+from src.platform_api.services.validation_identity_service import (
+    SharePermission,
+    SharedValidationInviteRecord,
+    ValidationIdentityService,
+)
 from src.platform_api.services.validation_replay_policy import (
     ValidationReplayInputs,
     evaluate_replay_policy,
@@ -79,7 +84,9 @@ ValidationReplayDecision = Literal["pass", "conditional_pass", "fail", "unknown"
 @dataclass
 class _ValidationRunRecord:
     tenant_id: str
-    user_id: str
+    owner_user_id: str
+    actor_type: Literal["user", "bot"]
+    actor_id: str
     run: ValidationRun
     artifact: ValidationRunArtifact
     llm_snapshot: ValidationLlmSnapshotArtifact
@@ -120,12 +127,14 @@ class ValidationV2Service:
         self,
         *,
         store: InMemoryStateStore,
+        identity_service: ValidationIdentityService,
         validation_storage: ValidationStorageService | None = None,
         renderer: ValidationRenderPort | None = None,
         deterministic_engine: DeterministicValidationEngine | None = None,
         agent_review_service: ValidationAgentReviewService | None = None,
     ) -> None:
         self._store = store
+        self._identity_service = identity_service
         self._validation_storage = validation_storage or ValidationStorageService(
             metadata_store=InMemoryValidationMetadataStore()
         )
@@ -263,7 +272,7 @@ class ValidationV2Service:
             run_id=run_id,
             request_id=context.request_id,
             tenant_id=context.tenant_id,
-            user_id=context.user_id,
+            user_id=context.owner_user_id or context.user_id,
             strategy_id=request.strategyId,
             provider_ref_id=provider_ref_id,
             prompt=prompt,
@@ -348,7 +357,9 @@ class ValidationV2Service:
         llm_snapshot = ValidationLlmSnapshotArtifact.model_validate(snapshot_payload)
         record = _ValidationRunRecord(
             tenant_id=context.tenant_id,
-            user_id=context.user_id,
+            owner_user_id=context.owner_user_id or context.user_id,
+            actor_type=cast(Literal["user", "bot"], context.actor_type),
+            actor_id=context.actor_id or context.user_id,
             run=completed_run,
             artifact=artifact,
             llm_snapshot=llm_snapshot,
@@ -383,7 +394,7 @@ class ValidationV2Service:
         runs = [
             record.run.model_copy()
             for record in self._runs.values()
-            if record.tenant_id == context.tenant_id and record.user_id == context.user_id
+            if record.tenant_id == context.tenant_id and record.owner_user_id == context.user_id
         ]
         runs.sort(key=lambda run: run.updatedAt, reverse=True)
         return ValidationRunListResponse(
@@ -395,6 +406,10 @@ class ValidationV2Service:
         record = self._require_run(run_id=run_id, context=context)
         return ValidationRunResponse(requestId=context.request_id, run=record.run)
 
+    async def get_shared_validation_run(self, *, run_id: str, context: RequestContext) -> ValidationRunResponse:
+        record = self._require_shared_run(run_id=run_id, context=context, required_permission="view")
+        return ValidationRunResponse(requestId=context.request_id, run=record.run)
+
     async def get_validation_run_artifact(
         self,
         *,
@@ -402,6 +417,19 @@ class ValidationV2Service:
         context: RequestContext,
     ) -> ValidationArtifactResponse:
         record = self._require_run(run_id=run_id, context=context)
+        return ValidationArtifactResponse(
+            requestId=context.request_id,
+            artifactType="validation_run",
+            artifact=record.artifact,
+        )
+
+    async def get_shared_validation_run_artifact(
+        self,
+        *,
+        run_id: str,
+        context: RequestContext,
+    ) -> ValidationArtifactResponse:
+        record = self._require_shared_run(run_id=run_id, context=context, required_permission="view")
         return ValidationArtifactResponse(
             requestId=context.request_id,
             artifactType="validation_run",
@@ -420,7 +448,7 @@ class ValidationV2Service:
         items = [
             self._build_validation_review_run_summary(record=record)
             for record in self._runs.values()
-            if record.tenant_id == context.tenant_id and record.user_id == context.user_id
+            if record.tenant_id == context.tenant_id and record.owner_user_id == context.user_id
         ]
         if status_filter is not None:
             items = [item for item in items if item.status == status_filter]
@@ -710,11 +738,28 @@ class ValidationV2Service:
                 status_code=404,
                 code="VALIDATION_RENDER_NOT_FOUND",
                 message=f"Validation review render {format} not found for run {run_id}.",
-                request_id=context.request_id,
-            )
+            request_id=context.request_id,
+                )
         return ValidationReviewRenderResponse(
             requestId=context.request_id,
             render=render_job,
+        )
+
+    async def create_shared_validation_invite(
+        self,
+        *,
+        run_id: str,
+        invitee_email: str,
+        permission: SharePermission,
+        context: RequestContext,
+    ) -> SharedValidationInviteRecord:
+        record = self._require_run(run_id=run_id, context=context)
+        return self._identity_service.create_run_share_invite(
+            context=context,
+            run_id=record.run.id,
+            owner_user_id=record.owner_user_id,
+            invitee_email=invitee_email,
+            permission=permission,
         )
 
     async def submit_validation_run_review(
@@ -724,6 +769,39 @@ class ValidationV2Service:
         request: CreateValidationRunReviewRequest,
         context: RequestContext,
         idempotency_key: str | None,
+    ) -> ValidationRunReviewResponse:
+        return await self._submit_validation_run_review(
+            run_id=run_id,
+            request=request,
+            context=context,
+            idempotency_key=idempotency_key,
+            shared_surface=False,
+        )
+
+    async def submit_shared_validation_run_review(
+        self,
+        *,
+        run_id: str,
+        request: CreateValidationRunReviewRequest,
+        context: RequestContext,
+        idempotency_key: str | None,
+    ) -> ValidationRunReviewResponse:
+        return await self._submit_validation_run_review(
+            run_id=run_id,
+            request=request,
+            context=context,
+            idempotency_key=idempotency_key,
+            shared_surface=True,
+        )
+
+    async def _submit_validation_run_review(
+        self,
+        *,
+        run_id: str,
+        request: CreateValidationRunReviewRequest,
+        context: RequestContext,
+        idempotency_key: str | None,
+        shared_surface: bool,
     ) -> ValidationRunReviewResponse:
         payload = {"runId": run_id, **request.model_dump(mode="json")}
         key = self._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
@@ -742,7 +820,10 @@ class ValidationV2Service:
         if cached is not None:
             return ValidationRunReviewResponse.model_validate(cached)
 
-        record = self._require_run(run_id=run_id, context=context)
+        if shared_surface:
+            record = self._require_shared_run(run_id=run_id, context=context, required_permission="review")
+        else:
+            record = self._require_run(run_id=run_id, context=context)
         reviewer_type = request.reviewerType
         decision = request.decision
         if reviewer_type not in {"agent", "trader"}:
@@ -950,7 +1031,11 @@ class ValidationV2Service:
             return ValidationBaselineResponse.model_validate(cached)
 
         run_record = self._runs.get(request.runId)
-        if run_record is None or run_record.tenant_id != context.tenant_id or run_record.user_id != context.user_id:
+        if (
+            run_record is None
+            or run_record.tenant_id != context.tenant_id
+            or run_record.owner_user_id != context.user_id
+        ):
             raise PlatformAPIError(
                 status_code=400,
                 code="VALIDATION_STATE_INVALID",
@@ -1049,7 +1134,11 @@ class ValidationV2Service:
             )
 
         candidate = self._runs.get(request.candidateRunId)
-        if candidate is None or candidate.tenant_id != context.tenant_id or candidate.user_id != context.user_id:
+        if (
+            candidate is None
+            or candidate.tenant_id != context.tenant_id
+            or candidate.owner_user_id != context.user_id
+        ):
             raise PlatformAPIError(
                 status_code=400,
                 code="VALIDATION_STATE_INVALID",
@@ -1524,11 +1613,46 @@ class ValidationV2Service:
 
     def _require_run(self, *, run_id: str, context: RequestContext) -> _ValidationRunRecord:
         record = self._runs.get(run_id)
-        if record is None or record.tenant_id != context.tenant_id or record.user_id != context.user_id:
+        if (
+            record is None
+            or record.tenant_id != context.tenant_id
+            or record.owner_user_id != context.user_id
+        ):
             raise PlatformAPIError(
                 status_code=404,
                 code="VALIDATION_RUN_NOT_FOUND",
                 message=f"Validation run {run_id} not found.",
+                request_id=context.request_id,
+            )
+        return record
+
+    def _require_shared_run(
+        self,
+        *,
+        run_id: str,
+        context: RequestContext,
+        required_permission: SharePermission,
+    ) -> _ValidationRunRecord:
+        record = self._runs.get(run_id)
+        if record is None or record.tenant_id != context.tenant_id:
+            raise PlatformAPIError(
+                status_code=404,
+                code="VALIDATION_RUN_NOT_FOUND",
+                message=f"Validation run {run_id} not found.",
+                request_id=context.request_id,
+            )
+
+        if not self._identity_service.can_access_run(
+            run_id=run_id,
+            tenant_id=context.tenant_id,
+            owner_user_id=record.owner_user_id,
+            user_id=context.user_id,
+            required_permission=required_permission,
+        ):
+            raise PlatformAPIError(
+                status_code=403,
+                code="VALIDATION_RUN_ACCESS_DENIED",
+                message=f"Validation run {run_id} access denied.",
                 request_id=context.request_id,
             )
         return record
@@ -1632,6 +1756,9 @@ class ValidationV2Service:
             request_id=artifact.requestId,
             tenant_id=artifact.tenantId,
             user_id=artifact.userId,
+            owner_user_id=record.owner_user_id,
+            actor_type=record.actor_type,
+            actor_id=record.actor_id,
             profile=cast(Literal["FAST", "STANDARD", "EXPERT"], artifact.policy.profile),
             status=cast(Literal["queued", "running", "completed", "failed"], record.run.status),
             final_decision=cast(

@@ -215,6 +215,19 @@ class OrchestratorExecutionTraceRecord:
     created_at: str = field(default_factory=utc_now)
 
 
+@dataclass
+class ValidationIdentityAuditRecord:
+    id: str
+    event_type: str
+    request_id: str
+    tenant_id: str
+    owner_user_id: str
+    actor_type: str
+    actor_id: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: str = field(default_factory=utc_now)
+
+
 class InMemoryStateStore:
     """Simple in-process persistence for Gate2 thin-slice behavior."""
 
@@ -340,6 +353,7 @@ class InMemoryStateStore:
         self.conversation_user_memory: dict[str, dict[str, Any]] = {}
         self.conversation_notifications: dict[str, ConversationNotificationRecord] = {}
         self.orchestrator_execution_traces: list[OrchestratorExecutionTraceRecord] = []
+        self.validation_identity_audit_events: list[ValidationIdentityAuditRecord] = []
         self.risk_policy: dict[str, Any] = {
             "version": "risk-policy.v1",
             "mode": "enforced",
@@ -379,6 +393,7 @@ class InMemoryStateStore:
             "conversation_turn": 1,
             "conversation_notification": 1,
             "orchestrator_trace": 1,
+            "validation_identity_audit": 1,
         }
         self._idempotency: dict[str, dict[str, tuple[str, dict[str, Any]]]] = {
             "deployments": {},
@@ -432,6 +447,8 @@ class InMemoryStateStore:
             return f"note-{idx:04d}"
         if scope == "orchestrator_trace":
             return f"orch-trace-{idx:04d}"
+        if scope == "validation_identity_audit":
+            return f"val-audit-{idx:04d}"
         return f"{scope}-{idx:03d}"
 
     @staticmethod

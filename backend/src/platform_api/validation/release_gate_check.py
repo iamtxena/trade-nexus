@@ -17,6 +17,7 @@ from src.platform_api.schemas_v2 import (
     CreateValidationRunRequest,
     ValidationRegressionReplay,
 )
+from src.platform_api.services.validation_identity_service import ValidationIdentityService
 from src.platform_api.services.validation_v2_service import ValidationV2Service
 from src.platform_api.state_store import InMemoryStateStore
 
@@ -55,7 +56,9 @@ async def compute_release_gate_replay(
     baseline_profile: ValidationProfile = "STANDARD",
     candidate_profile: ValidationProfile = "STANDARD",
 ) -> ValidationRegressionReplay:
-    service = ValidationV2Service(store=InMemoryStateStore())
+    store = InMemoryStateStore()
+    identity_service = ValidationIdentityService(store=store)
+    service = ValidationV2Service(store=store, identity_service=identity_service)
     context = RequestContext(
         request_id="req-validation-release-gate",
         tenant_id="tenant-validation-release-gate",

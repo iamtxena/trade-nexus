@@ -1693,7 +1693,6 @@ class ValidationV2Service:
 
         if not self._identity_service.can_access_run(
             run_id=run_id,
-            tenant_id=context.tenant_id,
             owner_user_id=record.owner_user_id,
             user_id=context.user_id,
             required_permission=required_permission,

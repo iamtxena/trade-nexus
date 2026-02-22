@@ -930,12 +930,10 @@ class ValidationIdentityService:
         self,
         *,
         run_id: str,
-        tenant_id: str,
         owner_user_id: str,
         user_id: str,
         required_permission: SharePermission,
     ) -> bool:
-        _ = tenant_id
         if user_id == owner_user_id:
             return True
 

@@ -69,7 +69,10 @@ from src.platform_api.services.v2_services import (
     KnowledgeV2Service,
     ResearchV2Service,
 )
-from src.platform_api.services.validation_identity_service import ValidationIdentityService
+from src.platform_api.services.validation_identity_service import (
+    ValidationIdentityService,
+    _normalize_email as _normalize_validation_email,
+)
 from src.platform_api.services.validation_v2_service import ValidationV2Service
 
 router = APIRouter(prefix="/v2")
@@ -167,8 +170,9 @@ def _normalized_bot_id(*, bot_name: str) -> str:
 
 
 def _normalized_email(*, email: str, request_id: str) -> str:
-    normalized = email.strip().lower()
-    if "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
+    try:
+        return _normalize_validation_email(email)
+    except ValueError:
         raise PlatformAPIError(
             status_code=400,
             code="BOT_REGISTRATION_INVALID",
@@ -176,7 +180,6 @@ def _normalized_email(*, email: str, request_id: str) -> str:
             request_id=request_id,
             details={"ownerEmail": email},
         )
-    return normalized
 
 
 def _bot_registration_path(method: Literal["invite", "partner"]) -> Literal["invite_code_trial", "partner_bootstrap"]:
@@ -205,17 +208,6 @@ def _is_validation_invite_accept_path(path: str) -> bool:
     return path.startswith("/v2/validation-sharing/invites/") and path.endswith("/accept")
 
 
-def _resolve_idempotency_key(*, context: RequestContext, idempotency_key: str | None) -> str:
-    normalized = (idempotency_key or "").strip()
-    if normalized:
-        return normalized
-    return context.request_id
-
-
-def _scoped_idempotency_key(*, context: RequestContext, key: str) -> str:
-    return f"{context.tenant_id}:{context.user_id}:{key}"
-
-
 def _get_idempotent_response(
     *,
     scope: str,
@@ -223,9 +215,9 @@ def _get_idempotent_response(
     idempotency_key: str | None,
     payload: dict[str, Any],
 ) -> dict[str, Any] | None:
-    key = _resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
-    scoped_key = _scoped_idempotency_key(context=context, key=key)
-    conflict, cached = router_v1_module._store.get_idempotent_response(  # noqa: SLF001
+    key = ValidationV2Service._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)  # noqa: SLF001
+    scoped_key = ValidationV2Service._scoped_idempotency_key(context=context, key=key)  # noqa: SLF001
+    conflict, cached = _validation_service._get_idempotent_response(  # noqa: SLF001
         scope=scope,
         key=scoped_key,
         payload=payload,
@@ -248,9 +240,9 @@ def _save_idempotent_response(
     payload: dict[str, Any],
     response: dict[str, Any],
 ) -> None:
-    key = _resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
-    scoped_key = _scoped_idempotency_key(context=context, key=key)
-    router_v1_module._store.save_idempotent_response(  # noqa: SLF001
+    key = ValidationV2Service._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)  # noqa: SLF001
+    scoped_key = ValidationV2Service._scoped_idempotency_key(context=context, key=key)  # noqa: SLF001
+    _validation_service._save_idempotent_response(  # noqa: SLF001
         scope=scope,
         key=scoped_key,
         payload=payload,

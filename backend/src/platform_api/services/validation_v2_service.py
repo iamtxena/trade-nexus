@@ -6,33 +6,16 @@ import copy
 import html
 import json
 import logging
-from datetime import UTC, datetime, timedelta
 from dataclasses import dataclass, field
 from typing import Any, Literal, cast
-from uuid import uuid4
 
 from src.platform_api.errors import PlatformAPIError
 from src.platform_api.observability import log_context_event
 from src.platform_api.schemas_v1 import RequestContext
 from src.platform_api.schemas_v2 import (
-    AcceptValidationInviteRequest,
-    Bot,
-    BotIssuedApiKey,
-    BotKeyMetadata,
-    BotKeyMetadataResponse,
-    BotKeyRotationResponse,
-    BotRegistration,
-    BotRegistrationPath,
-    BotRegistrationResponse,
-    BotStatus,
-    CreateBotInviteRegistrationRequest,
-    CreateBotKeyRevocationRequest,
-    CreateBotKeyRotationRequest,
-    CreateBotPartnerBootstrapRequest,
     CreateValidationBaselineRequest,
     CreateValidationRegressionReplayRequest,
     CreateValidationRenderRequest,
-    CreateValidationInviteRequest,
     CreateValidationReviewCommentRequest,
     CreateValidationReviewDecisionRequest,
     CreateValidationReviewRenderRequest,
@@ -61,13 +44,8 @@ from src.platform_api.schemas_v2 import (
     ValidationRunActorMetadata,
     ValidationRunArtifact,
     ValidationRunListResponse,
-    ValidationRunShare,
     ValidationRunResponse,
     ValidationRunReviewResponse,
-    ValidationInvite,
-    ValidationInviteAcceptanceResponse,
-    ValidationInviteListResponse,
-    ValidationInviteResponse,
 )
 from src.platform_api.services.validation_agent_review_service import ValidationAgentReviewService
 from src.platform_api.services.validation_deterministic_service import (
@@ -77,8 +55,8 @@ from src.platform_api.services.validation_deterministic_service import (
     ValidationPolicyConfig,
 )
 from src.platform_api.services.validation_identity_service import (
-    SharePermission,
     SharedValidationInviteRecord,
+    SharePermission,
     ValidationIdentityService,
 )
 from src.platform_api.services.validation_replay_policy import (
@@ -136,50 +114,11 @@ class _ValidationBaselineRecord:
     baseline: ValidationBaseline
 
 
-@dataclass
-class _ValidationBotRecord:
-    tenant_id: str
-    owner_user_id: str
-    bot: Bot
-
-
-@dataclass
-class _ValidationInviteRecord:
-    owner_tenant_id: str
-    owner_user_id: str
-    invite: ValidationInvite
-
-
-@dataclass
-class _ValidationRunShareRecord:
-    owner_tenant_id: str
-    owner_user_id: str
-    share: ValidationRunShare
-
-
 def _non_empty(value: str | None) -> str | None:
     if value is None:
         return None
     normalized = value.strip()
     return normalized if normalized else None
-
-
-def _normalize_email(value: str) -> str:
-    return value.strip().lower()
-
-
-def _parse_utc_datetime(value: str) -> datetime | None:
-    normalized = _non_empty(value)
-    if normalized is None:
-        return None
-    candidate = normalized.replace("Z", "+00:00")
-    try:
-        parsed = datetime.fromisoformat(candidate)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
 
 
 class ValidationV2Service:
@@ -207,20 +146,10 @@ class ValidationV2Service:
         self._runs: dict[str, _ValidationRunRecord] = {}
         self._baselines: dict[str, _ValidationBaselineRecord] = {}
         self._replays: dict[str, ValidationRegressionReplay] = {}
-        self._bots: dict[str, _ValidationBotRecord] = {}
-        self._bot_keys: dict[str, BotKeyMetadata] = {}
-        self._validation_invites: dict[str, _ValidationInviteRecord] = {}
-        self._validation_shares: dict[str, _ValidationRunShareRecord] = {}
-        self._invite_code_attempts: dict[str, int] = {}
         self._run_counter = 1
         self._baseline_counter = 1
         self._replay_counter = 1
         self._review_comment_counter = 1
-        self._bot_counter = 1
-        self._bot_registration_counter = 1
-        self._bot_key_counter = 1
-        self._validation_invite_counter = 1
-        self._validation_share_counter = 1
 
     async def create_validation_run(
         self,
@@ -819,8 +748,8 @@ class ValidationV2Service:
                 status_code=404,
                 code="VALIDATION_RENDER_NOT_FOUND",
                 message=f"Validation review render {format} not found for run {run_id}.",
-            request_id=context.request_id,
-                )
+                request_id=context.request_id,
+            )
         return ValidationReviewRenderResponse(
             requestId=context.request_id,
             render=render_job,
@@ -1364,350 +1293,6 @@ class ValidationV2Service:
             response=response.model_dump(mode="json"),
         )
         return response
-
-    async def register_validation_bot_invite_code(
-        self,
-        *,
-        request: CreateBotInviteRegistrationRequest,
-        context: RequestContext,
-        idempotency_key: str | None,
-    ) -> BotRegistrationResponse:
-        payload = request.model_dump(mode="json")
-        key = self._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
-        scoped_key = self._scoped_idempotency_key(context=context, key=key)
-        conflict, cached = self._get_idempotent_response(
-            scope="validation_bot_registrations_invite_code",
-            key=scoped_key,
-            payload=payload,
-        )
-        if conflict:
-            raise PlatformAPIError(
-                status_code=409,
-                code="IDEMPOTENCY_KEY_CONFLICT",
-                message="Idempotency-Key reused with different payload.",
-                request_id=context.request_id,
-            )
-        if cached is not None:
-            return BotRegistrationResponse.model_validate(cached)
-
-        rate_limit_bucket = f"{context.tenant_id}:{request.inviteCode.strip().upper()}"
-        attempts = self._invite_code_attempts.get(rate_limit_bucket, 0) + 1
-        self._invite_code_attempts[rate_limit_bucket] = attempts
-        if attempts > 3:
-            raise PlatformAPIError(
-                status_code=429,
-                code="VALIDATION_BOT_REGISTRATION_RATE_LIMITED",
-                message="Invite-code registration rate limit exceeded.",
-                request_id=context.request_id,
-                details={"rateLimitBucket": "bot_invite_trial"},
-            )
-
-        invite_prefix = "-".join(request.inviteCode.split("-")[:2]) or request.inviteCode[:8]
-        response = self._register_validation_bot(
-            context=context,
-            bot_name=request.botName,
-            metadata=request.metadata,
-            registration_path="invite_code_trial",
-            trial_expires_at=self._to_utc_z(datetime.now(tz=UTC) + timedelta(days=30)),
-            audit={
-                "source": "invite_code_trial",
-                "inviteCodePrefix": invite_prefix,
-                "rateLimitBucket": "bot_invite_trial",
-            },
-        )
-        self._save_idempotent_response(
-            scope="validation_bot_registrations_invite_code",
-            key=scoped_key,
-            payload=payload,
-            response=response.model_dump(mode="json"),
-        )
-        return response
-
-    async def register_validation_bot_partner_bootstrap(
-        self,
-        *,
-        request: CreateBotPartnerBootstrapRequest,
-        context: RequestContext,
-        idempotency_key: str | None,
-    ) -> BotRegistrationResponse:
-        payload = request.model_dump(mode="json")
-        key = self._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
-        scoped_key = self._scoped_idempotency_key(context=context, key=key)
-        conflict, cached = self._get_idempotent_response(
-            scope="validation_bot_registrations_partner_bootstrap",
-            key=scoped_key,
-            payload=payload,
-        )
-        if conflict:
-            raise PlatformAPIError(
-                status_code=409,
-                code="IDEMPOTENCY_KEY_CONFLICT",
-                message="Idempotency-Key reused with different payload.",
-                request_id=context.request_id,
-            )
-        if cached is not None:
-            return BotRegistrationResponse.model_validate(cached)
-
-        response = self._register_validation_bot(
-            context=context,
-            bot_name=request.botName,
-            metadata=request.metadata,
-            registration_path="partner_bootstrap",
-            trial_expires_at=None,
-            audit={
-                "source": "partner_bootstrap",
-                "partnerKeyId": request.partnerKey,
-                "ownerEmail": _normalize_email(request.ownerEmail),
-            },
-        )
-        self._save_idempotent_response(
-            scope="validation_bot_registrations_partner_bootstrap",
-            key=scoped_key,
-            payload=payload,
-            response=response.model_dump(mode="json"),
-        )
-        return response
-
-    async def rotate_validation_bot_key(
-        self,
-        *,
-        bot_id: str,
-        request: CreateBotKeyRotationRequest | None,
-        context: RequestContext,
-        idempotency_key: str | None,
-    ) -> BotKeyRotationResponse:
-        payload = request.model_dump(mode="json") if request is not None else {}
-        key = self._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
-        scoped_key = self._scoped_idempotency_key(context=context, key=key)
-        conflict, cached = self._get_idempotent_response(
-            scope="validation_bot_key_rotations",
-            key=scoped_key,
-            payload={"botId": bot_id, **payload},
-        )
-        if conflict:
-            raise PlatformAPIError(
-                status_code=409,
-                code="IDEMPOTENCY_KEY_CONFLICT",
-                message="Idempotency-Key reused with different payload.",
-                request_id=context.request_id,
-            )
-        if cached is not None:
-            return BotKeyRotationResponse.model_validate(cached)
-
-        bot_record = self._require_bot_owner(bot_id=bot_id, context=context)
-        for key_id, key_metadata in list(self._bot_keys.items()):
-            if key_metadata.botId != bot_id:
-                continue
-            if key_metadata.status != "active":
-                continue
-            self._bot_keys[key_id] = key_metadata.model_copy(update={"status": "rotated"})
-
-        rotated_at = utc_now()
-        bot_record.bot = bot_record.bot.model_copy(update={"updatedAt": rotated_at})
-        issued_key = self._issue_bot_key(bot_id=bot_id, created_at=rotated_at)
-        response = BotKeyRotationResponse(
-            requestId=context.request_id,
-            botId=bot_id,
-            issuedKey=issued_key,
-        )
-        self._save_idempotent_response(
-            scope="validation_bot_key_rotations",
-            key=scoped_key,
-            payload={"botId": bot_id, **payload},
-            response=response.model_dump(mode="json"),
-        )
-        return response
-
-    async def revoke_validation_bot_key(
-        self,
-        *,
-        bot_id: str,
-        key_id: str,
-        request: CreateBotKeyRevocationRequest | None,
-        context: RequestContext,
-        idempotency_key: str | None,
-    ) -> BotKeyMetadataResponse:
-        payload = request.model_dump(mode="json") if request is not None else {}
-        scoped_payload = {"botId": bot_id, "keyId": key_id, **payload}
-        key = self._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
-        scoped_key = self._scoped_idempotency_key(context=context, key=key)
-        conflict, cached = self._get_idempotent_response(
-            scope="validation_bot_key_revocations",
-            key=scoped_key,
-            payload=scoped_payload,
-        )
-        if conflict:
-            raise PlatformAPIError(
-                status_code=409,
-                code="IDEMPOTENCY_KEY_CONFLICT",
-                message="Idempotency-Key reused with different payload.",
-                request_id=context.request_id,
-            )
-        if cached is not None:
-            return BotKeyMetadataResponse.model_validate(cached)
-
-        self._require_bot_owner(bot_id=bot_id, context=context)
-        key_metadata = self._bot_keys.get(key_id)
-        if key_metadata is None or key_metadata.botId != bot_id:
-            raise PlatformAPIError(
-                status_code=404,
-                code="VALIDATION_BOT_KEY_NOT_FOUND",
-                message="Validation bot key was not found.",
-                request_id=context.request_id,
-                details={"botId": bot_id, "keyId": key_id},
-            )
-        if key_metadata.status == "revoked":
-            raise PlatformAPIError(
-                status_code=409,
-                code="VALIDATION_BOT_KEY_CONFLICT",
-                message="Validation bot key has already been revoked.",
-                request_id=context.request_id,
-                details={"botId": bot_id, "keyId": key_id},
-            )
-
-        revoked_key = key_metadata.model_copy(update={"status": "revoked", "revokedAt": utc_now()})
-        self._bot_keys[key_id] = revoked_key
-        response = BotKeyMetadataResponse(requestId=context.request_id, botId=bot_id, key=revoked_key)
-        self._save_idempotent_response(
-            scope="validation_bot_key_revocations",
-            key=scoped_key,
-            payload=scoped_payload,
-            response=response.model_dump(mode="json"),
-        )
-        return response
-
-    def _register_validation_bot(
-        self,
-        *,
-        context: RequestContext,
-        bot_name: str,
-        metadata: dict[str, Any],
-        registration_path: BotRegistrationPath,
-        trial_expires_at: str | None,
-        audit: dict[str, Any],
-    ) -> BotRegistrationResponse:
-        created_at = utc_now()
-        bot_id = self._next_bot_id()
-        bot = Bot(
-            id=bot_id,
-            tenantId=context.tenant_id,
-            ownerUserId=context.user_id,
-            name=bot_name,
-            status=cast(BotStatus, "active"),
-            registrationPath=registration_path,
-            trialExpiresAt=trial_expires_at,
-            metadata=copy.deepcopy(metadata),
-            createdAt=created_at,
-            updatedAt=created_at,
-        )
-        self._bots[bot_id] = _ValidationBotRecord(
-            tenant_id=context.tenant_id,
-            owner_user_id=context.user_id,
-            bot=bot,
-        )
-
-        registration = BotRegistration(
-            id=self._next_bot_registration_id(),
-            botId=bot_id,
-            registrationPath=registration_path,
-            status="completed",
-            audit=copy.deepcopy(audit),
-            createdAt=created_at,
-        )
-        issued_key = self._issue_bot_key(bot_id=bot_id, created_at=created_at)
-        return BotRegistrationResponse(
-            requestId=context.request_id,
-            bot=bot,
-            registration=registration,
-            issuedKey=issued_key,
-        )
-
-    def _issue_bot_key(self, *, bot_id: str, created_at: str) -> BotIssuedApiKey:
-        key_id = self._next_bot_key_id()
-        raw_key = f"tnx_bot_live_{uuid4().hex}"
-        metadata = BotKeyMetadata(
-            id=key_id,
-            botId=bot_id,
-            keyPrefix=raw_key[:17],
-            status="active",
-            createdAt=created_at,
-            lastUsedAt=None,
-            revokedAt=None,
-        )
-        self._bot_keys[key_id] = metadata
-        return BotIssuedApiKey(rawKey=raw_key, key=metadata)
-
-    def _require_bot_owner(self, *, bot_id: str, context: RequestContext) -> _ValidationBotRecord:
-        bot_record = self._bots.get(bot_id)
-        if (
-            bot_record is None
-            or bot_record.tenant_id != context.tenant_id
-            or bot_record.owner_user_id != context.user_id
-        ):
-            raise PlatformAPIError(
-                status_code=404,
-                code="VALIDATION_BOT_NOT_FOUND",
-                message="Validation bot was not found.",
-                request_id=context.request_id,
-                details={"botId": bot_id},
-            )
-        return bot_record
-
-    def _require_owner_run(self, *, run_id: str, context: RequestContext) -> _ValidationRunRecord:
-        run_record = self._runs.get(run_id)
-        if run_record is None or run_record.tenant_id != context.tenant_id or run_record.user_id != context.user_id:
-            raise PlatformAPIError(
-                status_code=404,
-                code="VALIDATION_RUN_NOT_FOUND",
-                message="Validation run was not found.",
-                request_id=context.request_id,
-                details={"runId": run_id},
-            )
-        return run_record
-
-    def _refresh_invite_status(self, *, record: _ValidationInviteRecord) -> ValidationInvite:
-        invite = record.invite
-        if invite.status != "pending" or invite.expiresAt is None:
-            return invite
-        expires_at = _parse_utc_datetime(invite.expiresAt)
-        if expires_at is None:
-            return invite
-        if expires_at <= datetime.now(tz=UTC):
-            invite = invite.model_copy(update={"status": "expired"})
-            record.invite = invite
-        return invite
-
-    def _find_share_by_invite_id(self, *, invite_id: str) -> _ValidationRunShareRecord | None:
-        for record in self._validation_shares.values():
-            if record.share.inviteId == invite_id:
-                return record
-        return None
-
-    def _resolve_invite_expiration(self, *, expires_at: str | None, context: RequestContext) -> str:
-        if _non_empty(expires_at) is None:
-            return self._to_utc_z(datetime.now(tz=UTC) + timedelta(days=7))
-        parsed = _parse_utc_datetime(expires_at or "")
-        if parsed is None:
-            raise PlatformAPIError(
-                status_code=400,
-                code="VALIDATION_INVITE_INVALID",
-                message="expiresAt must be an ISO8601 timestamp when provided.",
-                request_id=context.request_id,
-                details={"expiresAt": expires_at},
-            )
-        if parsed <= datetime.now(tz=UTC):
-            raise PlatformAPIError(
-                status_code=400,
-                code="VALIDATION_INVITE_INVALID",
-                message="expiresAt must be in the future.",
-                request_id=context.request_id,
-                details={"expiresAt": expires_at},
-            )
-        return self._to_utc_z(parsed)
-
-    @staticmethod
-    def _to_utc_z(value: datetime) -> str:
-        return value.astimezone(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
     def _execute_optional_render(
         self,
@@ -2369,31 +1954,6 @@ class ValidationV2Service:
         value = self._review_comment_counter
         self._review_comment_counter += 1
         return f"valcomment-{value:03d}"
-
-    def _next_bot_id(self) -> str:
-        value = self._bot_counter
-        self._bot_counter += 1
-        return f"bot-{value:03d}"
-
-    def _next_bot_registration_id(self) -> str:
-        value = self._bot_registration_counter
-        self._bot_registration_counter += 1
-        return f"botreg-{value:03d}"
-
-    def _next_bot_key_id(self) -> str:
-        value = self._bot_key_counter
-        self._bot_key_counter += 1
-        return f"botkey-{value:03d}"
-
-    def _next_validation_invite_id(self) -> str:
-        value = self._validation_invite_counter
-        self._validation_invite_counter += 1
-        return f"vinvite-{value:03d}"
-
-    def _next_validation_share_id(self) -> str:
-        value = self._validation_share_counter
-        self._validation_share_counter += 1
-        return f"vshare-{value:03d}"
 
     @staticmethod
     def _resolve_idempotency_key(*, context: RequestContext, idempotency_key: str | None) -> str:

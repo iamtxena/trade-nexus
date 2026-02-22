@@ -15,6 +15,7 @@ from typing import Any
 from src.platform_api.errors import PlatformAPIError
 
 _JWT_SECRET_ENV = "PLATFORM_AUTH_JWT_HS256_SECRET"
+_JWT_TIME_LEEWAY_SECONDS = 15
 
 
 def _non_empty(value: str | None) -> str | None:
@@ -149,10 +150,10 @@ def _jwt_secret() -> str | None:
 def _claims_time_window_valid(claims: dict[str, Any]) -> bool:
     now = int(time.time())
     exp = claims.get("exp")
-    if isinstance(exp, (int, float)) and now >= int(exp):
+    if isinstance(exp, (int, float)) and now >= int(exp) + _JWT_TIME_LEEWAY_SECONDS:
         return False
     nbf = claims.get("nbf")
-    if isinstance(nbf, (int, float)) and now < int(nbf):
+    if isinstance(nbf, (int, float)) and now + _JWT_TIME_LEEWAY_SECONDS < int(nbf):
         return False
     return True
 

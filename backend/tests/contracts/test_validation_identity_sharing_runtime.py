@@ -138,6 +138,9 @@ def _reset_runtime_state() -> None:
             "validation_renders",
             "validation_baselines",
             "validation_replays",
+            "validation_run_invites",
+            "validation_invite_revocations",
+            "validation_invite_acceptance",
             "validation_bot_registrations_invite_code",
             "validation_bot_registrations_partner_bootstrap",
             "validation_bot_key_rotations",
@@ -358,6 +361,66 @@ def test_runtime_bot_api_key_only_auth_sets_runtime_tenant_context() -> None:
     assert persisted.metadata.owner_user_id == "owner-runtime-bot-only-key"
     assert persisted.metadata.actor_type == "bot"
     assert persisted.metadata.actor_id == "runtime-bot-api-key-only"
+
+
+def test_runtime_bot_revoked_key_with_wrong_secret_returns_invalid_not_revoked() -> None:
+    client = _client()
+    router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
+    owner_headers = _auth_headers(
+        request_id="req-runtime-bot-revoked-oracle-owner-001",
+        tenant_id="tenant-runtime-bot-revoked-oracle",
+        user_id="owner-runtime-bot-revoked-oracle",
+    )
+
+    register = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={**owner_headers, "Idempotency-Key": "idem-runtime-bot-revoked-oracle-register-001"},
+        json={
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+            "ownerEmail": "owner-runtime-bot-revoked-oracle@example.com",
+            "botName": "Runtime Bot Revoked Oracle",
+        },
+    )
+    assert register.status_code == 201
+    runtime_key = register.json()["issuedKey"]["rawKey"]
+    key_id = register.json()["issuedKey"]["key"]["id"]
+
+    revoke = client.post(
+        f"/v2/validation-bots/runtime-bot-revoked-oracle/keys/{key_id}/revoke",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-runtime-bot-revoked-oracle-revoke-001",
+            "Idempotency-Key": "idem-runtime-bot-revoked-oracle-revoke-001",
+        },
+        json={},
+    )
+    assert revoke.status_code == 200
+
+    wrong_secret_key = ".".join([*runtime_key.split(".")[:-1], "nottherealsecret"])
+    invalid = client.post(
+        "/v2/validation-runs",
+        headers={
+            "X-Request-Id": "req-runtime-bot-revoked-oracle-invalid-001",
+            "X-API-Key": wrong_secret_key,
+            "Idempotency-Key": "idem-runtime-bot-revoked-oracle-invalid-001",
+        },
+        json=_validation_run_payload(),
+    )
+    assert invalid.status_code == 401
+    assert invalid.json()["error"]["code"] == "BOT_API_KEY_INVALID"
+
+    revoked = client.post(
+        "/v2/validation-runs",
+        headers={
+            "X-Request-Id": "req-runtime-bot-revoked-oracle-revoked-001",
+            "X-API-Key": runtime_key,
+            "Idempotency-Key": "idem-runtime-bot-revoked-oracle-revoked-001",
+        },
+        json=_validation_run_payload(),
+    )
+    assert revoked.status_code == 401
+    assert revoked.json()["error"]["code"] == "BOT_API_KEY_REVOKED"
 
 
 def test_runtime_bot_partner_registration_is_idempotent_for_retries() -> None:
@@ -775,6 +838,188 @@ def test_shared_validation_invite_rejects_duplicate_pending_email() -> None:
     )
     assert invites.status_code == 200
     assert len(invites.json()["items"]) == 1
+
+
+def test_shared_validation_invite_endpoints_honor_idempotency_keys() -> None:
+    client = _client()
+    owner_headers = _auth_headers(
+        request_id="req-shared-validation-idempotency-owner-001",
+        tenant_id="tenant-shared-validation-idempotency",
+        user_id="owner-shared-validation-idempotency",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-validation-idempotency-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    first_create = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-idempotency-create-001",
+            "Idempotency-Key": "idem-shared-validation-idempotency-create-001",
+        },
+        json={"email": "idempotent-create@example.com"},
+    )
+    assert first_create.status_code == 201
+
+    replay_create = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-idempotency-create-002",
+            "Idempotency-Key": "idem-shared-validation-idempotency-create-001",
+        },
+        json={"email": "idempotent-create@example.com"},
+    )
+    assert replay_create.status_code == 201
+    assert replay_create.json() == first_create.json()
+
+    conflict_create = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-idempotency-create-003",
+            "Idempotency-Key": "idem-shared-validation-idempotency-create-001",
+        },
+        json={"email": "idempotent-create-different@example.com"},
+    )
+    assert conflict_create.status_code == 409
+    assert conflict_create.json()["error"]["code"] == "IDEMPOTENCY_KEY_CONFLICT"
+
+    invite_id = first_create.json()["invite"]["id"]
+    first_revoke = client.post(
+        f"/v2/validation-sharing/invites/{invite_id}/revoke",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-idempotency-revoke-001",
+            "Idempotency-Key": "idem-shared-validation-idempotency-revoke-001",
+        },
+        json={},
+    )
+    assert first_revoke.status_code == 200
+
+    replay_revoke = client.post(
+        f"/v2/validation-sharing/invites/{invite_id}/revoke",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-idempotency-revoke-002",
+            "Idempotency-Key": "idem-shared-validation-idempotency-revoke-001",
+        },
+        json={},
+    )
+    assert replay_revoke.status_code == 200
+    assert replay_revoke.json() == first_revoke.json()
+
+    create_for_accept = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-idempotency-create-accept-001",
+            "Idempotency-Key": "idem-shared-validation-idempotency-create-accept-001",
+        },
+        json={"email": "idempotent-accept@example.com"},
+    )
+    assert create_for_accept.status_code == 201
+    invite_for_accept = create_for_accept.json()["invite"]["id"]
+
+    accept_headers = _auth_headers(
+        request_id="req-shared-validation-idempotency-accept-user-001",
+        tenant_id="tenant-shared-validation-idempotency",
+        user_id="idempotent-accept-user",
+        user_email="idempotent-accept@example.com",
+    )
+    first_accept = client.post(
+        f"/v2/validation-sharing/invites/{invite_for_accept}/accept",
+        headers={**accept_headers, "Idempotency-Key": "idem-shared-validation-idempotency-accept-001"},
+        json={"acceptedEmail": "idempotent-accept@example.com"},
+    )
+    assert first_accept.status_code == 200
+
+    replay_accept = client.post(
+        f"/v2/validation-sharing/invites/{invite_for_accept}/accept",
+        headers={
+            **accept_headers,
+            "X-Request-Id": "req-shared-validation-idempotency-accept-user-002",
+            "Idempotency-Key": "idem-shared-validation-idempotency-accept-001",
+        },
+        json={"acceptedEmail": "idempotent-accept@example.com"},
+    )
+    assert replay_accept.status_code == 200
+    assert replay_accept.json() == first_accept.json()
+
+    conflict_accept = client.post(
+        f"/v2/validation-sharing/invites/{invite_for_accept}/accept",
+        headers={
+            **accept_headers,
+            "X-Request-Id": "req-shared-validation-idempotency-accept-user-003",
+            "Idempotency-Key": "idem-shared-validation-idempotency-accept-001",
+        },
+        json={"acceptedEmail": "other@example.com"},
+    )
+    assert conflict_accept.status_code == 409
+    assert conflict_accept.json()["error"]["code"] == "IDEMPOTENCY_KEY_CONFLICT"
+
+
+def test_shared_validation_expired_pending_invite_allows_new_invite_creation() -> None:
+    client = _client()
+    owner_headers = _auth_headers(
+        request_id="req-shared-validation-expired-duplicate-owner-001",
+        tenant_id="tenant-shared-validation-expired-duplicate",
+        user_id="owner-shared-validation-expired-duplicate",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-validation-expired-duplicate-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    first = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-expired-duplicate-share-001",
+            "Idempotency-Key": "idem-shared-validation-expired-duplicate-share-001",
+        },
+        json={"email": "stale-invite@example.com"},
+    )
+    assert first.status_code == 201
+    first_invite_id = first.json()["invite"]["id"]
+
+    invites = router_v2_module._identity_service._share_invites_by_run[run_id]  # noqa: SLF001
+    invites[0] = replace(
+        invites[0],
+        status="pending",
+        expires_at=(datetime.now(tz=UTC) - timedelta(minutes=1)).isoformat().replace("+00:00", "Z"),
+    )
+
+    second = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-expired-duplicate-share-002",
+            "Idempotency-Key": "idem-shared-validation-expired-duplicate-share-002",
+        },
+        json={"email": "stale-invite@example.com"},
+    )
+    assert second.status_code == 201
+    assert second.json()["invite"]["id"] != first_invite_id
+
+    listed = client.get(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={**owner_headers, "X-Request-Id": "req-shared-validation-expired-duplicate-list-001"},
+    )
+    assert listed.status_code == 200
+    status_by_id = {item["id"]: item["status"] for item in listed.json()["items"]}
+    assert status_by_id[first_invite_id] == "expired"
+    assert status_by_id[second.json()["invite"]["id"]] == "pending"
 
 
 def test_shared_validation_invite_list_supports_cursor_pagination() -> None:

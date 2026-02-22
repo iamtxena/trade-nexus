@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import json
 import os
+import time
 
 import pytest
 
@@ -96,3 +97,79 @@ def test_resolve_validation_identity_rejects_spoofed_identity_headers() -> None:
         )
     assert exc.value.status_code == 401
     assert exc.value.code == "AUTH_IDENTITY_MISMATCH"
+
+
+def test_resolve_validation_identity_allows_small_clock_skew_for_exp_and_nbf() -> None:
+    now = int(time.time())
+
+    exp_within_skew = _jwt_token(
+        {
+            "sub": "user-auth-identity-skew-exp",
+            "tenant_id": "tenant-auth-identity-skew-exp",
+            "exp": now - 5,
+        }
+    )
+    exp_identity = resolve_validation_identity(
+        authorization=f"Bearer {exp_within_skew}",
+        api_key=None,
+        tenant_header="tenant-auth-identity-skew-exp",
+        user_header="user-auth-identity-skew-exp",
+        request_id="req-auth-identity-skew-exp-001",
+    )
+    assert exp_identity.user_id == "user-auth-identity-skew-exp"
+
+    nbf_within_skew = _jwt_token(
+        {
+            "sub": "user-auth-identity-skew-nbf",
+            "tenant_id": "tenant-auth-identity-skew-nbf",
+            "nbf": now + 5,
+        }
+    )
+    nbf_identity = resolve_validation_identity(
+        authorization=f"Bearer {nbf_within_skew}",
+        api_key=None,
+        tenant_header="tenant-auth-identity-skew-nbf",
+        user_header="user-auth-identity-skew-nbf",
+        request_id="req-auth-identity-skew-nbf-001",
+    )
+    assert nbf_identity.user_id == "user-auth-identity-skew-nbf"
+
+
+def test_resolve_validation_identity_rejects_time_claims_outside_leeway() -> None:
+    now = int(time.time())
+
+    expired = _jwt_token(
+        {
+            "sub": "user-auth-identity-expired",
+            "tenant_id": "tenant-auth-identity-expired",
+            "exp": now - 30,
+        }
+    )
+    with pytest.raises(PlatformAPIError) as expired_exc:
+        resolve_validation_identity(
+            authorization=f"Bearer {expired}",
+            api_key=None,
+            tenant_header="tenant-auth-identity-expired",
+            user_header="user-auth-identity-expired",
+            request_id="req-auth-identity-expired-001",
+        )
+    assert expired_exc.value.status_code == 401
+    assert expired_exc.value.code == "AUTH_UNAUTHORIZED"
+
+    not_yet_valid = _jwt_token(
+        {
+            "sub": "user-auth-identity-nbf-future",
+            "tenant_id": "tenant-auth-identity-nbf-future",
+            "nbf": now + 30,
+        }
+    )
+    with pytest.raises(PlatformAPIError) as nbf_exc:
+        resolve_validation_identity(
+            authorization=f"Bearer {not_yet_valid}",
+            api_key=None,
+            tenant_header="tenant-auth-identity-nbf-future",
+            user_header="user-auth-identity-nbf-future",
+            request_id="req-auth-identity-nbf-future-001",
+        )
+    assert nbf_exc.value.status_code == 401
+    assert nbf_exc.value.code == "AUTH_UNAUTHORIZED"

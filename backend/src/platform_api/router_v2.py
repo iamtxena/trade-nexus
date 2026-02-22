@@ -906,7 +906,19 @@ async def create_validation_run_invite_v2(
     context: ContextDep,
     idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> ValidationInviteResponse:
-    del idempotency_key
+    idempotency_payload = {
+        "runId": runId,
+        "permission": "review",
+        "request": request.model_dump(mode="json"),
+    }
+    cached = _get_idempotent_response(
+        scope="validation_run_invites",
+        context=context,
+        idempotency_key=idempotency_key,
+        payload=idempotency_payload,
+    )
+    if cached is not None:
+        return ValidationInviteResponse.model_validate(cached)
     invite = await _validation_service.create_validation_run_invite(
         run_id=runId,
         invitee_email=request.email,
@@ -914,10 +926,18 @@ async def create_validation_run_invite_v2(
         expires_at=request.expiresAt,
         context=context,
     )
-    return ValidationInviteResponse(
+    response = ValidationInviteResponse(
         requestId=context.request_id,
         invite=_to_validation_invite(invite),
     )
+    _save_idempotent_response(
+        scope="validation_run_invites",
+        context=context,
+        idempotency_key=idempotency_key,
+        payload=idempotency_payload,
+        response=response.model_dump(mode="json"),
+    )
+    return response
 
 
 @router.get(
@@ -977,15 +997,31 @@ async def revoke_validation_invite_v2(
     context: ContextDep,
     idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> ValidationInviteResponse:
-    del idempotency_key
+    idempotency_payload = {"inviteId": inviteId}
+    cached = _get_idempotent_response(
+        scope="validation_invite_revocations",
+        context=context,
+        idempotency_key=idempotency_key,
+        payload=idempotency_payload,
+    )
+    if cached is not None:
+        return ValidationInviteResponse.model_validate(cached)
     invite = await _validation_service.revoke_validation_invite(
         invite_id=inviteId,
         context=context,
     )
-    return ValidationInviteResponse(
+    response = ValidationInviteResponse(
         requestId=context.request_id,
         invite=_to_validation_invite(invite),
     )
+    _save_idempotent_response(
+        scope="validation_invite_revocations",
+        context=context,
+        idempotency_key=idempotency_key,
+        payload=idempotency_payload,
+        response=response.model_dump(mode="json"),
+    )
+    return response
 
 
 @router.post(
@@ -1000,17 +1036,36 @@ async def accept_validation_invite_on_login_v2(
     context: ContextDep,
     idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> ValidationInviteAcceptanceResponse:
-    del idempotency_key
+    idempotency_payload = {
+        "inviteId": inviteId,
+        "request": request.model_dump(mode="json"),
+    }
+    cached = _get_idempotent_response(
+        scope="validation_invite_acceptance",
+        context=context,
+        idempotency_key=idempotency_key,
+        payload=idempotency_payload,
+    )
+    if cached is not None:
+        return ValidationInviteAcceptanceResponse.model_validate(cached)
     invite = await _validation_service.accept_validation_invite_on_login(
         invite_id=inviteId,
         accepted_email=request.acceptedEmail,
         context=context,
     )
-    return ValidationInviteAcceptanceResponse(
+    response = ValidationInviteAcceptanceResponse(
         requestId=context.request_id,
         invite=_to_validation_invite(invite),
         share=_to_validation_run_share(invite),
     )
+    _save_idempotent_response(
+        scope="validation_invite_acceptance",
+        context=context,
+        idempotency_key=idempotency_key,
+        payload=idempotency_payload,
+        response=response.model_dump(mode="json"),
+    )
+    return response
 
 
 @router.get(

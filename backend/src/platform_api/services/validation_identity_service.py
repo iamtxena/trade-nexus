@@ -487,19 +487,19 @@ class ValidationIdentityService:
                 message="Runtime bot key is invalid.",
                 request_id=request_id,
             )
-        if record.revoked:
-            raise PlatformAPIError(
-                status_code=401,
-                code="BOT_API_KEY_REVOKED",
-                message="Runtime bot key has been revoked.",
-                request_id=request_id,
-            )
         actual_hash = _hash_secret(secret=secret, salt=record.secret_salt)
         if not hmac.compare_digest(actual_hash, record.secret_hash):
             raise PlatformAPIError(
                 status_code=401,
                 code="BOT_API_KEY_INVALID",
                 message="Runtime bot key is invalid.",
+                request_id=request_id,
+            )
+        if record.revoked:
+            raise PlatformAPIError(
+                status_code=401,
+                code="BOT_API_KEY_REVOKED",
+                message="Runtime bot key has been revoked.",
                 request_id=request_id,
             )
 
@@ -555,14 +555,18 @@ class ValidationIdentityService:
             request_id=context.request_id,
         )
 
-        for existing in self._share_invites_by_run.get(run_id, []):
-            if existing.tenant_id != context.tenant_id:
+        invites = self._share_invites_by_run.get(run_id, [])
+        for index, existing in enumerate(invites):
+            refreshed = self._refresh_expired_share_invite(invite=existing)
+            if refreshed is not existing:
+                invites[index] = refreshed
+            if refreshed.tenant_id != context.tenant_id:
                 continue
-            if existing.owner_user_id != owner_user_id:
+            if refreshed.owner_user_id != owner_user_id:
                 continue
-            if existing.status != "pending":
+            if refreshed.status != "pending":
                 continue
-            if existing.invitee_email != normalized_email:
+            if refreshed.invitee_email != normalized_email:
                 continue
             raise PlatformAPIError(
                 status_code=409,
@@ -572,7 +576,7 @@ class ValidationIdentityService:
                 details={
                     "runId": run_id,
                     "email": normalized_email,
-                    "inviteId": existing.invite_id,
+                    "inviteId": refreshed.invite_id,
                 },
             )
 

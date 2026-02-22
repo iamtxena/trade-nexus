@@ -141,6 +141,8 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                 except PlatformAPIError as exc:
                     request.state.tenant_id = "tenant-unauthenticated"
                     request.state.user_id = "user-unauthenticated"
+                    request.state.user_email_authenticated = False
+                    request.state.user_email = None
                     log_request_event(
                         logger,
                         level=logging.WARNING,

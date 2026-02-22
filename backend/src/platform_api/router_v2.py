@@ -182,6 +182,29 @@ def _normalized_email(*, email: str, request_id: str) -> str:
         )
 
 
+def _partner_bootstrap_context_for_public_identity(*, context: RequestContext, owner_email_hint: str) -> RequestContext:
+    is_public_registration_identity = (
+        context.user_id == "user-public-registration"
+        or context.tenant_id == "tenant-public-registration"
+    )
+    if not is_public_registration_identity:
+        return context
+
+    normalized_hint = owner_email_hint.strip().lower()
+    digest = hashlib.sha256(normalized_hint.encode("utf-8")).hexdigest()
+    derived_user_id = f"user-email-{digest[:12]}"
+    derived_tenant_id = f"tenant-email-{digest[12:24]}"
+    return context.model_copy(
+        update={
+            "tenant_id": derived_tenant_id,
+            "user_id": derived_user_id,
+            "owner_user_id": derived_user_id,
+            "actor_type": "user",
+            "actor_id": derived_user_id,
+        }
+    )
+
+
 def _bot_registration_path(method: Literal["invite", "partner"]) -> Literal["invite_code_trial", "partner_bootstrap"]:
     if method == "invite":
         return "invite_code_trial"
@@ -215,9 +238,9 @@ def _get_idempotent_response(
     idempotency_key: str | None,
     payload: dict[str, Any],
 ) -> dict[str, Any] | None:
-    key = ValidationV2Service._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)  # noqa: SLF001
-    scoped_key = ValidationV2Service._scoped_idempotency_key(context=context, key=key)  # noqa: SLF001
-    conflict, cached = _validation_service._get_idempotent_response(  # noqa: SLF001
+    key = ValidationV2Service.resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
+    scoped_key = ValidationV2Service.scoped_idempotency_key(context=context, key=key)
+    conflict, cached = _validation_service.get_idempotent_response(
         scope=scope,
         key=scoped_key,
         payload=payload,
@@ -240,9 +263,9 @@ def _save_idempotent_response(
     payload: dict[str, Any],
     response: dict[str, Any],
 ) -> None:
-    key = ValidationV2Service._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)  # noqa: SLF001
-    scoped_key = ValidationV2Service._scoped_idempotency_key(context=context, key=key)  # noqa: SLF001
-    _validation_service._save_idempotent_response(  # noqa: SLF001
+    key = ValidationV2Service.resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
+    scoped_key = ValidationV2Service.scoped_idempotency_key(context=context, key=key)
+    _validation_service.save_idempotent_response(
         scope=scope,
         key=scoped_key,
         payload=payload,
@@ -491,10 +514,14 @@ async def register_validation_bot_partner_bootstrap_v2(
     context: ContextDep,
     idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> BotRegistrationResponse:
+    registration_context = _partner_bootstrap_context_for_public_identity(
+        context=context,
+        owner_email_hint=payload.ownerEmail,
+    )
     idempotency_payload = payload.model_dump(mode="json")
     cached = _get_idempotent_response(
         scope="validation_bot_registrations_partner_bootstrap",
-        context=context,
+        context=registration_context,
         idempotency_key=idempotency_key,
         payload=idempotency_payload,
     )
@@ -503,25 +530,7 @@ async def register_validation_bot_partner_bootstrap_v2(
 
     bot_id = _normalized_bot_id(bot_name=payload.botName)
     owner_email = _normalized_email(email=payload.ownerEmail, request_id=context.request_id)
-    registration_context = context
-    is_public_registration_identity = (
-        context.user_id == "user-public-registration"
-        or context.tenant_id == "tenant-public-registration"
-    )
-    if is_public_registration_identity:
-        digest = hashlib.sha256(owner_email.encode("utf-8")).hexdigest()
-        derived_user_id = f"user-email-{digest[:12]}"
-        derived_tenant_id = f"tenant-email-{digest[12:24]}"
-        registration_context = context.model_copy(
-            update={
-                "tenant_id": derived_tenant_id,
-                "user_id": derived_user_id,
-                "owner_user_id": derived_user_id,
-                "actor_type": "user",
-                "actor_id": derived_user_id,
-                "user_email": owner_email,
-            }
-        )
+    registration_context = registration_context.model_copy(update={"user_email": owner_email})
     result = _identity_service.register_bot(
         context=registration_context,
         bot_id=bot_id,
@@ -572,7 +581,7 @@ async def register_validation_bot_partner_bootstrap_v2(
     )
     _save_idempotent_response(
         scope="validation_bot_registrations_partner_bootstrap",
-        context=context,
+        context=registration_context,
         idempotency_key=idempotency_key,
         payload=idempotency_payload,
         response=response.model_dump(mode="json"),

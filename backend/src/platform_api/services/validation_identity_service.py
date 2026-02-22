@@ -133,7 +133,7 @@ class ValidationIdentityService:
 
         self._share_invites_by_run: dict[str, list[SharedValidationInviteRecord]] = {}
         self._share_grants_by_run: dict[str, dict[str, SharePermission]] = {}
-        self._pending_share_invite_index: dict[tuple[str, str], set[str]] = {}
+        self._pending_share_invite_index: dict[tuple[str, str], dict[str, int]] = {}
 
         self._invite_counter = 1
         self._key_counter = 1
@@ -872,7 +872,7 @@ class ValidationIdentityService:
         except ValueError:
             return []
         accepted: list[SharedValidationInviteRecord] = []
-        run_ids = sorted(self._pending_share_invite_index.get((context.tenant_id, normalized_email), set()))
+        run_ids = sorted(self._pending_share_invite_index.get((context.tenant_id, normalized_email), {}).keys())
         for run_id in run_ids:
             invites = self._share_invites_by_run.get(run_id, [])
             for index, invite in enumerate(invites):
@@ -930,10 +930,14 @@ class ValidationIdentityService:
         self,
         *,
         run_id: str,
+        tenant_id: str,
+        run_tenant_id: str,
         owner_user_id: str,
         user_id: str,
         required_permission: SharePermission,
     ) -> bool:
+        if tenant_id != run_tenant_id:
+            return False
         if user_id == owner_user_id:
             return True
 
@@ -952,15 +956,20 @@ class ValidationIdentityService:
         if invite.status != "pending":
             return
         key = (invite.tenant_id, invite.invitee_email)
-        self._pending_share_invite_index.setdefault(key, set()).add(invite.run_id)
+        run_counts = self._pending_share_invite_index.setdefault(key, {})
+        run_counts[invite.run_id] = run_counts.get(invite.run_id, 0) + 1
 
     def _remove_pending_share_invite_index(self, *, invite: SharedValidationInviteRecord) -> None:
         key = (invite.tenant_id, invite.invitee_email)
-        run_ids = self._pending_share_invite_index.get(key)
-        if run_ids is None:
+        run_counts = self._pending_share_invite_index.get(key)
+        if run_counts is None:
             return
-        run_ids.discard(invite.run_id)
-        if not run_ids:
+        count = run_counts.get(invite.run_id, 0)
+        if count <= 1:
+            run_counts.pop(invite.run_id, None)
+        else:
+            run_counts[invite.run_id] = count - 1
+        if not run_counts:
             self._pending_share_invite_index.pop(key, None)
 
     def _refresh_expired_share_invite(self, *, invite: SharedValidationInviteRecord) -> SharedValidationInviteRecord:

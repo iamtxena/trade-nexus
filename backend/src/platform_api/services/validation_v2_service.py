@@ -1693,6 +1693,8 @@ class ValidationV2Service:
 
         if not self._identity_service.can_access_run(
             run_id=run_id,
+            tenant_id=context.tenant_id,
+            run_tenant_id=record.tenant_id,
             owner_user_id=record.owner_user_id,
             user_id=context.user_id,
             required_permission=required_permission,
@@ -1953,6 +1955,38 @@ class ValidationV2Service:
         value = self._review_comment_counter
         self._review_comment_counter += 1
         return f"valcomment-{value:03d}"
+
+    @staticmethod
+    def resolve_idempotency_key(*, context: RequestContext, idempotency_key: str | None) -> str:
+        return ValidationV2Service._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
+
+    @staticmethod
+    def scoped_idempotency_key(*, context: RequestContext, key: str) -> str:
+        return ValidationV2Service._scoped_idempotency_key(context=context, key=key)
+
+    def get_idempotent_response(
+        self,
+        *,
+        scope: str,
+        key: str,
+        payload: dict[str, Any],
+    ) -> tuple[bool, dict[str, Any] | None]:
+        return self._get_idempotent_response(scope=scope, key=key, payload=payload)
+
+    def save_idempotent_response(
+        self,
+        *,
+        scope: str,
+        key: str,
+        payload: dict[str, Any],
+        response: dict[str, Any],
+    ) -> None:
+        self._save_idempotent_response(
+            scope=scope,
+            key=key,
+            payload=payload,
+            response=response,
+        )
 
     @staticmethod
     def _resolve_idempotency_key(*, context: RequestContext, idempotency_key: str | None) -> str:

@@ -337,6 +337,44 @@ def test_runtime_bot_partner_public_registration_rejects_invalid_owner_email() -
     assert register.status_code == 422
 
 
+def test_runtime_bot_partner_public_registration_scopes_idempotency_by_derived_owner_identity() -> None:
+    client = _client()
+    router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
+
+    idem_key = "idem-runtime-bot-public-partner-scope-001"
+    first = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={
+            "X-Request-Id": "req-runtime-bot-public-partner-scope-001",
+            "Idempotency-Key": idem_key,
+        },
+        json={
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+            "ownerEmail": "public-owner-1@example.com",
+            "botName": "Public Runtime Bot One",
+        },
+    )
+    assert first.status_code == 201
+
+    second = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={
+            "X-Request-Id": "req-runtime-bot-public-partner-scope-002",
+            "Idempotency-Key": idem_key,
+        },
+        json={
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+            "ownerEmail": "public-owner-2@example.com",
+            "botName": "Public Runtime Bot Two",
+        },
+    )
+    assert second.status_code == 201
+    assert second.json()["bot"]["ownerUserId"] != first.json()["bot"]["ownerUserId"]
+    assert second.json()["bot"]["tenantId"] != first.json()["bot"]["tenantId"]
+
+
 def test_runtime_bot_api_key_only_auth_sets_runtime_tenant_context() -> None:
     client = _client()
     router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
@@ -974,6 +1012,81 @@ def test_shared_validation_invite_rejects_duplicate_pending_email() -> None:
     )
     assert invites.status_code == 200
     assert len(invites.json()["items"]) == 1
+
+
+def test_shared_validation_access_check_enforces_tenant_match() -> None:
+    service = router_v2_module._identity_service
+    service._share_grants_by_run["valrun-tenant-check-001"] = {"user-tenant-check": "review"}  # noqa: SLF001
+
+    allowed = service.can_access_run(
+        run_id="valrun-tenant-check-001",
+        tenant_id="tenant-tenant-check-a",
+        run_tenant_id="tenant-tenant-check-a",
+        owner_user_id="owner-tenant-check",
+        user_id="user-tenant-check",
+        required_permission="review",
+    )
+    assert allowed is True
+
+    denied = service.can_access_run(
+        run_id="valrun-tenant-check-001",
+        tenant_id="tenant-tenant-check-b",
+        run_tenant_id="tenant-tenant-check-a",
+        owner_user_id="owner-tenant-check",
+        user_id="user-tenant-check",
+        required_permission="review",
+    )
+    assert denied is False
+
+
+def test_shared_validation_pending_invite_index_keeps_run_when_multiple_pending_exist() -> None:
+    client = _client()
+    owner_headers = _auth_headers(
+        request_id="req-shared-validation-pending-index-owner-001",
+        tenant_id="tenant-shared-validation-pending-index",
+        user_id="owner-shared-validation-pending-index",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-validation-pending-index-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    create_invite = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-pending-index-share-001",
+            "Idempotency-Key": "idem-shared-validation-pending-index-share-001",
+        },
+        json={"email": "pending-index@example.com"},
+    )
+    assert create_invite.status_code == 201
+
+    service = router_v2_module._identity_service
+    invites = service._share_invites_by_run[run_id]  # noqa: SLF001
+    first_invite = invites[0]
+    second_invite = replace(first_invite, invite_id="valshare-pending-index-dup-001")
+    invites.append(second_invite)
+    service._index_pending_share_invite(invite=second_invite)  # noqa: SLF001
+
+    assert service.has_pending_email_invites(
+        tenant_id="tenant-shared-validation-pending-index",
+        email="pending-index@example.com",
+    )
+    service._remove_pending_share_invite_index(invite=first_invite)  # noqa: SLF001
+    assert service.has_pending_email_invites(
+        tenant_id="tenant-shared-validation-pending-index",
+        email="pending-index@example.com",
+    )
+    service._remove_pending_share_invite_index(invite=second_invite)  # noqa: SLF001
+    assert not service.has_pending_email_invites(
+        tenant_id="tenant-shared-validation-pending-index",
+        email="pending-index@example.com",
+    )
 
 
 def test_shared_validation_invite_endpoints_honor_idempotency_keys() -> None:

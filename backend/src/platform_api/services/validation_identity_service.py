@@ -9,7 +9,7 @@ import os
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from hashlib import sha256
+from hashlib import pbkdf2_hmac
 from typing import Any, Literal
 
 from src.platform_api.errors import PlatformAPIError
@@ -101,6 +101,9 @@ class ValidationIdentityService:
     """Owns runtime bot identity, bot-key resolution, and run-share invite state."""
 
     _RUNTIME_KEY_PREFIX = "tnx.bot"
+    _INVITE_CODE_TOKEN_BYTES = 24
+    _SECRET_HASH_ITERATIONS = 240_000
+    _SECRET_HASH_BYTES = 32
 
     def __init__(
         self,
@@ -159,7 +162,8 @@ class ValidationIdentityService:
         invite_id = f"botinv-{self._invite_counter:06d}"
         self._invite_counter += 1
 
-        invite_code = f"tnx_invite_{secrets.token_hex(18)}"
+        # 24 random bytes -> 192-bit invite entropy before prefixing.
+        invite_code = f"tnx_invite_{secrets.token_hex(self._INVITE_CODE_TOKEN_BYTES)}"
         salt = secrets.token_hex(16)
         now_dt = datetime.now(tz=UTC)
         expires_dt = now_dt + timedelta(seconds=self._invite_ttl_seconds)
@@ -677,7 +681,18 @@ class ValidationIdentityService:
 
 
 def _hash_secret(*, secret: str, salt: str) -> str:
-    return sha256(f"{salt}:{secret}".encode("utf-8")).hexdigest()
+    try:
+        salt_bytes = bytes.fromhex(salt)
+    except ValueError:
+        salt_bytes = salt.encode("utf-8")
+    digest = pbkdf2_hmac(
+        "sha256",
+        secret.encode("utf-8"),
+        salt_bytes,
+        ValidationIdentityService._SECRET_HASH_ITERATIONS,
+        dklen=ValidationIdentityService._SECRET_HASH_BYTES,
+    )
+    return digest.hex()
 
 
 def _normalize_email(value: str) -> str:

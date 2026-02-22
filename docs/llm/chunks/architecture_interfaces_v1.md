@@ -656,3 +656,19 @@ Required policy behavior:
 1. Supabase stores workflow metadata, review states, baselines, policy decisions.
 2. Blob storage stores heavy artifacts (logs, trades, chart payload, rendered html/pdf).
 3. Vector store keeps indicator expertise memory and accumulated review lessons.
+
+### 11.6 Validation Identity And Sharing Contract
+
+1. Runtime bot self-registration supports two paths only:
+   - invite-code trial path (rate-limited),
+   - partner key/secret bootstrap path.
+2. Runtime bot keys are returned once at registration and persisted only as hashes plus key metadata.
+3. API key resolution must produce actor identity fields:
+   - `owner_user_id`,
+   - `actor_type` (`user` or `bot`),
+   - `actor_id`.
+4. Validation run metadata persists actor fields so audit trails distinguish owner identity from acting bot identity.
+5. Run sharing is run-level only, invite-by-email only, and activated when an authenticated user login email matches a pending invite.
+6. Shared run access is exposed only via dedicated shared-validation routes; owner endpoints remain owner-scoped.
+7. Shared run permissions are bounded to `view` and `review`, with deny-by-default for non-owner/non-invited users.
+8. Audit events are required for register, rotate, revoke, share, and invite-accept transitions.

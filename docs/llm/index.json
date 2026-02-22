@@ -45,7 +45,7 @@
   },
   {
     "chunk": "docs/llm/chunks/architecture_interfaces_v1.md",
-    "chunk_hash": "21dbbd3adcf2175e4da6787894e34525d430325ac560419e7c8b82ff6add1128",
+    "chunk_hash": "806b325581aa5c90db7ff02ad64407de3cc34159d964d9023ffc034b1f4a333f",
     "concepts": [
       "interfaces",
       "public_api",
@@ -65,7 +65,7 @@
       "Architecture/Contracts lead"
     ],
     "source": "docs/architecture/INTERFACES.md",
-    "source_hash": "34c8e70e5a38c6809ce84434961356c0e9f0e8c961d696d44a6bdd487466e2dd",
+    "source_hash": "e0445a3a03f264d5f4a336041d57614094cfa16ede091f1b0ca2f8cd0af7fb53",
     "title": "Architecture Interfaces",
     "topic": "architecture",
     "workflows": [

@@ -102,6 +102,7 @@ async def _request_context(
     actor_type = "user"
     actor_id = user_id
     if actor_identity is not None:
+        # Keep run ownership scoped to the human owner while preserving acting bot identity separately.
         owner_user_id = actor_identity.owner_user_id
         user_id = actor_identity.owner_user_id
         actor_type = actor_identity.actor_type

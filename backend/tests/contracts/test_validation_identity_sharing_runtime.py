@@ -484,6 +484,55 @@ def test_runtime_bot_revoked_key_with_wrong_secret_returns_invalid_not_revoked()
     assert revoked.json()["error"]["code"] == "BOT_API_KEY_REVOKED"
 
 
+def test_runtime_bot_revoked_key_with_jwt_does_not_fallback_to_user_identity() -> None:
+    client = _client()
+    router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
+    owner_headers = _auth_headers(
+        request_id="req-runtime-bot-revoked-jwt-owner-001",
+        tenant_id="tenant-runtime-bot-revoked-jwt",
+        user_id="owner-runtime-bot-revoked-jwt",
+        user_email="owner-runtime-bot-revoked-jwt@example.com",
+    )
+
+    register = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={**owner_headers, "Idempotency-Key": "idem-runtime-bot-revoked-jwt-register-001"},
+        json={
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+            "ownerEmail": "owner-runtime-bot-revoked-jwt@example.com",
+            "botName": "Runtime Bot Revoked JWT",
+        },
+    )
+    assert register.status_code == 201
+    runtime_key = register.json()["issuedKey"]["rawKey"]
+    key_id = register.json()["issuedKey"]["key"]["id"]
+
+    revoke = client.post(
+        f"/v2/validation-bots/runtime-bot-revoked-jwt/keys/{key_id}/revoke",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-runtime-bot-revoked-jwt-revoke-001",
+            "Idempotency-Key": "idem-runtime-bot-revoked-jwt-revoke-001",
+        },
+        json={},
+    )
+    assert revoke.status_code == 200
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-runtime-bot-revoked-jwt-run-001",
+            "X-API-Key": runtime_key,
+            "Idempotency-Key": "idem-runtime-bot-revoked-jwt-run-001",
+        },
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 401
+    assert create_run.json()["error"]["code"] == "BOT_API_KEY_REVOKED"
+
+
 def test_runtime_bot_partner_registration_is_idempotent_for_retries() -> None:
     client = _client()
     router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001

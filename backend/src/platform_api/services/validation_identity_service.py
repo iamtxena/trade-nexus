@@ -1181,6 +1181,10 @@ def _normalize_email(value: str) -> str:
     return normalized
 
 
+def normalize_email(value: str) -> str:
+    return _normalize_email(value)
+
+
 def _normalize_bot_id(value: str) -> str:
     normalized = value.strip().lower()
     if normalized == "":
@@ -1278,4 +1282,5 @@ __all__ = [
     "SharePermission",
     "SharedValidationInviteRecord",
     "ValidationIdentityService",
+    "normalize_email",
 ]

@@ -71,7 +71,7 @@ from src.platform_api.services.v2_services import (
 )
 from src.platform_api.services.validation_identity_service import (
     ValidationIdentityService,
-    _normalize_email as _normalize_validation_email,
+    normalize_email as normalize_validation_email,
 )
 from src.platform_api.services.validation_v2_service import ValidationV2Service
 
@@ -111,12 +111,12 @@ async def _request_context(
                 tenant_id=tenant_id,
                 request_id=request_id,
             )
-        except PlatformAPIError:
+        except PlatformAPIError as exc:
             # If JWT identity is already verified by middleware, malformed bot keys
             # should not preempt the authenticated user context.
             has_bearer_header = bool((request.headers.get("Authorization") or "").strip())
             state_is_api_key_identity = tenant_id.startswith("tenant-apikey-") and user_id.startswith("user-apikey-")
-            if has_bearer_header and not state_is_api_key_identity:
+            if has_bearer_header and not state_is_api_key_identity and exc.code == "BOT_API_KEY_INVALID":
                 actor_identity = None
             else:
                 raise
@@ -171,7 +171,7 @@ def _normalized_bot_id(*, bot_name: str) -> str:
 
 def _normalized_email(*, email: str, request_id: str) -> str:
     try:
-        return _normalize_validation_email(email)
+        return normalize_validation_email(email)
     except ValueError:
         raise PlatformAPIError(
             status_code=400,

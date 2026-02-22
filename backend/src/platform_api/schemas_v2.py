@@ -595,7 +595,7 @@ class CreateBotInviteRegistrationRequest(BaseModel):
 class CreateBotPartnerBootstrapRequest(BaseModel):
     partnerKey: str = Field(min_length=8)
     partnerSecret: str = Field(min_length=8)
-    ownerEmail: str
+    ownerEmail: str = Field(min_length=3, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     botName: str = Field(min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
 

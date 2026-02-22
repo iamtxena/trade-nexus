@@ -317,6 +317,26 @@ def test_runtime_bot_partner_registration_public_path_derives_owner_identity() -
     assert create_run.json()["run"]["actor"]["actorId"] == "public-runtime-bot"
 
 
+def test_runtime_bot_partner_public_registration_rejects_invalid_owner_email() -> None:
+    client = _client()
+    router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
+
+    register = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={
+            "X-Request-Id": "req-runtime-bot-public-partner-invalid-email-001",
+            "Idempotency-Key": "idem-runtime-bot-public-partner-invalid-email-001",
+        },
+        json={
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+            "ownerEmail": "not-an-email",
+            "botName": "Public Runtime Bot Invalid Email",
+        },
+    )
+    assert register.status_code == 422
+
+
 def test_runtime_bot_api_key_only_auth_sets_runtime_tenant_context() -> None:
     client = _client()
     router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001

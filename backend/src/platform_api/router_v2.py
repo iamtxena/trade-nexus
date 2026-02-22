@@ -165,6 +165,19 @@ def _normalized_bot_id(*, bot_name: str) -> str:
     return normalized or "runtime-bot"
 
 
+def _normalized_email(*, email: str, request_id: str) -> str:
+    normalized = email.strip().lower()
+    if "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
+        raise PlatformAPIError(
+            status_code=400,
+            code="BOT_REGISTRATION_INVALID",
+            message="ownerEmail must be a valid address.",
+            request_id=request_id,
+            details={"ownerEmail": email},
+        )
+    return normalized
+
+
 def _bot_registration_path(method: Literal["invite", "partner"]) -> Literal["invite_code_trial", "partner_bootstrap"]:
     if method == "invite":
         return "invite_code_trial"
@@ -488,13 +501,13 @@ async def register_validation_bot_partner_bootstrap_v2(
         return BotRegistrationResponse.model_validate(cached)
 
     bot_id = _normalized_bot_id(bot_name=payload.botName)
+    owner_email = _normalized_email(email=payload.ownerEmail, request_id=context.request_id)
     registration_context = context
     is_public_registration_identity = (
         context.user_id == "user-public-registration"
         or context.tenant_id == "tenant-public-registration"
     )
     if is_public_registration_identity:
-        owner_email = payload.ownerEmail.strip().lower()
         digest = hashlib.sha256(owner_email.encode("utf-8")).hexdigest()
         derived_user_id = f"user-email-{digest[:12]}"
         derived_tenant_id = f"tenant-email-{digest[12:24]}"
@@ -550,7 +563,7 @@ async def register_validation_bot_partner_bootstrap_v2(
             audit={
                 "source": "partner_bootstrap",
                 "partnerKeyId": payload.partnerKey,
-                "ownerEmail": payload.ownerEmail,
+                "ownerEmail": owner_email,
             },
             createdAt=result.created_at,
         ),

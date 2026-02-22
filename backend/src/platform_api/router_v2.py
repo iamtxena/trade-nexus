@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 from uuid import uuid4
 
@@ -215,6 +216,16 @@ def _bot_key_prefix(raw_key: str) -> str:
     return raw_key[:16]
 
 
+def _invite_trial_expires_at(created_at: str) -> str | None:
+    try:
+        created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    return (created.astimezone(UTC) + timedelta(days=30)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
 def _is_validation_request_path(path: str) -> bool:
     if not path.startswith("/v2/validation"):
         return False
@@ -300,7 +311,12 @@ def _to_validation_invite(invite: object) -> ValidationInvite:
 
 def _to_validation_run_share(invite: object) -> ValidationRunShare:
     status_value = getattr(invite, "status")
-    share_status: Literal["active", "revoked"] = "active" if status_value == "accepted" else "revoked"
+    if status_value == "accepted":
+        share_status: Literal["active", "revoked"] = "active"
+    elif status_value == "revoked":
+        share_status = "revoked"
+    else:
+        raise ValueError(f"Invite status {status_value!r} cannot be projected as ValidationRunShare.")
     granted_at = getattr(invite, "accepted_at") or getattr(invite, "created_at")
     return ValidationRunShare(
         id=f"vshare-{getattr(invite, 'invite_id')}",
@@ -473,7 +489,7 @@ async def register_validation_bot_invite_code_v2(
             name=payload.botName,
             status="active",
             registrationPath=registration_path,
-            trialExpiresAt=None,
+            trialExpiresAt=_invite_trial_expires_at(result.created_at),
             metadata=payload.metadata,
             createdAt=result.created_at,
             updatedAt=result.created_at,

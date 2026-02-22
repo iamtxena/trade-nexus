@@ -737,6 +737,12 @@ def test_runtime_bot_invite_registration_path_is_single_use_and_rate_limited() -
     )
     assert register.status_code == 201
     assert register.json()["registration"]["registrationPath"] == "invite_code_trial"
+    trial_expires_at = register.json()["bot"]["trialExpiresAt"]
+    assert trial_expires_at is not None
+    created_at = register.json()["bot"]["createdAt"]
+    created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    trial_expires_dt = datetime.fromisoformat(trial_expires_at.replace("Z", "+00:00"))
+    assert trial_expires_dt - created_dt == timedelta(days=30)
     assert register.json()["registration"]["audit"]["inviteCodePrefix"] != "tnx_invite"
 
     reuse = client.post(
@@ -1014,6 +1020,69 @@ def test_shared_validation_access_owner_invited_and_denied_users() -> None:
     audit_events = router_v1_module._store.validation_identity_audit_events
     assert any(item.event_type == "share" for item in audit_events)
     assert any(item.event_type == "accept" for item in audit_events)
+
+
+def test_shared_review_idempotency_key_does_not_cache_across_owner_surface() -> None:
+    client = _client()
+    owner_headers = _auth_headers(
+        request_id="req-shared-review-surface-owner-001",
+        tenant_id="tenant-shared-review-surface",
+        user_id="owner-shared-review-surface",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-review-surface-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    share = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-review-surface-share-001",
+            "Idempotency-Key": "idem-shared-review-surface-share-001",
+        },
+        json={"email": "surface-reviewer@example.com"},
+    )
+    assert share.status_code == 201
+
+    reviewer_headers = _auth_headers(
+        request_id="req-shared-review-surface-reviewer-001",
+        tenant_id="tenant-shared-review-surface",
+        user_id="surface-reviewer-user",
+        user_email="surface-reviewer@example.com",
+    )
+    activate = client.get(f"/v2/validation-sharing/runs/{run_id}", headers=reviewer_headers)
+    assert activate.status_code == 200
+
+    review_payload = {
+        "reviewerType": "agent",
+        "decision": "pass",
+        "summary": "Shared reviewer accepted evidence.",
+        "findings": [],
+        "comments": [],
+    }
+    shared_review = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/review",
+        headers={**reviewer_headers, "Idempotency-Key": "idem-shared-review-surface-review-001"},
+        json=review_payload,
+    )
+    assert shared_review.status_code == 202
+
+    owner_surface_replay = client.post(
+        f"/v2/validation-runs/{run_id}/review",
+        headers={
+            **reviewer_headers,
+            "X-Request-Id": "req-shared-review-surface-owner-replay-001",
+            "Idempotency-Key": "idem-shared-review-surface-review-001",
+        },
+        json=review_payload,
+    )
+    assert owner_surface_replay.status_code == 404
+    assert owner_surface_replay.json()["error"]["code"] == "VALIDATION_RUN_NOT_FOUND"
 
 
 def test_shared_validation_invite_rejects_duplicate_pending_email() -> None:

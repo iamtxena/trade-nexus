@@ -854,9 +854,12 @@ class ValidationV2Service:
     ) -> ValidationRunReviewResponse:
         payload = {"runId": run_id, **request.model_dump(mode="json")}
         key = self._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
+        scoped_review_key = self._scoped_idempotency_key(context=context, key=key)
+        # Keep owner and shared review surfaces in distinct idempotency buckets.
+        scoped_review_key = f"{'shared' if shared_surface else 'owner'}:{scoped_review_key}"
         conflict, cached = self._get_idempotent_response(
             scope="validation_reviews",
-            key=self._scoped_idempotency_key(context=context, key=key),
+            key=scoped_review_key,
             payload=payload,
         )
         if conflict:
@@ -973,7 +976,7 @@ class ValidationV2Service:
         )
         self._save_idempotent_response(
             scope="validation_reviews",
-            key=self._scoped_idempotency_key(context=context, key=key),
+            key=scoped_review_key,
             payload=payload,
             response=response.model_dump(mode="json"),
         )

@@ -646,6 +646,10 @@ class ValidationIdentityService:
                 request_id=context.request_id,
             )
         run_id, index, invite = lookup
+        refreshed_invite = self._refresh_expired_share_invite(invite=invite)
+        if refreshed_invite is not invite:
+            self._share_invites_by_run[run_id][index] = refreshed_invite
+            invite = refreshed_invite
         if invite.tenant_id != context.tenant_id or invite.owner_user_id != context.user_id:
             raise PlatformAPIError(
                 status_code=404,
@@ -658,6 +662,13 @@ class ValidationIdentityService:
                 status_code=409,
                 code="VALIDATION_INVITE_STATE_INVALID",
                 message=f"Validation invite {invite_id} is already revoked.",
+                request_id=context.request_id,
+            )
+        if invite.status == "expired":
+            raise PlatformAPIError(
+                status_code=409,
+                code="VALIDATION_INVITE_EXPIRED",
+                message=f"Validation invite {invite_id} has expired.",
                 request_id=context.request_id,
             )
         if invite.status == "pending":

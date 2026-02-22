@@ -1330,6 +1330,62 @@ def test_shared_validation_invite_list_surfaces_expired_status() -> None:
     assert invite["status"] == "expired"
 
 
+def test_shared_validation_revoke_refreshes_expired_invite_state() -> None:
+    client = _client()
+    owner_headers = _auth_headers(
+        request_id="req-shared-validation-expired-revoke-owner-001",
+        tenant_id="tenant-shared-validation-expired-revoke",
+        user_id="owner-shared-validation-expired-revoke",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-validation-expired-revoke-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    create_invite = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-expired-revoke-share-001",
+            "Idempotency-Key": "idem-shared-validation-expired-revoke-share-001",
+        },
+        json={"email": "expired-revoke@example.com"},
+    )
+    assert create_invite.status_code == 201
+    invite_id = create_invite.json()["invite"]["id"]
+
+    invites = router_v2_module._identity_service._share_invites_by_run[run_id]  # noqa: SLF001
+    invites[0] = replace(
+        invites[0],
+        status="pending",
+        expires_at=(datetime.now(tz=UTC) - timedelta(minutes=1)).isoformat().replace("+00:00", "Z"),
+    )
+
+    revoke = client.post(
+        f"/v2/validation-sharing/invites/{invite_id}/revoke",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-expired-revoke-001",
+            "Idempotency-Key": "idem-shared-validation-expired-revoke-001",
+        },
+        json={},
+    )
+    assert revoke.status_code == 409
+    assert revoke.json()["error"]["code"] == "VALIDATION_INVITE_EXPIRED"
+
+    listed = client.get(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={**owner_headers, "X-Request-Id": "req-shared-validation-expired-revoke-list-001"},
+    )
+    assert listed.status_code == 200
+    invite = next(item for item in listed.json()["items"] if item["id"] == invite_id)
+    assert invite["status"] == "expired"
+
+
 def test_shared_invite_auto_accepts_on_authenticated_login_email_match() -> None:
     client = _client()
     owner_headers = _auth_headers(
@@ -1445,7 +1501,7 @@ def test_shared_invite_accept_endpoint_enforces_accepted_email_before_auto_accep
     assert invite_item["status"] == "pending"
 
 
-def test_shared_invite_accept_rejects_mixed_jwt_and_bot_key_identity() -> None:
+def test_shared_invite_accept_with_jwt_and_bot_key_prefers_verified_jwt_identity() -> None:
     client = _client()
     router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
     owner_headers = _auth_headers(
@@ -1501,8 +1557,7 @@ def test_shared_invite_accept_rejects_mixed_jwt_and_bot_key_identity() -> None:
         },
         json={"acceptedEmail": "invitee-mixed@example.com"},
     )
-    assert mixed_accept.status_code == 403
-    assert mixed_accept.json()["error"]["code"] == "VALIDATION_INVITE_EMAIL_MISMATCH"
+    assert mixed_accept.status_code == 200
 
     listed = client.get(
         f"/v2/validation-sharing/runs/{run_id}/invites",
@@ -1510,7 +1565,7 @@ def test_shared_invite_accept_rejects_mixed_jwt_and_bot_key_identity() -> None:
     )
     assert listed.status_code == 200
     invite_item = next(item for item in listed.json()["items"] if item["id"] == invite_id)
-    assert invite_item["status"] == "pending"
+    assert invite_item["status"] == "accepted"
 
 
 def test_validation_owner_endpoints_regression_remain_unchanged() -> None:

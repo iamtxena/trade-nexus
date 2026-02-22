@@ -194,7 +194,11 @@ def _is_validation_request_path(path: str) -> bool:
         return False
     # Bot registration/management endpoints are user-authenticated control-plane calls.
     # Do not let runtime bot API keys override verified JWT identity on these routes.
-    return not path.startswith("/v2/validation-bots")
+    if path.startswith("/v2/validation-bots"):
+        return False
+    # Explicit invite accept is a user-authenticated login flow and must retain
+    # verified JWT identity (including email claim) even if X-API-Key is present.
+    return not _is_validation_invite_accept_path(path)
 
 
 def _is_validation_invite_accept_path(path: str) -> bool:

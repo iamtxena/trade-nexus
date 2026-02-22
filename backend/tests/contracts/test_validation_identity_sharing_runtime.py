@@ -672,6 +672,42 @@ def test_runtime_bot_invite_registration_path_is_single_use_and_rate_limited() -
     assert exc.value.code == "BOT_INVITE_RATE_LIMITED"
 
 
+def test_runtime_bot_registration_normalizes_special_characters_in_bot_name() -> None:
+    client = _client()
+    router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
+    owner_headers = _auth_headers(
+        request_id="req-runtime-bot-name-normalize-owner-001",
+        tenant_id="tenant-runtime-bot-name-normalize",
+        user_id="owner-runtime-bot-name-normalize",
+    )
+
+    register = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={**owner_headers, "Idempotency-Key": "idem-runtime-bot-name-normalize-register-001"},
+        json={
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+            "ownerEmail": "owner-runtime-bot-name-normalize@example.com",
+            "botName": "My_bot v2.0's",
+        },
+    )
+    assert register.status_code == 201
+    assert register.json()["bot"]["id"] == "my-bot-v2-0-s"
+
+    rotate = client.post(
+        "/v2/validation-bots/my-bot-v2-0-s/keys/rotate",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-runtime-bot-name-normalize-rotate-001",
+            "Idempotency-Key": "idem-runtime-bot-name-normalize-rotate-001",
+        },
+        json={},
+    )
+    assert rotate.status_code == 201
+    assert rotate.json()["botId"] == "my-bot-v2-0-s"
+    assert rotate.json()["issuedKey"]["key"]["botId"] == "my-bot-v2-0-s"
+
+
 def test_runtime_identity_routes_require_authenticated_identity() -> None:
     client = _client()
 

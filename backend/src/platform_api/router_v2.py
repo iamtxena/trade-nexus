@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Annotated, Any, Literal
 from uuid import uuid4
 
@@ -150,7 +151,7 @@ ContextDep = Annotated[RequestContext, Depends(_request_context)]
 
 
 def _normalized_bot_id(*, bot_name: str) -> str:
-    normalized = "-".join(part for part in bot_name.lower().strip().split() if part)
+    normalized = re.sub(r"[^a-z0-9]+", "-", bot_name.lower().strip()).strip("-")
     return normalized or "runtime-bot"
 
 

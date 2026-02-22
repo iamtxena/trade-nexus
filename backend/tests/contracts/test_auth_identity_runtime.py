@@ -17,12 +17,12 @@ from src.platform_api.errors import PlatformAPIError
 _JWT_SECRET = os.environ.setdefault("PLATFORM_AUTH_JWT_HS256_SECRET", "test-auth-identity-secret")
 
 
-def _jwt_segment(payload: dict[str, str]) -> str:
+def _jwt_segment(payload: dict[str, object]) -> str:
     encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     return base64.urlsafe_b64encode(encoded).decode("utf-8").rstrip("=")
 
 
-def _jwt_token(payload: dict[str, str]) -> str:
+def _jwt_token(payload: dict[str, object]) -> str:
     header = _jwt_segment({"alg": "HS256", "typ": "JWT"})
     claims = _jwt_segment(payload)
     signing_input = f"{header}.{claims}".encode("utf-8")
@@ -31,12 +31,17 @@ def _jwt_token(payload: dict[str, str]) -> str:
     return f"{header}.{claims}.{encoded_signature}"
 
 
+def _future_exp(seconds: int = 300) -> int:
+    return int(time.time()) + seconds
+
+
 def test_resolve_validation_identity_uses_verified_jwt_claims() -> None:
     token = _jwt_token(
         {
             "sub": "user-auth-identity-001",
             "tenant_id": "tenant-auth-identity-001",
             "email": "auth-user@example.com",
+            "exp": _future_exp(),
         }
     )
     identity = resolve_validation_identity(
@@ -69,9 +74,21 @@ def test_resolve_validation_identity_rejects_unsigned_jwt_payload_claims() -> No
 
 
 def test_resolve_validation_identity_rejects_tampered_jwt_signature() -> None:
-    token = _jwt_token({"sub": "user-auth-identity-002", "tenant_id": "tenant-auth-identity-002"})
+    token = _jwt_token(
+        {
+            "sub": "user-auth-identity-002",
+            "tenant_id": "tenant-auth-identity-002",
+            "exp": _future_exp(),
+        }
+    )
     header_segment, _, signature_segment = token.split(".")
-    tampered_payload = _jwt_segment({"sub": "user-auth-identity-002", "tenant_id": "tenant-auth-identity-999"})
+    tampered_payload = _jwt_segment(
+        {
+            "sub": "user-auth-identity-002",
+            "tenant_id": "tenant-auth-identity-999",
+            "exp": _future_exp(),
+        }
+    )
     tampered = f"{header_segment}.{tampered_payload}.{signature_segment}"
     with pytest.raises(PlatformAPIError) as exc:
         resolve_validation_identity(
@@ -86,7 +103,13 @@ def test_resolve_validation_identity_rejects_tampered_jwt_signature() -> None:
 
 
 def test_resolve_validation_identity_rejects_spoofed_identity_headers() -> None:
-    token = _jwt_token({"sub": "user-auth-identity-003", "tenant_id": "tenant-auth-identity-003"})
+    token = _jwt_token(
+        {
+            "sub": "user-auth-identity-003",
+            "tenant_id": "tenant-auth-identity-003",
+            "exp": _future_exp(),
+        }
+    )
     with pytest.raises(PlatformAPIError) as exc:
         resolve_validation_identity(
             authorization=f"Bearer {token}",
@@ -97,6 +120,25 @@ def test_resolve_validation_identity_rejects_spoofed_identity_headers() -> None:
         )
     assert exc.value.status_code == 401
     assert exc.value.code == "AUTH_IDENTITY_MISMATCH"
+
+
+def test_resolve_validation_identity_rejects_jwt_without_exp_claim() -> None:
+    token = _jwt_token(
+        {
+            "sub": "user-auth-identity-no-exp",
+            "tenant_id": "tenant-auth-identity-no-exp",
+        }
+    )
+    with pytest.raises(PlatformAPIError) as exc:
+        resolve_validation_identity(
+            authorization=f"Bearer {token}",
+            api_key=None,
+            tenant_header="tenant-auth-identity-no-exp",
+            user_header="user-auth-identity-no-exp",
+            request_id="req-auth-identity-no-exp-001",
+        )
+    assert exc.value.status_code == 401
+    assert exc.value.code == "AUTH_UNAUTHORIZED"
 
 
 def test_resolve_validation_identity_allows_small_clock_skew_for_exp_and_nbf() -> None:
@@ -122,6 +164,7 @@ def test_resolve_validation_identity_allows_small_clock_skew_for_exp_and_nbf() -
         {
             "sub": "user-auth-identity-skew-nbf",
             "tenant_id": "tenant-auth-identity-skew-nbf",
+            "exp": now + 300,
             "nbf": now + 5,
         }
     )
@@ -160,6 +203,7 @@ def test_resolve_validation_identity_rejects_time_claims_outside_leeway() -> Non
         {
             "sub": "user-auth-identity-nbf-future",
             "tenant_id": "tenant-auth-identity-nbf-future",
+            "exp": now + 300,
             "nbf": now + 30,
         }
     )

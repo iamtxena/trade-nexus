@@ -150,7 +150,9 @@ def _jwt_secret() -> str | None:
 def _claims_time_window_valid(claims: dict[str, Any]) -> bool:
     now = int(time.time())
     exp = claims.get("exp")
-    if isinstance(exp, (int, float)) and now >= int(exp) + _JWT_TIME_LEEWAY_SECONDS:
+    if not isinstance(exp, (int, float)):
+        return False
+    if now >= int(exp) + _JWT_TIME_LEEWAY_SECONDS:
         return False
     nbf = claims.get("nbf")
     if isinstance(nbf, (int, float)) and now + _JWT_TIME_LEEWAY_SECONDS < int(nbf):

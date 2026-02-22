@@ -6,6 +6,7 @@ import base64
 import hmac
 import json
 import os
+import time
 
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
@@ -23,14 +24,16 @@ HEADERS = {
 _JWT_SECRET = os.environ.setdefault("PLATFORM_AUTH_JWT_HS256_SECRET", "test-runtime-openapi-secret")
 
 
-def _jwt_segment(payload: dict[str, str]) -> str:
+def _jwt_segment(payload: dict[str, object]) -> str:
     encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     return base64.urlsafe_b64encode(encoded).decode("utf-8").rstrip("=")
 
 
-def _jwt_token(payload: dict[str, str]) -> str:
+def _jwt_token(payload: dict[str, object]) -> str:
+    claims_payload = dict(payload)
+    claims_payload.setdefault("exp", int(time.time()) + 300)
     header = _jwt_segment({"alg": "HS256", "typ": "JWT"})
-    claims = _jwt_segment(payload)
+    claims = _jwt_segment(claims_payload)
     signing_input = f"{header}.{claims}".encode("utf-8")
     signature = hmac.new(_JWT_SECRET.encode("utf-8"), signing_input, "sha256").digest()
     encoded_signature = base64.urlsafe_b64encode(signature).decode("utf-8").rstrip("=")
@@ -45,7 +48,7 @@ def _auth_headers(
     user_email: str | None = None,
     api_key: str = "test-key",
 ) -> dict[str, str]:
-    claims: dict[str, str] = {"sub": user_id, "tenant_id": tenant_id}
+    claims: dict[str, object] = {"sub": user_id, "tenant_id": tenant_id}
     if user_email is not None:
         claims["email"] = user_email
     return {

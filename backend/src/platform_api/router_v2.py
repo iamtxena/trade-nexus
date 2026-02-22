@@ -248,7 +248,7 @@ def _to_validation_invite(invite: object) -> ValidationInvite:
 
 def _to_validation_run_share(invite: object) -> ValidationRunShare:
     status_value = getattr(invite, "status")
-    share_status: Literal["active", "revoked"] = "active" if status_value != "revoked" else "revoked"
+    share_status: Literal["active", "revoked"] = "active" if status_value == "accepted" else "revoked"
     granted_at = getattr(invite, "accepted_at") or getattr(invite, "created_at")
     return ValidationRunShare(
         id=f"vshare-{getattr(invite, 'invite_id')}",

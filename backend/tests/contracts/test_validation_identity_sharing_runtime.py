@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import json
 import os
+import time
 
 from fastapi.testclient import TestClient
 import pytest
@@ -27,14 +28,16 @@ def _client() -> TestClient:
     return TestClient(app)
 
 
-def _jwt_segment(payload: dict[str, str]) -> str:
+def _jwt_segment(payload: dict[str, object]) -> str:
     encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     return base64.urlsafe_b64encode(encoded).decode("utf-8").rstrip("=")
 
 
-def _jwt_token(claims: dict[str, str]) -> str:
+def _jwt_token(claims: dict[str, object]) -> str:
+    claims_payload = dict(claims)
+    claims_payload.setdefault("exp", int(time.time()) + 300)
     header_segment = _jwt_segment({"alg": "HS256", "typ": "JWT"})
-    payload_segment = _jwt_segment(claims)
+    payload_segment = _jwt_segment(claims_payload)
     signing_input = f"{header_segment}.{payload_segment}".encode("utf-8")
     signature = hmac.new(_JWT_SECRET.encode("utf-8"), signing_input, hashlib.sha256).digest()
     signature_segment = base64.urlsafe_b64encode(signature).decode("utf-8").rstrip("=")
@@ -48,7 +51,7 @@ def _auth_headers(
     user_id: str,
     user_email: str | None = None,
 ) -> dict[str, str]:
-    claims: dict[str, str] = {"sub": user_id, "tenant_id": tenant_id}
+    claims: dict[str, object] = {"sub": user_id, "tenant_id": tenant_id}
     if user_email is not None:
         claims["email"] = user_email
     token = _jwt_token(claims)

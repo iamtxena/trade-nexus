@@ -32,6 +32,24 @@ create table if not exists bots (
   revoked_at timestamptz
 );
 
+create or replace function set_bots_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.updated_at is null or new.updated_at = old.updated_at then
+    new.updated_at = now();
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_bots_updated_at on bots;
+create trigger trg_bots_updated_at
+  before update on bots
+  for each row
+  execute function set_bots_updated_at();
+
 create index if not exists idx_bots_owner_scope on bots (tenant_id, owner_user_id, created_at desc);
 create index if not exists idx_bots_registration_path on bots (registration_path, created_at desc);
 
@@ -190,6 +208,20 @@ create policy "Users can manage own validation invites" on validation_invites
   with check (
     auth.jwt() ->> 'sub' = owner_user_id
     and auth.jwt() ->> 'tenant_id' = tenant_id
+  );
+
+drop policy if exists "Invite recipients can read validation invites" on validation_invites;
+create policy "Invite recipients can read validation invites" on validation_invites
+  for select
+  using (
+    auth.jwt() ->> 'tenant_id' = tenant_id
+    and (
+      lower(coalesce(auth.jwt() ->> 'email', '')) = lower(invited_email)
+      or (
+        accepted_by_user_id is not null
+        and auth.jwt() ->> 'sub' = accepted_by_user_id
+      )
+    )
   );
 
 drop policy if exists "Users can manage own validation run shares" on validation_run_shares;

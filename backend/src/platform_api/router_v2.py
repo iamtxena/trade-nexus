@@ -113,11 +113,13 @@ async def _request_context(
                 request_id=request_id,
             )
         except PlatformAPIError as exc:
-            # If JWT identity is already verified by middleware, malformed bot keys
-            # should not preempt the authenticated user context.
-            has_bearer_header = bool((request.headers.get("Authorization") or "").strip())
             state_is_api_key_identity = tenant_id.startswith("tenant-apikey-") and user_id.startswith("user-apikey-")
-            if has_bearer_header and not state_is_api_key_identity and exc.code == "BOT_API_KEY_INVALID":
+            state_is_public_registration_identity = (
+                tenant_id == "tenant-public-registration" and user_id == "user-public-registration"
+            )
+            state_is_verified_user_identity = not state_is_api_key_identity and not state_is_public_registration_identity
+            # Verified middleware user identity remains canonical on mixed JWT + bot-key requests.
+            if state_is_verified_user_identity and exc.code in {"BOT_API_KEY_INVALID", "BOT_API_KEY_REVOKED"}:
                 actor_identity = None
             else:
                 raise

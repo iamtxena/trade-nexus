@@ -484,7 +484,7 @@ def test_runtime_bot_revoked_key_with_wrong_secret_returns_invalid_not_revoked()
     assert revoked.json()["error"]["code"] == "BOT_API_KEY_REVOKED"
 
 
-def test_runtime_bot_revoked_key_with_jwt_does_not_fallback_to_user_identity() -> None:
+def test_runtime_bot_revoked_key_with_jwt_prefers_verified_jwt_identity() -> None:
     client = _client()
     router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
     owner_headers = _auth_headers(
@@ -529,8 +529,19 @@ def test_runtime_bot_revoked_key_with_jwt_does_not_fallback_to_user_identity() -
         },
         json=_validation_run_payload(),
     )
-    assert create_run.status_code == 401
-    assert create_run.json()["error"]["code"] == "BOT_API_KEY_REVOKED"
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+    persisted = asyncio.run(
+        router_v2_module._validation_service._validation_storage.get_run(  # noqa: SLF001
+            run_id=run_id,
+            tenant_id="tenant-runtime-bot-revoked-jwt",
+            user_id="owner-runtime-bot-revoked-jwt",
+        )
+    )
+    assert persisted is not None
+    assert persisted.metadata.owner_user_id == "owner-runtime-bot-revoked-jwt"
+    assert persisted.metadata.actor_type == "user"
+    assert persisted.metadata.actor_id == "owner-runtime-bot-revoked-jwt"
 
 
 def test_runtime_bot_partner_registration_is_idempotent_for_retries() -> None:

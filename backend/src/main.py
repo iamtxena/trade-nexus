@@ -76,11 +76,7 @@ def _is_platform_request(path: str) -> bool:
 
 
 def _is_v2_validation_request(path: str) -> bool:
-    return (
-        path.startswith("/v2/validation")
-        or path.startswith("/v2/validation-sharing")
-        or path.startswith("/v2/validation-bots")
-    )
+    return path.startswith("/v2/validation")
 
 
 def _is_v2_validation_public_registration_request(path: str) -> bool:

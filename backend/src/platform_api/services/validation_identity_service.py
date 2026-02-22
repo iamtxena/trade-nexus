@@ -972,8 +972,8 @@ class ValidationIdentityService:
                 actor_type=actor_type,
                 actor_id=actor_id,
                 metadata=metadata,
-                )
             )
+        )
 
     def _find_share_invite(
         self,

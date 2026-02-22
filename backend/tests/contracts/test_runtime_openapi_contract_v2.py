@@ -39,6 +39,14 @@ def test_openapi_v2_routes_are_registered() -> None:
         ("GET", "/v2/validation-review/runs/{runId}/renders/{format}"),
         ("POST", "/v2/validation-baselines"),
         ("POST", "/v2/validation-regressions/replay"),
+        ("POST", "/v2/validation-bots/registrations/invite-code"),
+        ("POST", "/v2/validation-bots/registrations/partner-bootstrap"),
+        ("POST", "/v2/validation-bots/{botId}/keys/rotate"),
+        ("POST", "/v2/validation-bots/{botId}/keys/{keyId}/revoke"),
+        ("GET", "/v2/validation-sharing/runs/{runId}/invites"),
+        ("POST", "/v2/validation-sharing/runs/{runId}/invites"),
+        ("POST", "/v2/validation-sharing/invites/{inviteId}/revoke"),
+        ("POST", "/v2/validation-sharing/invites/{inviteId}/accept"),
     }
     found: set[tuple[str, str]] = set()
     for route in app.routes:
@@ -219,6 +227,80 @@ def test_openapi_v2_runtime_status_codes() -> None:
         == 202
     )
 
+    register_invite_path = client.post(
+        "/v2/validation-bots/registrations/invite-code",
+        headers={**HEADERS, "Idempotency-Key": "idem-runtime-v2-bot-register-invite-001"},
+        json={"inviteCode": "INV-TRIAL-00000001", "botName": "runtime-invite-bot"},
+    )
+    assert register_invite_path.status_code == 201
+
+    register_partner_path = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={**HEADERS, "Idempotency-Key": "idem-runtime-v2-bot-register-partner-001"},
+        json={
+            "partnerKey": "pk_live_partner_01234567",
+            "partnerSecret": "ps_live_partner_89abcdef",
+            "ownerEmail": "owner@example.com",
+            "botName": "runtime-partner-bot",
+        },
+    )
+    assert register_partner_path.status_code == 201
+    partner_bot_id = register_partner_path.json()["bot"]["id"]
+
+    rotate_key = client.post(
+        f"/v2/validation-bots/{partner_bot_id}/keys/rotate",
+        headers={**HEADERS, "Idempotency-Key": "idem-runtime-v2-bot-rotate-001"},
+        json={"reason": "runtime contract key rotation"},
+    )
+    assert rotate_key.status_code == 201
+    rotated_key_id = rotate_key.json()["issuedKey"]["key"]["id"]
+
+    assert (
+        client.post(
+            f"/v2/validation-bots/{partner_bot_id}/keys/{rotated_key_id}/revoke",
+            headers={**HEADERS, "Idempotency-Key": "idem-runtime-v2-bot-revoke-001"},
+            json={"reason": "runtime contract key revoke"},
+        ).status_code
+        == 200
+    )
+
+    create_invite = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={**HEADERS, "Idempotency-Key": "idem-runtime-v2-share-create-001"},
+        json={"email": "reviewer@example.com", "message": "Please review this run."},
+    )
+    assert create_invite.status_code == 201
+    invite_id = create_invite.json()["invite"]["id"]
+
+    list_invites = client.get(f"/v2/validation-sharing/runs/{run_id}/invites", headers=HEADERS)
+    assert list_invites.status_code == 200
+    assert any(item["id"] == invite_id for item in list_invites.json().get("items", []))
+
+    assert (
+        client.post(
+            f"/v2/validation-sharing/invites/{invite_id}/accept",
+            headers={**HEADERS, "Idempotency-Key": "idem-runtime-v2-share-accept-001"},
+            json={"acceptedEmail": "reviewer@example.com"},
+        ).status_code
+        == 200
+    )
+
+    create_revoke_invite = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={**HEADERS, "Idempotency-Key": "idem-runtime-v2-share-create-002"},
+        json={"email": "reviewer-two@example.com"},
+    )
+    assert create_revoke_invite.status_code == 201
+    revoke_invite_id = create_revoke_invite.json()["invite"]["id"]
+
+    assert (
+        client.post(
+            f"/v2/validation-sharing/invites/{revoke_invite_id}/revoke",
+            headers={**HEADERS, "Idempotency-Key": "idem-runtime-v2-share-revoke-001"},
+        ).status_code
+        == 200
+    )
+
 
 def test_validation_v2_write_routes_require_idempotency_key_header() -> None:
     client = TestClient(app)
@@ -308,3 +390,100 @@ def test_validation_v2_write_routes_require_idempotency_key_header() -> None:
         },
     )
     assert replay.status_code == 422
+
+    register_invite = client.post(
+        "/v2/validation-bots/registrations/invite-code",
+        headers=HEADERS,
+        json={"inviteCode": "INV-TRIAL-00000001", "botName": "missing"},
+    )
+    assert register_invite.status_code == 422
+
+    register_partner = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers=HEADERS,
+        json={
+            "partnerKey": "pk_live_partner_01234567",
+            "partnerSecret": "ps_live_partner_89abcdef",
+            "ownerEmail": "owner@example.com",
+            "botName": "missing",
+        },
+    )
+    assert register_partner.status_code == 422
+
+    rotate_bot_key = client.post(
+        "/v2/validation-bots/bot-missing/keys/rotate",
+        headers=HEADERS,
+        json={"reason": "missing idempotency key"},
+    )
+    assert rotate_bot_key.status_code == 422
+
+    revoke_bot_key = client.post(
+        "/v2/validation-bots/bot-missing/keys/botkey-missing/revoke",
+        headers=HEADERS,
+        json={"reason": "missing idempotency key"},
+    )
+    assert revoke_bot_key.status_code == 422
+
+    create_share_invite = client.post(
+        "/v2/validation-sharing/runs/valrun-missing/invites",
+        headers=HEADERS,
+        json={"email": "reviewer@example.com"},
+    )
+    assert create_share_invite.status_code == 422
+
+    revoke_share_invite = client.post(
+        "/v2/validation-sharing/invites/vinvite-missing/revoke",
+        headers=HEADERS,
+    )
+    assert revoke_share_invite.status_code == 422
+
+    accept_share_invite = client.post(
+        "/v2/validation-sharing/invites/vinvite-missing/accept",
+        headers=HEADERS,
+        json={"acceptedEmail": "reviewer@example.com"},
+    )
+    assert accept_share_invite.status_code == 422
+
+
+def test_validation_bot_registration_routes_allow_unauthenticated_access() -> None:
+    client = TestClient(app)
+    public_headers = {"X-Request-Id": "req-runtime-v2-public-registration-001"}
+
+    invite_registration = client.post(
+        "/v2/validation-bots/registrations/invite-code",
+        headers={**public_headers, "Idempotency-Key": "idem-runtime-v2-public-register-invite-001"},
+        json={"inviteCode": "INV-TRIAL-00000011", "botName": "runtime-public-invite-bot"},
+    )
+    assert invite_registration.status_code == 201
+    assert invite_registration.json()["bot"]["registrationPath"] == "invite_code_trial"
+
+    partner_registration = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={**public_headers, "Idempotency-Key": "idem-runtime-v2-public-register-partner-001"},
+        json={
+            "partnerKey": "pk_live_partner_11223344",
+            "partnerSecret": "ps_live_partner_aabbccdd",
+            "ownerEmail": "public-owner@example.com",
+            "botName": "runtime-public-partner-bot",
+        },
+    )
+    assert partner_registration.status_code == 201
+    assert partner_registration.json()["bot"]["registrationPath"] == "partner_bootstrap"
+
+    invite_registration_with_invalid_auth = client.post(
+        "/v2/validation-bots/registrations/invite-code",
+        headers={
+            **public_headers,
+            "Idempotency-Key": "idem-runtime-v2-public-register-invite-002",
+            "Authorization": "Bearer invalid-token",
+        },
+        json={"inviteCode": "INV-TRIAL-00000012", "botName": "runtime-public-invite-bot-invalid-auth"},
+    )
+    assert invite_registration_with_invalid_auth.status_code == 201
+
+    protected_write = client.post(
+        "/v2/validation-sharing/runs/valrun-public-test/invites",
+        headers={**public_headers, "Idempotency-Key": "idem-runtime-v2-public-protected-write-001"},
+        json={"email": "reviewer@example.com"},
+    )
+    assert protected_write.status_code == 401

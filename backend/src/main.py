@@ -79,6 +79,13 @@ def _is_v2_validation_request(path: str) -> bool:
     return path.startswith("/v2/validation")
 
 
+def _is_v2_validation_public_registration_request(path: str) -> bool:
+    return path in {
+        "/v2/validation-bots/registrations/invite-code",
+        "/v2/validation-bots/registrations/partner-bootstrap",
+    }
+
+
 def _header_or_fallback(request: Request, *, header: str, fallback: str) -> str:
     value = request.headers.get(header)
     if isinstance(value, str) and value.strip():
@@ -92,31 +99,56 @@ async def platform_api_observability_context_middleware(request: Request, call_n
     if _is_platform_request(request.url.path):
         request.state.request_id = request.headers.get("X-Request-Id") or f"req-{uuid4()}"
         if _is_v2_validation_request(request.url.path):
-            try:
-                identity = resolve_validation_identity(
-                    authorization=request.headers.get("Authorization"),
-                    api_key=request.headers.get("X-API-Key"),
-                    tenant_header=request.headers.get("X-Tenant-Id"),
-                    user_header=request.headers.get("X-User-Id"),
-                    request_id=request.state.request_id,
-                )
-            except PlatformAPIError as exc:
-                request.state.tenant_id = "tenant-unauthenticated"
-                request.state.user_id = "user-unauthenticated"
-                log_request_event(
-                    logger,
-                    level=logging.WARNING,
-                    message="Platform API validation request rejected.",
-                    request=request,
-                    component="api",
-                    operation="request_rejected",
-                    status_code=exc.status_code,
-                    errorCode=exc.code,
-                    method=request.method,
-                )
-                return await platform_api_error_handler(request, exc)
-            request.state.tenant_id = identity.tenant_id
-            request.state.user_id = identity.user_id
+            is_public_registration_route = _is_v2_validation_public_registration_request(request.url.path)
+            has_auth_headers = bool(
+                (request.headers.get("Authorization") or "").strip()
+                or (request.headers.get("X-API-Key") or "").strip()
+            )
+            if is_public_registration_route:
+                if has_auth_headers:
+                    try:
+                        identity = resolve_validation_identity(
+                            authorization=request.headers.get("Authorization"),
+                            api_key=request.headers.get("X-API-Key"),
+                            tenant_header=request.headers.get("X-Tenant-Id"),
+                            user_header=request.headers.get("X-User-Id"),
+                            request_id=request.state.request_id,
+                        )
+                    except PlatformAPIError:
+                        request.state.tenant_id = "tenant-public-registration"
+                        request.state.user_id = "user-public-registration"
+                    else:
+                        request.state.tenant_id = identity.tenant_id
+                        request.state.user_id = identity.user_id
+                else:
+                    request.state.tenant_id = "tenant-public-registration"
+                    request.state.user_id = "user-public-registration"
+            else:
+                try:
+                    identity = resolve_validation_identity(
+                        authorization=request.headers.get("Authorization"),
+                        api_key=request.headers.get("X-API-Key"),
+                        tenant_header=request.headers.get("X-Tenant-Id"),
+                        user_header=request.headers.get("X-User-Id"),
+                        request_id=request.state.request_id,
+                    )
+                except PlatformAPIError as exc:
+                    request.state.tenant_id = "tenant-unauthenticated"
+                    request.state.user_id = "user-unauthenticated"
+                    log_request_event(
+                        logger,
+                        level=logging.WARNING,
+                        message="Platform API validation request rejected.",
+                        request=request,
+                        component="api",
+                        operation="request_rejected",
+                        status_code=exc.status_code,
+                        errorCode=exc.code,
+                        method=request.method,
+                    )
+                    return await platform_api_error_handler(request, exc)
+                request.state.tenant_id = identity.tenant_id
+                request.state.user_id = identity.user_id
         else:
             request.state.tenant_id = _header_or_fallback(
                 request,

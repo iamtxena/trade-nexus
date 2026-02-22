@@ -440,6 +440,53 @@ def test_shared_validation_access_owner_invited_and_denied_users() -> None:
     assert any(item.event_type == "accept" for item in audit_events)
 
 
+def test_shared_validation_invite_rejects_duplicate_pending_email() -> None:
+    client = _client()
+    owner_headers = _auth_headers(
+        request_id="req-shared-validation-conflict-owner-001",
+        tenant_id="tenant-shared-validation-conflict",
+        user_id="owner-shared-validation-conflict",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-validation-conflict-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    first = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-conflict-share-001",
+            "Idempotency-Key": "idem-shared-validation-conflict-share-001",
+        },
+        json={"email": "duplicate@example.com"},
+    )
+    assert first.status_code == 201
+
+    duplicate = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-conflict-share-002",
+            "Idempotency-Key": "idem-shared-validation-conflict-share-002",
+        },
+        json={"email": "duplicate@example.com"},
+    )
+    assert duplicate.status_code == 409
+    assert duplicate.json()["error"]["code"] == "VALIDATION_INVITE_CONFLICT"
+
+    invites = client.get(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={**owner_headers, "X-Request-Id": "req-shared-validation-conflict-list-001"},
+    )
+    assert invites.status_code == 200
+    assert len(invites.json()["items"]) == 1
+
+
 def test_shared_invite_auto_accepts_on_authenticated_login_email_match() -> None:
     client = _client()
     owner_headers = _auth_headers(

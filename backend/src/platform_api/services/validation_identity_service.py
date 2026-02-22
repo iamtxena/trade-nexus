@@ -536,6 +536,27 @@ class ValidationIdentityService:
                 details={"permission": permission},
             )
 
+        for existing in self._share_invites_by_run.get(run_id, []):
+            if existing.tenant_id != context.tenant_id:
+                continue
+            if existing.owner_user_id != owner_user_id:
+                continue
+            if existing.status != "pending":
+                continue
+            if existing.invitee_email != normalized_email:
+                continue
+            raise PlatformAPIError(
+                status_code=409,
+                code="VALIDATION_INVITE_CONFLICT",
+                message="A pending invite already exists for this email.",
+                request_id=context.request_id,
+                details={
+                    "runId": run_id,
+                    "email": normalized_email,
+                    "inviteId": existing.invite_id,
+                },
+            )
+
         invite_id = f"valshare-{self._share_counter:06d}"
         self._share_counter += 1
         record = SharedValidationInviteRecord(

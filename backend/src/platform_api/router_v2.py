@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, Query, Request, status
@@ -96,26 +96,16 @@ async def _request_context(
     request.state.request_id = request_id
     state_tenant_id = getattr(request.state, "tenant_id", None)
     state_user_id = getattr(request.state, "user_id", None)
-    tenant_id = (
-        state_tenant_id
-        if isinstance(state_tenant_id, str) and state_tenant_id.strip()
-        else request.headers.get("X-Tenant-Id")
-    )
-    user_id = (
-        state_user_id
-        if isinstance(state_user_id, str) and state_user_id.strip()
-        else request.headers.get("X-User-Id")
-    )
-    if not isinstance(tenant_id, str) or not tenant_id.strip():
-        tenant_id = "tenant-local"
-    if not isinstance(user_id, str) or not user_id.strip():
-        user_id = "user-local"
+    tenant_id = state_tenant_id if isinstance(state_tenant_id, str) and state_tenant_id.strip() else "tenant-local"
+    user_id = state_user_id if isinstance(state_user_id, str) and state_user_id.strip() else "user-local"
 
-    actor_identity = _identity_service.resolve_api_key(
-        api_key=x_api_key,
-        tenant_id=tenant_id,
-        request_id=request_id,
-    )
+    actor_identity = None
+    if _is_validation_request_path(request.url.path):
+        actor_identity = _identity_service.resolve_api_key(
+            api_key=x_api_key,
+            tenant_id=tenant_id,
+            request_id=request_id,
+        )
     owner_user_id = user_id
     actor_type = "user"
     actor_id = user_id
@@ -170,6 +160,63 @@ def _bot_registration_path(method: Literal["invite", "partner"]) -> Literal["inv
 
 def _bot_key_prefix(raw_key: str) -> str:
     return raw_key[:16]
+
+
+def _is_validation_request_path(path: str) -> bool:
+    return path.startswith("/v2/validation")
+
+
+def _resolve_idempotency_key(*, context: RequestContext, idempotency_key: str | None) -> str:
+    normalized = (idempotency_key or "").strip()
+    if normalized:
+        return normalized
+    return context.request_id
+
+
+def _scoped_idempotency_key(*, context: RequestContext, key: str) -> str:
+    return f"{context.tenant_id}:{context.user_id}:{key}"
+
+
+def _get_idempotent_response(
+    *,
+    scope: str,
+    context: RequestContext,
+    idempotency_key: str | None,
+    payload: dict[str, Any],
+) -> dict[str, Any] | None:
+    key = _resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
+    scoped_key = _scoped_idempotency_key(context=context, key=key)
+    conflict, cached = router_v1_module._store.get_idempotent_response(  # noqa: SLF001
+        scope=scope,
+        key=scoped_key,
+        payload=payload,
+    )
+    if conflict:
+        raise PlatformAPIError(
+            status_code=409,
+            code="IDEMPOTENCY_KEY_CONFLICT",
+            message="Idempotency-Key reused with different payload.",
+            request_id=context.request_id,
+        )
+    return cached
+
+
+def _save_idempotent_response(
+    *,
+    scope: str,
+    context: RequestContext,
+    idempotency_key: str | None,
+    payload: dict[str, Any],
+    response: dict[str, Any],
+) -> None:
+    key = _resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
+    scoped_key = _scoped_idempotency_key(context=context, key=key)
+    router_v1_module._store.save_idempotent_response(  # noqa: SLF001
+        scope=scope,
+        key=scoped_key,
+        payload=payload,
+        response=response,
+    )
 
 
 def _to_validation_invite(invite: object) -> ValidationInvite:
@@ -332,7 +379,16 @@ async def register_validation_bot_invite_code_v2(
     context: ContextDep,
     idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> BotRegistrationResponse:
-    del idempotency_key
+    idempotency_payload = payload.model_dump(mode="json")
+    cached = _get_idempotent_response(
+        scope="validation_bot_registrations_invite_code",
+        context=context,
+        idempotency_key=idempotency_key,
+        payload=idempotency_payload,
+    )
+    if cached is not None:
+        return BotRegistrationResponse.model_validate(cached)
+
     bot_id = _normalized_bot_id(bot_name=payload.botName)
     result = _identity_service.register_bot(
         context=context,
@@ -354,7 +410,7 @@ async def register_validation_bot_invite_code_v2(
             revokedAt=None,
         ),
     )
-    return BotRegistrationResponse(
+    response = BotRegistrationResponse(
         requestId=context.request_id,
         bot=Bot(
             id=result.bot_id,
@@ -382,6 +438,14 @@ async def register_validation_bot_invite_code_v2(
         ),
         issuedKey=issued_key,
     )
+    _save_idempotent_response(
+        scope="validation_bot_registrations_invite_code",
+        context=context,
+        idempotency_key=idempotency_key,
+        payload=idempotency_payload,
+        response=response.model_dump(mode="json"),
+    )
+    return response
 
 
 @router.post(
@@ -396,7 +460,16 @@ async def register_validation_bot_partner_bootstrap_v2(
     context: ContextDep,
     idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> BotRegistrationResponse:
-    del idempotency_key
+    idempotency_payload = payload.model_dump(mode="json")
+    cached = _get_idempotent_response(
+        scope="validation_bot_registrations_partner_bootstrap",
+        context=context,
+        idempotency_key=idempotency_key,
+        payload=idempotency_payload,
+    )
+    if cached is not None:
+        return BotRegistrationResponse.model_validate(cached)
+
     bot_id = _normalized_bot_id(bot_name=payload.botName)
     registration_context = context
     is_public_registration_identity = (
@@ -438,7 +511,7 @@ async def register_validation_bot_partner_bootstrap_v2(
             revokedAt=None,
         ),
     )
-    return BotRegistrationResponse(
+    response = BotRegistrationResponse(
         requestId=context.request_id,
         bot=Bot(
             id=result.bot_id,
@@ -466,6 +539,14 @@ async def register_validation_bot_partner_bootstrap_v2(
         ),
         issuedKey=issued_key,
     )
+    _save_idempotent_response(
+        scope="validation_bot_registrations_partner_bootstrap",
+        context=context,
+        idempotency_key=idempotency_key,
+        payload=idempotency_payload,
+        response=response.model_dump(mode="json"),
+    )
+    return response
 
 
 @router.post(
@@ -481,12 +562,24 @@ async def rotate_validation_bot_key_v2(
     payload: CreateBotKeyRotationRequest | None = None,
     idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> BotKeyRotationResponse:
-    del payload, idempotency_key
+    idempotency_payload = {
+        "botId": botId,
+        "request": payload.model_dump(mode="json") if payload is not None else {},
+    }
+    cached = _get_idempotent_response(
+        scope="validation_bot_key_rotations",
+        context=context,
+        idempotency_key=idempotency_key,
+        payload=idempotency_payload,
+    )
+    if cached is not None:
+        return BotKeyRotationResponse.model_validate(cached)
+
     result = _identity_service.rotate_bot_key(
         context=context,
         bot_id=botId,
     )
-    return BotKeyRotationResponse(
+    response = BotKeyRotationResponse(
         requestId=context.request_id,
         botId=botId,
         issuedKey=BotIssuedApiKey(
@@ -502,6 +595,14 @@ async def rotate_validation_bot_key_v2(
             ),
         ),
     )
+    _save_idempotent_response(
+        scope="validation_bot_key_rotations",
+        context=context,
+        idempotency_key=idempotency_key,
+        payload=idempotency_payload,
+        response=response.model_dump(mode="json"),
+    )
+    return response
 
 
 @router.post(
@@ -517,7 +618,20 @@ async def revoke_validation_bot_key_v2(
     payload: CreateBotKeyRevocationRequest | None = None,
     idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> BotKeyMetadataResponse:
-    del payload, idempotency_key
+    idempotency_payload = {
+        "botId": botId,
+        "keyId": keyId,
+        "request": payload.model_dump(mode="json") if payload is not None else {},
+    }
+    cached = _get_idempotent_response(
+        scope="validation_bot_key_revocations",
+        context=context,
+        idempotency_key=idempotency_key,
+        payload=idempotency_payload,
+    )
+    if cached is not None:
+        return BotKeyMetadataResponse.model_validate(cached)
+
     _identity_service.revoke_bot_key(
         context=context,
         bot_id=botId,
@@ -531,7 +645,7 @@ async def revoke_validation_bot_key_v2(
             message=f"Runtime bot key {keyId} not found.",
             request_id=context.request_id,
         )
-    return BotKeyMetadataResponse(
+    response = BotKeyMetadataResponse(
         requestId=context.request_id,
         botId=botId,
         key=BotKeyMetadata(
@@ -544,6 +658,14 @@ async def revoke_validation_bot_key_v2(
             revokedAt=record.revoked_at,
         ),
     )
+    _save_idempotent_response(
+        scope="validation_bot_key_revocations",
+        context=context,
+        idempotency_key=idempotency_key,
+        payload=idempotency_payload,
+        response=response.model_dump(mode="json"),
+    )
+    return response
 
 
 @router.post(

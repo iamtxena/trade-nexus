@@ -138,6 +138,10 @@ def _reset_runtime_state() -> None:
             "validation_renders",
             "validation_baselines",
             "validation_replays",
+            "validation_bot_registrations_invite_code",
+            "validation_bot_registrations_partner_bootstrap",
+            "validation_bot_key_rotations",
+            "validation_bot_key_revocations",
         ):
             store._idempotency[scope].clear()  # noqa: SLF001
 
@@ -356,6 +360,126 @@ def test_runtime_bot_api_key_only_auth_sets_runtime_tenant_context() -> None:
     assert persisted.metadata.actor_id == "runtime-bot-api-key-only"
 
 
+def test_runtime_bot_partner_registration_is_idempotent_for_retries() -> None:
+    client = _client()
+    router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
+    owner_headers = _auth_headers(
+        request_id="req-runtime-bot-partner-idempotent-register-001",
+        tenant_id="tenant-runtime-bot-partner-idempotent",
+        user_id="owner-runtime-bot-partner-idempotent",
+    )
+    payload = {
+        "partnerKey": "partner-bootstrap",
+        "partnerSecret": "partner-secret",
+        "ownerEmail": "owner-runtime-bot-partner-idempotent@example.com",
+        "botName": "Runtime Bot Partner Idempotent",
+    }
+
+    first = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={**owner_headers, "Idempotency-Key": "idem-runtime-bot-partner-idempotent-register-001"},
+        json=payload,
+    )
+    assert first.status_code == 201
+
+    replay = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-runtime-bot-partner-idempotent-register-002",
+            "Idempotency-Key": "idem-runtime-bot-partner-idempotent-register-001",
+        },
+        json=payload,
+    )
+    assert replay.status_code == 201
+    assert replay.json() == first.json()
+
+    issued_key = first.json()["issuedKey"]["key"]["id"]
+    indexed = router_v2_module._identity_service._bot_key_index[  # noqa: SLF001
+        (
+            "tenant-runtime-bot-partner-idempotent",
+            "owner-runtime-bot-partner-idempotent",
+            "runtime-bot-partner-idempotent",
+        )
+    ]
+    assert sorted(indexed) == [issued_key]
+    issued_record = router_v2_module._identity_service.get_bot_key(key_id=issued_key)
+    assert issued_record is not None
+    assert not issued_record.revoked
+
+    register_events = [
+        item
+        for item in router_v1_module._store.validation_identity_audit_events
+        if item.event_type == "register" and item.metadata.get("botId") == "runtime-bot-partner-idempotent"
+    ]
+    assert len(register_events) == 1
+
+
+def test_runtime_bot_key_rotation_is_idempotent_for_retries() -> None:
+    client = _client()
+    router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
+    owner_headers = _auth_headers(
+        request_id="req-runtime-bot-rotate-idempotent-register-001",
+        tenant_id="tenant-runtime-bot-rotate-idempotent",
+        user_id="owner-runtime-bot-rotate-idempotent",
+    )
+
+    register = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={**owner_headers, "Idempotency-Key": "idem-runtime-bot-rotate-idempotent-register-001"},
+        json={
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+            "ownerEmail": "owner-runtime-bot-rotate-idempotent@example.com",
+            "botName": "Runtime Bot Rotate Idempotent",
+        },
+    )
+    assert register.status_code == 201
+
+    first_rotate = client.post(
+        "/v2/validation-bots/runtime-bot-rotate-idempotent/keys/rotate",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-runtime-bot-rotate-idempotent-001",
+            "Idempotency-Key": "idem-runtime-bot-rotate-idempotent-001",
+        },
+        json={},
+    )
+    assert first_rotate.status_code == 201
+
+    replay_rotate = client.post(
+        "/v2/validation-bots/runtime-bot-rotate-idempotent/keys/rotate",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-runtime-bot-rotate-idempotent-002",
+            "Idempotency-Key": "idem-runtime-bot-rotate-idempotent-001",
+        },
+        json={},
+    )
+    assert replay_rotate.status_code == 201
+    assert replay_rotate.json() == first_rotate.json()
+
+    active_key_id = first_rotate.json()["issuedKey"]["key"]["id"]
+    active_record = router_v2_module._identity_service.get_bot_key(key_id=active_key_id)
+    assert active_record is not None
+    assert not active_record.revoked
+
+    bot_keys = [
+        item
+        for item in router_v2_module._identity_service._bot_keys.values()  # noqa: SLF001
+        if item.bot_id == "runtime-bot-rotate-idempotent"
+    ]
+    assert len(bot_keys) == 2
+    assert sum(1 for item in bot_keys if item.revoked_at is None) == 1
+
+    rotate_events = [
+        item
+        for item in router_v1_module._store.validation_identity_audit_events
+        if item.event_type == "rotate" and item.metadata.get("botId") == "runtime-bot-rotate-idempotent"
+    ]
+    assert len(rotate_events) == 1
+
+
 def test_runtime_bot_invite_registration_path_is_single_use_and_rate_limited() -> None:
     client = _client()
     tenant_id = "tenant-runtime-bot-invite"
@@ -457,6 +581,21 @@ def test_runtime_identity_routes_require_authenticated_identity() -> None:
     )
     assert register.status_code == 401
     assert register.json()["error"]["code"] == "AUTH_UNAUTHORIZED"
+
+
+def test_non_validation_routes_ignore_validation_bot_api_key_header() -> None:
+    client = _client()
+    response = client.get(
+        "/v2/conversations/sessions/session-does-not-exist",
+        headers={
+            "X-Request-Id": "req-non-validation-bot-api-key-001",
+            "X-Tenant-Id": "tenant-non-validation-bot-api-key",
+            "X-User-Id": "user-non-validation-bot-api-key",
+            "X-API-Key": "tnx.bot.invalid",
+        },
+    )
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "CONVERSATION_SESSION_NOT_FOUND"
 
 
 def test_shared_validation_access_owner_invited_and_denied_users() -> None:

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 import hashlib
 import hmac
 import json
@@ -117,6 +119,7 @@ def _reset_runtime_state() -> None:
         identity._invite_rate_limit_index.clear()  # noqa: SLF001
         identity._share_invites_by_run.clear()  # noqa: SLF001
         identity._share_grants_by_run.clear()  # noqa: SLF001
+        identity._pending_share_invite_index.clear()  # noqa: SLF001
         identity._partner_credentials = {}  # noqa: SLF001
         identity._invite_counter = 1  # noqa: SLF001
         identity._key_counter = 1  # noqa: SLF001
@@ -302,6 +305,55 @@ def test_runtime_bot_partner_registration_public_path_derives_owner_identity() -
     assert create_run.status_code == 202
     assert create_run.json()["run"]["actor"]["actorType"] == "bot"
     assert create_run.json()["run"]["actor"]["actorId"] == "public-runtime-bot"
+
+
+def test_runtime_bot_api_key_only_auth_sets_runtime_tenant_context() -> None:
+    client = _client()
+    router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
+
+    owner_headers = _auth_headers(
+        request_id="req-runtime-bot-api-key-only-owner-register-001",
+        tenant_id="tenant-runtime-bot-only-key",
+        user_id="owner-runtime-bot-only-key",
+    )
+    register = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={**owner_headers, "Idempotency-Key": "idem-runtime-bot-api-key-only-register-001"},
+        json={
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+            "ownerEmail": "owner-runtime-bot-only-key@example.com",
+            "botName": "Runtime Bot API Key Only",
+        },
+    )
+    assert register.status_code == 201
+    runtime_key = register.json()["issuedKey"]["rawKey"]
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={
+            "X-Request-Id": "req-runtime-bot-api-key-only-run-001",
+            "X-API-Key": runtime_key,
+            "Idempotency-Key": "idem-runtime-bot-api-key-only-run-001",
+        },
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+    assert create_run.json()["run"]["actor"]["actorType"] == "bot"
+    assert create_run.json()["run"]["actor"]["actorId"] == "runtime-bot-api-key-only"
+
+    persisted = asyncio.run(
+        router_v2_module._validation_service._validation_storage.get_run(  # noqa: SLF001
+            run_id=run_id,
+            tenant_id="tenant-runtime-bot-only-key",
+            user_id="owner-runtime-bot-only-key",
+        )
+    )
+    assert persisted is not None
+    assert persisted.metadata.owner_user_id == "owner-runtime-bot-only-key"
+    assert persisted.metadata.actor_type == "bot"
+    assert persisted.metadata.actor_id == "runtime-bot-api-key-only"
 
 
 def test_runtime_bot_invite_registration_path_is_single_use_and_rate_limited() -> None:
@@ -600,6 +652,111 @@ def test_shared_validation_invite_list_supports_cursor_pagination() -> None:
     )
     assert invalid_cursor.status_code == 400
     assert invalid_cursor.json()["error"]["code"] == "VALIDATION_SHARE_INVALID"
+
+
+def test_shared_validation_invite_expiration_defaults_and_validation() -> None:
+    client = _client()
+    owner_headers = _auth_headers(
+        request_id="req-shared-validation-expiry-owner-001",
+        tenant_id="tenant-shared-validation-expiry",
+        user_id="owner-shared-validation-expiry",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-validation-expiry-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    default_expiry_invite = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-expiry-share-default-001",
+            "Idempotency-Key": "idem-shared-validation-expiry-share-default-001",
+        },
+        json={"email": "default-expiry@example.com"},
+    )
+    assert default_expiry_invite.status_code == 201
+    expires_at = default_expiry_invite.json()["invite"]["expiresAt"]
+    assert isinstance(expires_at, str)
+    expires_at_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    now = datetime.now(tz=UTC)
+    assert expires_at_dt > now + timedelta(days=6)
+    assert expires_at_dt < now + timedelta(days=8)
+
+    invalid_expiry = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-expiry-share-invalid-001",
+            "Idempotency-Key": "idem-shared-validation-expiry-share-invalid-001",
+        },
+        json={"email": "invalid-expiry@example.com", "expiresAt": "not-a-timestamp"},
+    )
+    assert invalid_expiry.status_code == 400
+    assert invalid_expiry.json()["error"]["code"] == "VALIDATION_SHARE_INVALID"
+
+    past_expiry = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-expiry-share-past-001",
+            "Idempotency-Key": "idem-shared-validation-expiry-share-past-001",
+        },
+        json={
+            "email": "past-expiry@example.com",
+            "expiresAt": (datetime.now(tz=UTC) - timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
+        },
+    )
+    assert past_expiry.status_code == 400
+    assert past_expiry.json()["error"]["code"] == "VALIDATION_SHARE_INVALID"
+
+
+def test_shared_validation_invite_list_surfaces_expired_status() -> None:
+    client = _client()
+    owner_headers = _auth_headers(
+        request_id="req-shared-validation-expired-status-owner-001",
+        tenant_id="tenant-shared-validation-expired-status",
+        user_id="owner-shared-validation-expired-status",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-validation-expired-status-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    create_invite = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-expired-status-share-001",
+            "Idempotency-Key": "idem-shared-validation-expired-status-share-001",
+        },
+        json={"email": "expired-status@example.com"},
+    )
+    assert create_invite.status_code == 201
+    invite_id = create_invite.json()["invite"]["id"]
+
+    invites = router_v2_module._identity_service._share_invites_by_run[run_id]  # noqa: SLF001
+    invites[0] = replace(
+        invites[0],
+        status="pending",
+        expires_at=(datetime.now(tz=UTC) - timedelta(minutes=1)).isoformat().replace("+00:00", "Z"),
+    )
+
+    listed = client.get(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={**owner_headers, "X-Request-Id": "req-shared-validation-expired-status-list-001"},
+    )
+    assert listed.status_code == 200
+    invite = next(item for item in listed.json()["items"] if item["id"] == invite_id)
+    assert invite["status"] == "expired"
 
 
 def test_shared_invite_auto_accepts_on_authenticated_login_email_match() -> None:

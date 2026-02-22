@@ -121,6 +121,7 @@ async def _request_context(
     actor_id = user_id
     if actor_identity is not None:
         # Keep run ownership scoped to the human owner while preserving acting bot identity separately.
+        tenant_id = actor_identity.tenant_id
         owner_user_id = actor_identity.owner_user_id
         user_id = actor_identity.owner_user_id
         actor_type = actor_identity.actor_type
@@ -141,7 +142,14 @@ async def _request_context(
         actor_id=actor_id,
         user_email=user_email,
     )
-    if context.actor_type == "user" and context.user_email is not None:
+    if (
+        context.actor_type == "user"
+        and context.user_email is not None
+        and _identity_service.has_pending_email_invites(
+            tenant_id=context.tenant_id,
+            email=context.user_email,
+        )
+    ):
         _identity_service.activate_email_invites(context=context)
     return context
 

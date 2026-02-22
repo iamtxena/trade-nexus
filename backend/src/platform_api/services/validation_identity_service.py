@@ -21,11 +21,12 @@ logger = logging.getLogger(__name__)
 ActorType = Literal["user", "bot"]
 RegistrationMethod = Literal["invite", "partner"]
 SharePermission = Literal["view", "review"]
-ShareInviteStatus = Literal["pending", "accepted", "revoked"]
+ShareInviteStatus = Literal["pending", "accepted", "revoked", "expired"]
 
 
 @dataclass(frozen=True)
 class RuntimeActorIdentity:
+    tenant_id: str
     owner_user_id: str
     actor_type: ActorType
     actor_id: str
@@ -132,6 +133,7 @@ class ValidationIdentityService:
 
         self._share_invites_by_run: dict[str, list[SharedValidationInviteRecord]] = {}
         self._share_grants_by_run: dict[str, dict[str, SharePermission]] = {}
+        self._pending_share_invite_index: dict[tuple[str, str], set[str]] = {}
 
         self._invite_counter = 1
         self._key_counter = 1
@@ -447,7 +449,7 @@ class ValidationIdentityService:
         self,
         *,
         api_key: str | None,
-        tenant_id: str,
+        tenant_id: str | None,
         request_id: str,
     ) -> RuntimeActorIdentity | None:
         normalized = (api_key or "").strip()
@@ -466,7 +468,19 @@ class ValidationIdentityService:
             )
         _, _, bot_id, key_id, secret = parts
         record = self._bot_keys.get(key_id)
-        if record is None or record.bot_id != bot_id or record.tenant_id != tenant_id:
+        if record is None or record.bot_id != bot_id:
+            raise PlatformAPIError(
+                status_code=401,
+                code="BOT_API_KEY_INVALID",
+                message="Runtime bot key is invalid.",
+                request_id=request_id,
+            )
+        normalized_tenant_id = (tenant_id or "").strip()
+        if (
+            normalized_tenant_id
+            and normalized_tenant_id != record.tenant_id
+            and not normalized_tenant_id.startswith("tenant-apikey-")
+        ):
             raise PlatformAPIError(
                 status_code=401,
                 code="BOT_API_KEY_INVALID",
@@ -502,6 +516,7 @@ class ValidationIdentityService:
             last_used_at=utc_now(),
         )
         return RuntimeActorIdentity(
+            tenant_id=record.tenant_id,
             owner_user_id=record.owner_user_id,
             actor_type="bot",
             actor_id=record.bot_id,
@@ -535,6 +550,10 @@ class ValidationIdentityService:
                 request_id=context.request_id,
                 details={"permission": permission},
             )
+        resolved_expires_at = _resolve_share_invite_expiration(
+            expires_at=expires_at,
+            request_id=context.request_id,
+        )
 
         for existing in self._share_invites_by_run.get(run_id, []):
             if existing.tenant_id != context.tenant_id:
@@ -570,9 +589,10 @@ class ValidationIdentityService:
             invited_by_user_id=context.user_id,
             invited_by_actor_type=context.actor_type,
             created_at=utc_now(),
-            expires_at=expires_at,
+            expires_at=resolved_expires_at,
         )
         self._share_invites_by_run.setdefault(run_id, []).append(record)
+        self._index_pending_share_invite(invite=record)
 
         self._record_audit(
             event_type="share",
@@ -598,11 +618,14 @@ class ValidationIdentityService:
         owner_user_id: str,
     ) -> list[SharedValidationInviteRecord]:
         invites = self._share_invites_by_run.get(run_id, [])
-        return [
-            invite
-            for invite in invites
-            if invite.tenant_id == context.tenant_id and invite.owner_user_id == owner_user_id
-        ]
+        visible: list[SharedValidationInviteRecord] = []
+        for index, invite in enumerate(invites):
+            refreshed = self._refresh_expired_share_invite(invite=invite)
+            if refreshed is not invite:
+                invites[index] = refreshed
+            if refreshed.tenant_id == context.tenant_id and refreshed.owner_user_id == owner_user_id:
+                visible.append(refreshed)
+        return visible
 
     def revoke_run_share_invite(
         self,
@@ -633,6 +656,8 @@ class ValidationIdentityService:
                 message=f"Validation invite {invite_id} is already revoked.",
                 request_id=context.request_id,
             )
+        if invite.status == "pending":
+            self._remove_pending_share_invite_index(invite=invite)
 
         now = utc_now()
         updated = SharedValidationInviteRecord(
@@ -734,9 +759,33 @@ class ValidationIdentityService:
                 message=f"Validation invite {invite_id} is revoked.",
                 request_id=context.request_id,
             )
+        if invite.status == "expired":
+            raise PlatformAPIError(
+                status_code=409,
+                code="VALIDATION_INVITE_EXPIRED",
+                message=f"Validation invite {invite_id} has expired.",
+                request_id=context.request_id,
+            )
         if invite.status == "accepted":
             return invite
         if _invite_expired(invite.expires_at):
+            self._remove_pending_share_invite_index(invite=invite)
+            self._share_invites_by_run[run_id][index] = SharedValidationInviteRecord(
+                invite_id=invite.invite_id,
+                run_id=invite.run_id,
+                tenant_id=invite.tenant_id,
+                owner_user_id=invite.owner_user_id,
+                invitee_email=invite.invitee_email,
+                permission=invite.permission,
+                status="expired",
+                invited_by_user_id=invite.invited_by_user_id,
+                invited_by_actor_type=invite.invited_by_actor_type,
+                created_at=invite.created_at,
+                expires_at=invite.expires_at,
+                revoked_at=invite.revoked_at,
+                accepted_user_id=invite.accepted_user_id,
+                accepted_at=invite.accepted_at,
+            )
             raise PlatformAPIError(
                 status_code=409,
                 code="VALIDATION_INVITE_EXPIRED",
@@ -744,6 +793,7 @@ class ValidationIdentityService:
                 request_id=context.request_id,
             )
 
+        self._remove_pending_share_invite_index(invite=invite)
         now = utc_now()
         updated = SharedValidationInviteRecord(
             invite_id=invite.invite_id,
@@ -782,6 +832,15 @@ class ValidationIdentityService:
         )
         return updated
 
+    def has_pending_email_invites(self, *, tenant_id: str, email: str | None) -> bool:
+        if email is None:
+            return False
+        try:
+            normalized_email = _normalize_email(email)
+        except ValueError:
+            return False
+        return bool(self._pending_share_invite_index.get((tenant_id, normalized_email)))
+
     def activate_email_invites(self, *, context: RequestContext) -> list[SharedValidationInviteRecord]:
         if context.user_email is None:
             return []
@@ -791,15 +850,21 @@ class ValidationIdentityService:
         except ValueError:
             return []
         accepted: list[SharedValidationInviteRecord] = []
-        for run_id, invites in self._share_invites_by_run.items():
+        run_ids = sorted(self._pending_share_invite_index.get((context.tenant_id, normalized_email), set()))
+        for run_id in run_ids:
+            invites = self._share_invites_by_run.get(run_id, [])
             for index, invite in enumerate(invites):
                 if invite.status != "pending":
                     continue
                 if invite.tenant_id != context.tenant_id or invite.invitee_email != normalized_email:
                     continue
                 if _invite_expired(invite.expires_at):
+                    refreshed = self._refresh_expired_share_invite(invite=invite)
+                    if refreshed is not invite:
+                        invites[index] = refreshed
                     continue
 
+                self._remove_pending_share_invite_index(invite=invite)
                 updated = SharedValidationInviteRecord(
                     invite_id=invite.invite_id,
                     run_id=invite.run_id,
@@ -862,6 +927,44 @@ class ValidationIdentityService:
         if required_permission == "view":
             return permission in {"view", "review"}
         return permission == "review"
+
+    def _index_pending_share_invite(self, *, invite: SharedValidationInviteRecord) -> None:
+        if invite.status != "pending":
+            return
+        key = (invite.tenant_id, invite.invitee_email)
+        self._pending_share_invite_index.setdefault(key, set()).add(invite.run_id)
+
+    def _remove_pending_share_invite_index(self, *, invite: SharedValidationInviteRecord) -> None:
+        key = (invite.tenant_id, invite.invitee_email)
+        run_ids = self._pending_share_invite_index.get(key)
+        if run_ids is None:
+            return
+        run_ids.discard(invite.run_id)
+        if not run_ids:
+            self._pending_share_invite_index.pop(key, None)
+
+    def _refresh_expired_share_invite(self, *, invite: SharedValidationInviteRecord) -> SharedValidationInviteRecord:
+        if invite.status != "pending":
+            return invite
+        if not _invite_expired(invite.expires_at):
+            return invite
+        self._remove_pending_share_invite_index(invite=invite)
+        return SharedValidationInviteRecord(
+            invite_id=invite.invite_id,
+            run_id=invite.run_id,
+            tenant_id=invite.tenant_id,
+            owner_user_id=invite.owner_user_id,
+            invitee_email=invite.invitee_email,
+            permission=invite.permission,
+            status="expired",
+            invited_by_user_id=invite.invited_by_user_id,
+            invited_by_actor_type=invite.invited_by_actor_type,
+            created_at=invite.created_at,
+            expires_at=invite.expires_at,
+            revoked_at=invite.revoked_at,
+            accepted_user_id=invite.accepted_user_id,
+            accepted_at=invite.accepted_at,
+        )
 
     def _resolve_registration_method(
         self,
@@ -1086,18 +1189,56 @@ def _max_permission(current: SharePermission | None, new: SharePermission) -> Sh
     return "view"
 
 
+def _parse_utc_datetime(value: str) -> datetime | None:
+    normalized = value.strip()
+    if normalized == "":
+        return None
+    try:
+        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _resolve_share_invite_expiration(*, expires_at: str | None, request_id: str) -> str:
+    now = datetime.now(tz=UTC)
+    normalized = (expires_at or "").strip()
+    if normalized == "":
+        return _to_utc(now + timedelta(days=7))
+
+    parsed = _parse_utc_datetime(normalized)
+    if parsed is None:
+        raise PlatformAPIError(
+            status_code=400,
+            code="VALIDATION_SHARE_INVALID",
+            message="expiresAt must be an ISO8601 timestamp when provided.",
+            request_id=request_id,
+            details={"expiresAt": expires_at},
+        )
+    if parsed <= now:
+        raise PlatformAPIError(
+            status_code=400,
+            code="VALIDATION_SHARE_INVALID",
+            message="expiresAt must be in the future.",
+            request_id=request_id,
+            details={"expiresAt": expires_at},
+        )
+    return _to_utc(parsed)
+
+
 def _invite_expired(expires_at: str | None) -> bool:
     if expires_at is None:
         return False
-    try:
-        expires_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-    except ValueError:
-        return False
+    expires_dt = _parse_utc_datetime(expires_at)
+    if expires_dt is None:
+        return True
     return datetime.now(tz=UTC) >= expires_dt
 
 
 def _to_utc(value: datetime) -> str:
-    return value.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return value.astimezone(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 __all__ = [

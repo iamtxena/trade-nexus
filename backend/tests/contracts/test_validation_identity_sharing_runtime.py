@@ -1392,6 +1392,59 @@ def test_shared_invite_auto_accepts_on_authenticated_login_email_match() -> None
     assert after_login.status_code == 200
 
 
+def test_shared_invite_accept_endpoint_enforces_accepted_email_before_auto_accept() -> None:
+    client = _client()
+    owner_headers = _auth_headers(
+        request_id="req-shared-accept-email-owner-001",
+        tenant_id="tenant-shared-accept-email",
+        user_id="owner-shared-accept-email",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-accept-email-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    invite = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-accept-email-share-001",
+            "Idempotency-Key": "idem-shared-accept-email-share-001",
+        },
+        json={"email": "accept-email-user@example.com"},
+    )
+    assert invite.status_code == 201
+    invite_id = invite.json()["invite"]["id"]
+
+    mismatched_accept = client.post(
+        f"/v2/validation-sharing/invites/{invite_id}/accept",
+        headers={
+            **_auth_headers(
+                request_id="req-shared-accept-email-mismatch-001",
+                tenant_id="tenant-shared-accept-email",
+                user_id="accept-email-user",
+                user_email="accept-email-user@example.com",
+            ),
+            "Idempotency-Key": "idem-shared-accept-email-mismatch-001",
+        },
+        json={"acceptedEmail": "other-user@example.com"},
+    )
+    assert mismatched_accept.status_code == 403
+    assert mismatched_accept.json()["error"]["code"] == "VALIDATION_INVITE_EMAIL_MISMATCH"
+
+    listed = client.get(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={**owner_headers, "X-Request-Id": "req-shared-accept-email-list-001"},
+    )
+    assert listed.status_code == 200
+    invite_item = next(item for item in listed.json()["items"] if item["id"] == invite_id)
+    assert invite_item["status"] == "pending"
+
+
 def test_shared_invite_accept_rejects_mixed_jwt_and_bot_key_identity() -> None:
     client = _client()
     router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001

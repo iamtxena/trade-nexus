@@ -168,9 +168,8 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                 header="X-User-Id",
                 fallback="user-local",
             )
-            raw_user_email = request.headers.get("X-User-Email")
             request.state.user_email_authenticated = False
-            request.state.user_email = raw_user_email if isinstance(raw_user_email, str) and raw_user_email.strip() else None
+            request.state.user_email = None
         log_request_event(
             logger,
             level=logging.INFO,

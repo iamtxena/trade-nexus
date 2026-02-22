@@ -148,6 +148,7 @@ async def _request_context(
     if (
         context.actor_type == "user"
         and context.user_email is not None
+        and not _is_validation_invite_accept_path(request.url.path)
         and _identity_service.has_pending_email_invites(
             tenant_id=context.tenant_id,
             email=context.user_email,
@@ -194,6 +195,10 @@ def _is_validation_request_path(path: str) -> bool:
     # Bot registration/management endpoints are user-authenticated control-plane calls.
     # Do not let runtime bot API keys override verified JWT identity on these routes.
     return not path.startswith("/v2/validation-bots")
+
+
+def _is_validation_invite_accept_path(path: str) -> bool:
+    return path.startswith("/v2/validation-sharing/invites/") and path.endswith("/accept")
 
 
 def _resolve_idempotency_key(*, context: RequestContext, idempotency_key: str | None) -> str:

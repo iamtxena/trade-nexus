@@ -630,6 +630,7 @@ def test_runtime_bot_invite_registration_path_is_single_use_and_rate_limited() -
     )
     assert register.status_code == 201
     assert register.json()["registration"]["registrationPath"] == "invite_code_trial"
+    assert register.json()["registration"]["audit"]["inviteCodePrefix"] != "tnx_invite"
 
     reuse = client.post(
         "/v2/validation-bots/registrations/invite-code",
@@ -706,6 +707,28 @@ def test_runtime_bot_registration_normalizes_special_characters_in_bot_name() ->
     assert rotate.status_code == 201
     assert rotate.json()["botId"] == "my-bot-v2-0-s"
     assert rotate.json()["issuedKey"]["key"]["botId"] == "my-bot-v2-0-s"
+
+
+def test_validation_run_with_valid_jwt_ignores_malformed_runtime_key_header() -> None:
+    client = _client()
+    headers = _auth_headers(
+        request_id="req-runtime-malformed-runtime-key-jwt-001",
+        tenant_id="tenant-runtime-malformed-runtime-key",
+        user_id="owner-runtime-malformed-runtime-key",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={
+            **headers,
+            "X-API-Key": "tnx.bot.invalid",
+            "Idempotency-Key": "idem-runtime-malformed-runtime-key-jwt-001",
+        },
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    assert create_run.json()["run"]["actor"]["actorType"] == "user"
+    assert create_run.json()["run"]["actor"]["actorId"] == "owner-runtime-malformed-runtime-key"
 
 
 def test_runtime_bot_registration_routes_do_not_override_jwt_identity_with_runtime_key() -> None:

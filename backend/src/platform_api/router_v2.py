@@ -102,11 +102,21 @@ async def _request_context(
 
     actor_identity = None
     if _is_validation_request_path(request.url.path):
-        actor_identity = _identity_service.resolve_api_key(
-            api_key=x_api_key,
-            tenant_id=tenant_id,
-            request_id=request_id,
-        )
+        try:
+            actor_identity = _identity_service.resolve_api_key(
+                api_key=x_api_key,
+                tenant_id=tenant_id,
+                request_id=request_id,
+            )
+        except PlatformAPIError:
+            # If JWT identity is already verified by middleware, malformed bot keys
+            # should not preempt the authenticated user context.
+            has_bearer_header = bool((request.headers.get("Authorization") or "").strip())
+            state_is_api_key_identity = tenant_id.startswith("tenant-apikey-") and user_id.startswith("user-apikey-")
+            if has_bearer_header and not state_is_api_key_identity:
+                actor_identity = None
+            else:
+                raise
     owner_user_id = user_id
     actor_type = "user"
     actor_id = user_id
@@ -438,7 +448,7 @@ async def register_validation_bot_invite_code_v2(
             status="completed",
             audit={
                 "source": "invite_code_trial",
-                "inviteCodePrefix": payload.inviteCode[:10],
+                "inviteCodePrefix": hashlib.sha256(payload.inviteCode.encode("utf-8")).hexdigest()[:10],
                 "rateLimitBucket": "bot_invite_trial",
             },
             createdAt=result.created_at,

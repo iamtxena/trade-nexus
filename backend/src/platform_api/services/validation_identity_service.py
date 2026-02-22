@@ -782,7 +782,14 @@ class ValidationIdentityService:
                 request_id=context.request_id,
             )
         if invite.status == "accepted":
-            return invite
+            if invite.accepted_user_id == context.user_id:
+                return invite
+            raise PlatformAPIError(
+                status_code=409,
+                code="VALIDATION_INVITE_STATE_INVALID",
+                message=f"Validation invite {invite_id} was already accepted by another user identity.",
+                request_id=context.request_id,
+            )
         if _invite_expired(invite.expires_at):
             self._remove_pending_share_invite_index(invite=invite)
             self._share_invites_by_run[run_id][index] = SharedValidationInviteRecord(

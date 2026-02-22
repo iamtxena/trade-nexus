@@ -1568,6 +1568,88 @@ def test_shared_invite_accept_with_jwt_and_bot_key_prefers_verified_jwt_identity
     assert invite_item["status"] == "accepted"
 
 
+def test_shared_invite_accept_rejects_already_accepted_for_different_user_identity() -> None:
+    client = _client()
+    owner_headers = _auth_headers(
+        request_id="req-shared-invite-reaccept-owner-001",
+        tenant_id="tenant-shared-invite-reaccept",
+        user_id="owner-shared-invite-reaccept",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-invite-reaccept-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    invite = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-invite-reaccept-share-001",
+            "Idempotency-Key": "idem-shared-invite-reaccept-share-001",
+        },
+        json={"email": "same-email@example.com"},
+    )
+    assert invite.status_code == 201
+    invite_id = invite.json()["invite"]["id"]
+
+    first_accept = client.post(
+        f"/v2/validation-sharing/invites/{invite_id}/accept",
+        headers={
+            **_auth_headers(
+                request_id="req-shared-invite-reaccept-accept-001",
+                tenant_id="tenant-shared-invite-reaccept",
+                user_id="invitee-user-a",
+                user_email="same-email@example.com",
+            ),
+            "Idempotency-Key": "idem-shared-invite-reaccept-accept-001",
+        },
+        json={"acceptedEmail": "same-email@example.com"},
+    )
+    assert first_accept.status_code == 200
+
+    second_accept = client.post(
+        f"/v2/validation-sharing/invites/{invite_id}/accept",
+        headers={
+            **_auth_headers(
+                request_id="req-shared-invite-reaccept-accept-002",
+                tenant_id="tenant-shared-invite-reaccept",
+                user_id="invitee-user-b",
+                user_email="same-email@example.com",
+            ),
+            "Idempotency-Key": "idem-shared-invite-reaccept-accept-002",
+        },
+        json={"acceptedEmail": "same-email@example.com"},
+    )
+    assert second_accept.status_code == 409
+    assert second_accept.json()["error"]["code"] == "VALIDATION_INVITE_STATE_INVALID"
+
+    first_user_access = client.get(
+        f"/v2/validation-sharing/runs/{run_id}",
+        headers=_auth_headers(
+            request_id="req-shared-invite-reaccept-access-a-001",
+            tenant_id="tenant-shared-invite-reaccept",
+            user_id="invitee-user-a",
+            user_email="same-email@example.com",
+        ),
+    )
+    assert first_user_access.status_code == 200
+
+    second_user_access = client.get(
+        f"/v2/validation-sharing/runs/{run_id}",
+        headers=_auth_headers(
+            request_id="req-shared-invite-reaccept-access-b-001",
+            tenant_id="tenant-shared-invite-reaccept",
+            user_id="invitee-user-b",
+            user_email="same-email@example.com",
+        ),
+    )
+    assert second_user_access.status_code == 403
+
+
 def test_validation_owner_endpoints_regression_remain_unchanged() -> None:
     client = _client()
     headers = _auth_headers(

@@ -1011,6 +1011,74 @@ def test_shared_invite_auto_accepts_on_authenticated_login_email_match() -> None
     assert after_login.status_code == 200
 
 
+def test_shared_invite_accept_rejects_mixed_jwt_and_bot_key_identity() -> None:
+    client = _client()
+    router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
+    owner_headers = _auth_headers(
+        request_id="req-shared-invite-mixed-owner-001",
+        tenant_id="tenant-shared-invite-mixed",
+        user_id="owner-shared-invite-mixed",
+    )
+
+    register_bot = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-invite-mixed-register-bot-001"},
+        json={
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+            "ownerEmail": "owner-shared-invite-mixed@example.com",
+            "botName": "Shared Invite Mix Bot",
+        },
+    )
+    assert register_bot.status_code == 201
+    runtime_key = register_bot.json()["issuedKey"]["rawKey"]
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-invite-mixed-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    invite = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-invite-mixed-share-001",
+            "Idempotency-Key": "idem-shared-invite-mixed-share-001",
+        },
+        json={"email": "invitee-mixed@example.com"},
+    )
+    assert invite.status_code == 201
+    invite_id = invite.json()["invite"]["id"]
+
+    mixed_accept = client.post(
+        f"/v2/validation-sharing/invites/{invite_id}/accept",
+        headers={
+            **_auth_headers(
+                request_id="req-shared-invite-mixed-accept-001",
+                tenant_id="tenant-shared-invite-mixed",
+                user_id="invitee-user-mixed",
+                user_email="invitee-mixed@example.com",
+            ),
+            "X-API-Key": runtime_key,
+            "Idempotency-Key": "idem-shared-invite-mixed-accept-001",
+        },
+        json={"acceptedEmail": "invitee-mixed@example.com"},
+    )
+    assert mixed_accept.status_code == 403
+    assert mixed_accept.json()["error"]["code"] == "VALIDATION_INVITE_EMAIL_MISMATCH"
+
+    listed = client.get(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={**owner_headers, "X-Request-Id": "req-shared-invite-mixed-list-001"},
+    )
+    assert listed.status_code == 200
+    invite_item = next(item for item in listed.json()["items"] if item["id"] == invite_id)
+    assert invite_item["status"] == "pending"
+
+
 def test_validation_owner_endpoints_regression_remain_unchanged() -> None:
     client = _client()
     headers = _auth_headers(

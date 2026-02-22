@@ -120,6 +120,8 @@ async def _request_context(
     state_user_email = getattr(request.state, "user_email", None)
     user_email_authenticated = bool(getattr(request.state, "user_email_authenticated", False))
     user_email = state_user_email if user_email_authenticated and isinstance(state_user_email, str) and state_user_email.strip() else None
+    if actor_type != "user":
+        user_email = None
 
     request.state.tenant_id = tenant_id
     request.state.user_id = user_id

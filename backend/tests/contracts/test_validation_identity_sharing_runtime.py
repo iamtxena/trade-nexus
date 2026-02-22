@@ -23,10 +23,19 @@ def _jwt_segment(payload: dict[str, str]) -> str:
     return base64.urlsafe_b64encode(encoded).decode("utf-8").rstrip("=")
 
 
-def _owner_headers(*, request_id: str, tenant_id: str, user_id: str) -> dict[str, str]:
+def _auth_headers(
+    *,
+    request_id: str,
+    tenant_id: str,
+    user_id: str,
+    user_email: str | None = None,
+) -> dict[str, str]:
+    claims: dict[str, str] = {"sub": user_id, "tenant_id": tenant_id}
+    if user_email is not None:
+        claims["email"] = user_email
     token = (
         f"{_jwt_segment({'alg': 'none', 'typ': 'JWT'})}."
-        f"{_jwt_segment({'sub': user_id, 'tenant_id': tenant_id})}."
+        f"{_jwt_segment(claims)}."
     )
     return {
         "Authorization": f"Bearer {token}",
@@ -103,7 +112,7 @@ def test_runtime_bot_partner_registration_resolves_actor_identity_for_validation
     client = _client()
     router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
 
-    headers = _owner_headers(
+    headers = _auth_headers(
         request_id="req-runtime-bot-partner-register-001",
         tenant_id="tenant-runtime-bot",
         user_id="owner-runtime-bot",
@@ -195,7 +204,7 @@ def test_runtime_bot_invite_registration_path_is_single_use_and_rate_limited() -
     client = _client()
 
     headers = {
-        **_owner_headers(
+        **_auth_headers(
             request_id="req-runtime-bot-invite-001",
             tenant_id="tenant-runtime-bot-invite",
             user_id="owner-runtime-bot-invite",
@@ -254,9 +263,40 @@ def test_runtime_bot_invite_registration_path_is_single_use_and_rate_limited() -
     assert fourth.json()["error"]["code"] == "BOT_INVITE_RATE_LIMITED"
 
 
+def test_runtime_identity_routes_require_authenticated_identity() -> None:
+    client = _client()
+
+    shared = client.get(
+        "/v2/shared-validation/runs/valrun-0001",
+        headers={
+            "X-Request-Id": "req-shared-unauth-001",
+            "X-Tenant-Id": "tenant-unauth",
+            "X-User-Id": "user-unauth",
+        },
+    )
+    assert shared.status_code == 401
+    assert shared.json()["error"]["code"] == "AUTH_UNAUTHORIZED"
+
+    register = client.post(
+        "/v2/bots/register",
+        headers={
+            "X-Request-Id": "req-bot-unauth-001",
+            "X-Tenant-Id": "tenant-unauth",
+            "X-User-Id": "user-unauth",
+        },
+        json={
+            "botId": "runtime-bot-unauth",
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+        },
+    )
+    assert register.status_code == 401
+    assert register.json()["error"]["code"] == "AUTH_UNAUTHORIZED"
+
+
 def test_shared_validation_access_owner_invited_and_denied_users() -> None:
     client = _client()
-    owner_headers = _owner_headers(
+    owner_headers = _auth_headers(
         request_id="req-shared-validation-owner-001",
         tenant_id="tenant-shared-validation",
         user_id="owner-shared-validation",
@@ -279,22 +319,22 @@ def test_shared_validation_access_owner_invited_and_denied_users() -> None:
 
     denied = client.get(
         f"/v2/shared-validation/runs/{run_id}",
-        headers={
-            **owner_headers,
-            "X-Request-Id": "req-shared-validation-denied-001",
-            "X-User-Id": "denied-user",
-            "X-User-Email": "other@example.com",
-        },
+        headers=_auth_headers(
+            request_id="req-shared-validation-denied-001",
+            tenant_id="tenant-shared-validation",
+            user_id="denied-user",
+            user_email="other@example.com",
+        ),
     )
     assert denied.status_code == 403
     assert denied.json()["error"]["code"] == "VALIDATION_RUN_ACCESS_DENIED"
 
-    invited_headers = {
-        **owner_headers,
-        "X-Request-Id": "req-shared-validation-invitee-001",
-        "X-User-Id": "invitee-user",
-        "X-User-Email": "invitee@example.com",
-    }
+    invited_headers = _auth_headers(
+        request_id="req-shared-validation-invitee-001",
+        tenant_id="tenant-shared-validation",
+        user_id="invitee-user",
+        user_email="invitee@example.com",
+    )
     invited_get = client.get(f"/v2/shared-validation/runs/{run_id}", headers=invited_headers)
     assert invited_get.status_code == 200
 
@@ -315,8 +355,8 @@ def test_shared_validation_access_owner_invited_and_denied_users() -> None:
         f"/v2/validation-runs/{run_id}",
         headers={**invited_headers, "X-Request-Id": "req-shared-validation-owner-surface-denied-001"},
     )
-    assert owner_surface_for_invitee.status_code == 401
-    assert owner_surface_for_invitee.json()["error"]["code"] == "AUTH_IDENTITY_MISMATCH"
+    assert owner_surface_for_invitee.status_code == 404
+    assert owner_surface_for_invitee.json()["error"]["code"] == "VALIDATION_RUN_NOT_FOUND"
 
     owner_get = client.get(
         f"/v2/validation-runs/{run_id}",
@@ -331,7 +371,7 @@ def test_shared_validation_access_owner_invited_and_denied_users() -> None:
 
 def test_shared_invite_auto_accepts_on_authenticated_login_email_match() -> None:
     client = _client()
-    owner_headers = _owner_headers(
+    owner_headers = _auth_headers(
         request_id="req-shared-auto-accept-owner-001",
         tenant_id="tenant-shared-auto-accept",
         user_id="owner-shared-auto-accept",
@@ -354,40 +394,42 @@ def test_shared_invite_auto_accepts_on_authenticated_login_email_match() -> None
 
     before_login = client.get(
         f"/v2/shared-validation/runs/{run_id}",
-        headers={
-            **owner_headers,
-            "X-Request-Id": "req-shared-auto-accept-before-login-001",
-            "X-User-Id": "login-user",
-        },
+        headers=_auth_headers(
+            request_id="req-shared-auto-accept-before-login-001",
+            tenant_id="tenant-shared-auto-accept",
+            user_id="login-user",
+        ),
     )
     assert before_login.status_code == 403
 
-    login = client.post(
-        "/v2/knowledge/search",
+    spoofed_email = client.get(
+        f"/v2/shared-validation/runs/{run_id}",
         headers={
-            **owner_headers,
-            "X-Request-Id": "req-shared-auto-accept-login-001",
-            "X-User-Id": "login-user",
+            **_auth_headers(
+                request_id="req-shared-auto-accept-spoofed-email-001",
+                tenant_id="tenant-shared-auto-accept",
+                user_id="login-user",
+            ),
             "X-User-Email": "login-user@example.com",
         },
-        json={"query": "regime", "assets": ["BTCUSDT"], "limit": 1},
     )
-    assert login.status_code == 200
+    assert spoofed_email.status_code == 403
 
     after_login = client.get(
         f"/v2/shared-validation/runs/{run_id}",
-        headers={
-            **owner_headers,
-            "X-Request-Id": "req-shared-auto-accept-after-login-001",
-            "X-User-Id": "login-user",
-        },
+        headers=_auth_headers(
+            request_id="req-shared-auto-accept-after-login-001",
+            tenant_id="tenant-shared-auto-accept",
+            user_id="login-user",
+            user_email="login-user@example.com",
+        ),
     )
     assert after_login.status_code == 200
 
 
 def test_validation_owner_endpoints_regression_remain_unchanged() -> None:
     client = _client()
-    headers = _owner_headers(
+    headers = _auth_headers(
         request_id="req-validation-regression-owner-001",
         tenant_id="tenant-validation-regression",
         user_id="owner-validation-regression",

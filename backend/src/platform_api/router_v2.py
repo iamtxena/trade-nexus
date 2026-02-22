@@ -108,6 +108,13 @@ async def _request_context(
         actor_type = actor_identity.actor_type
         actor_id = actor_identity.actor_id
 
+    state_user_email = getattr(request.state, "user_email", None)
+    user_email_authenticated = bool(getattr(request.state, "user_email_authenticated", False))
+    if user_email_authenticated:
+        user_email = state_user_email if isinstance(state_user_email, str) and state_user_email.strip() else None
+    else:
+        user_email = x_user_email
+
     request.state.tenant_id = tenant_id
     request.state.user_id = user_id
     context = RequestContext(
@@ -117,7 +124,7 @@ async def _request_context(
         owner_user_id=owner_user_id,
         actor_type=actor_type,
         actor_id=actor_id,
-        user_email=x_user_email,
+        user_email=user_email,
     )
     if context.actor_type == "user":
         _identity_service.activate_email_invites(context=context)

@@ -25,6 +25,7 @@ class AuthenticatedIdentity:
 
     tenant_id: str
     user_id: str
+    user_email: str | None = None
 
 
 def resolve_validation_identity(
@@ -91,7 +92,17 @@ def _identity_from_bearer_claims(token: str) -> AuthenticatedIdentity | None:
     tenant_id = _claim_value(claims, keys=("tenant_id", "tenantId", "org_id", "orgId"))
     if tenant_id is None:
         tenant_id = f"tenant-clerk-{user_id}"
-    return AuthenticatedIdentity(tenant_id=tenant_id, user_id=user_id)
+    user_email = _claim_value(
+        claims,
+        keys=("email", "email_address", "user_email", "userEmail"),
+    )
+    if user_email is not None:
+        user_email = user_email.lower()
+    return AuthenticatedIdentity(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        user_email=user_email,
+    )
 
 
 def _decode_jwt_payload(token: str) -> dict[str, Any] | None:
@@ -126,6 +137,7 @@ def _identity_from_api_key(api_key: str) -> AuthenticatedIdentity:
     return AuthenticatedIdentity(
         tenant_id=f"tenant-apikey-{digest[:12]}",
         user_id=f"user-apikey-{digest[12:24]}",
+        user_email=None,
     )
 
 

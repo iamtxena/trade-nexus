@@ -76,7 +76,11 @@ def _is_platform_request(path: str) -> bool:
 
 
 def _is_v2_validation_request(path: str) -> bool:
-    return path.startswith("/v2/validation")
+    return (
+        path.startswith("/v2/validation")
+        or path.startswith("/v2/shared-validation")
+        or path.startswith("/v2/bots")
+    )
 
 
 def _header_or_fallback(request: Request, *, header: str, fallback: str) -> str:
@@ -117,6 +121,8 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                 return await platform_api_error_handler(request, exc)
             request.state.tenant_id = identity.tenant_id
             request.state.user_id = identity.user_id
+            request.state.user_email_authenticated = True
+            request.state.user_email = identity.user_email
         else:
             request.state.tenant_id = _header_or_fallback(
                 request,
@@ -128,6 +134,9 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                 header="X-User-Id",
                 fallback="user-local",
             )
+            raw_user_email = request.headers.get("X-User-Email")
+            request.state.user_email_authenticated = False
+            request.state.user_email = raw_user_email if isinstance(raw_user_email, str) and raw_user_email.strip() else None
         log_request_event(
             logger,
             level=logging.INFO,

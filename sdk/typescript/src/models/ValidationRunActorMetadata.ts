@@ -34,25 +34,25 @@ export interface ValidationRunActorMetadata {
      */
     actorType: ValidationActorType;
     /**
-     * 
+     * Canonical actor identifier for ownership/audit linkage.
      * @type {string}
      * @memberof ValidationRunActorMetadata
      */
     actorId: string;
     /**
-     * 
+     * Present when actorType is `user`; omitted otherwise.
      * @type {string}
      * @memberof ValidationRunActorMetadata
      */
     userId?: string | null;
     /**
-     * 
+     * Present when actorType is `bot`; omitted otherwise.
      * @type {string}
      * @memberof ValidationRunActorMetadata
      */
     botId?: string | null;
     /**
-     * 
+     * Must include `ownerUserId` for ownership auditability.
      * @type {{ [key: string]: any; }}
      * @memberof ValidationRunActorMetadata
      */

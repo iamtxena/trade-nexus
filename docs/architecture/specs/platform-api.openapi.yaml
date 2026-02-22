@@ -3547,18 +3547,26 @@ components:
       properties:
         actorType:
           $ref: '#/components/schemas/ValidationActorType'
+          description: |
+            Canonical actor discriminator.
+            `user` means actorId maps to userId.
+            `bot` means actorId maps to botId.
         actorId:
           type: string
           minLength: 1
+          description: Canonical actor identifier for ownership/audit linkage.
         userId:
           type: string
           nullable: true
+          description: Present when actorType is `user`; omitted otherwise.
         botId:
           type: string
           nullable: true
+          description: Present when actorType is `bot`; omitted otherwise.
         metadata:
           type: object
           additionalProperties: true
+          description: Must include `ownerUserId` for ownership auditability.
 
     ValidationRun:
       type: object
@@ -3577,6 +3585,7 @@ components:
           $ref: '#/components/schemas/ValidationRunDecision'
         actor:
           $ref: '#/components/schemas/ValidationRunActorMetadata'
+          description: Runtime guarantees actor linkage on successful v2 responses.
         createdAt:
           type: string
           format: date-time
@@ -3831,6 +3840,7 @@ components:
           type: string
         actor:
           $ref: '#/components/schemas/ValidationRunActorMetadata'
+          description: Runtime guarantees actor linkage on successful v2 responses.
         strategyRef:
           $ref: '#/components/schemas/ValidationStrategyRef'
         inputs:

@@ -562,8 +562,9 @@ async def rotate_validation_bot_key_v2(
     payload: CreateBotKeyRotationRequest | None = None,
     idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> BotKeyRotationResponse:
+    normalized_bot_id = botId.strip().lower()
     idempotency_payload = {
-        "botId": botId,
+        "botId": normalized_bot_id,
         "request": payload.model_dump(mode="json") if payload is not None else {},
     }
     cached = _get_idempotent_response(
@@ -581,7 +582,7 @@ async def rotate_validation_bot_key_v2(
     )
     response = BotKeyRotationResponse(
         requestId=context.request_id,
-        botId=botId,
+        botId=result.bot_id,
         issuedKey=BotIssuedApiKey(
             rawKey=result.runtime_bot_key,
             key=BotKeyMetadata(
@@ -618,9 +619,11 @@ async def revoke_validation_bot_key_v2(
     payload: CreateBotKeyRevocationRequest | None = None,
     idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> BotKeyMetadataResponse:
+    normalized_bot_id = botId.strip().lower()
+    normalized_key_id = keyId.strip()
     idempotency_payload = {
-        "botId": botId,
-        "keyId": keyId,
+        "botId": normalized_bot_id,
+        "keyId": normalized_key_id,
         "request": payload.model_dump(mode="json") if payload is not None else {},
     }
     cached = _get_idempotent_response(
@@ -635,9 +638,9 @@ async def revoke_validation_bot_key_v2(
     _identity_service.revoke_bot_key(
         context=context,
         bot_id=botId,
-        key_id=keyId,
+        key_id=normalized_key_id,
     )
-    record = _identity_service.get_bot_key(key_id=keyId)
+    record = _identity_service.get_bot_key(key_id=normalized_key_id)
     if record is None:
         raise PlatformAPIError(
             status_code=404,
@@ -647,7 +650,7 @@ async def revoke_validation_bot_key_v2(
         )
     response = BotKeyMetadataResponse(
         requestId=context.request_id,
-        botId=botId,
+        botId=record.bot_id,
         key=BotKeyMetadata(
             id=record.key_id,
             botId=record.bot_id,

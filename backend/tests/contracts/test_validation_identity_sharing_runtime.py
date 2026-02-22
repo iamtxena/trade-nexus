@@ -480,6 +480,57 @@ def test_runtime_bot_key_rotation_is_idempotent_for_retries() -> None:
     assert len(rotate_events) == 1
 
 
+def test_runtime_bot_key_rotation_and_revoke_normalize_response_bot_id_and_key_lookup() -> None:
+    client = _client()
+    router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
+    owner_headers = _auth_headers(
+        request_id="req-runtime-bot-normalize-register-001",
+        tenant_id="tenant-runtime-bot-normalize",
+        user_id="owner-runtime-bot-normalize",
+    )
+
+    register = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={**owner_headers, "Idempotency-Key": "idem-runtime-bot-normalize-register-001"},
+        json={
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+            "ownerEmail": "owner-runtime-bot-normalize@example.com",
+            "botName": "Runtime Bot Normalize",
+        },
+    )
+    assert register.status_code == 201
+
+    rotate = client.post(
+        "/v2/validation-bots/RUNTIME-BOT-NORMALIZE/keys/rotate",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-runtime-bot-normalize-rotate-001",
+            "Idempotency-Key": "idem-runtime-bot-normalize-rotate-001",
+        },
+        json={},
+    )
+    assert rotate.status_code == 201
+    assert rotate.json()["botId"] == "runtime-bot-normalize"
+    assert rotate.json()["issuedKey"]["key"]["botId"] == "runtime-bot-normalize"
+    key_id = rotate.json()["issuedKey"]["key"]["id"]
+
+    revoke = client.post(
+        f"/v2/validation-bots/RUNTIME-BOT-NORMALIZE/keys/{key_id}%20/revoke",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-runtime-bot-normalize-revoke-001",
+            "Idempotency-Key": "idem-runtime-bot-normalize-revoke-001",
+        },
+        json={},
+    )
+    assert revoke.status_code == 200
+    assert revoke.json()["botId"] == "runtime-bot-normalize"
+    assert revoke.json()["key"]["id"] == key_id
+    assert revoke.json()["key"]["botId"] == "runtime-bot-normalize"
+    assert revoke.json()["key"]["status"] == "revoked"
+
+
 def test_runtime_bot_invite_registration_path_is_single_use_and_rate_limited() -> None:
     client = _client()
     tenant_id = "tenant-runtime-bot-invite"

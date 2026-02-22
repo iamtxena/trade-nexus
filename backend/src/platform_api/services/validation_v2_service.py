@@ -41,6 +41,7 @@ from src.platform_api.schemas_v2 import (
     ValidationReviewRunListResponse,
     ValidationReviewRunSummary,
     ValidationRun,
+    ValidationRunActorMetadata,
     ValidationRunArtifact,
     ValidationRunListResponse,
     ValidationRunResponse,
@@ -318,11 +319,19 @@ class ValidationV2Service:
             trader_status=trader_status,
             policy=policy,
         )
+        actor_metadata = ValidationRunActorMetadata(
+            actorType=cast(Literal["user", "bot"], context.actor_type),
+            actorId=context.actor_id or context.user_id,
+            userId=(context.owner_user_id or context.user_id) if context.actor_type == "user" else None,
+            botId=(context.actor_id or context.user_id) if context.actor_type == "bot" else None,
+            metadata={"ownerUserId": context.owner_user_id or context.user_id},
+        )
         artifact_payload["traderReview"] = {
             "required": policy.require_trader_review,
             "status": trader_status,
             "comments": [],
         }
+        artifact_payload["actor"] = actor_metadata.model_dump(mode="json")
         artifact_payload["finalDecision"] = final_decision
         snapshot_payload["finalDecision"] = final_decision
         snapshot_payload["findings"] = [
@@ -343,6 +352,7 @@ class ValidationV2Service:
                 Literal["pending", "pass", "conditional_pass", "fail"],
                 final_decision,
             ),
+            actor=actor_metadata,
             createdAt=created_at,
             updatedAt=created_at,
         )
@@ -745,12 +755,13 @@ class ValidationV2Service:
             render=render_job,
         )
 
-    async def create_shared_validation_invite(
+    async def create_validation_run_invite(
         self,
         *,
         run_id: str,
         invitee_email: str,
         permission: SharePermission,
+        expires_at: str | None,
         context: RequestContext,
     ) -> SharedValidationInviteRecord:
         record = self._require_run(run_id=run_id, context=context)
@@ -760,6 +771,44 @@ class ValidationV2Service:
             owner_user_id=record.owner_user_id,
             invitee_email=invitee_email,
             permission=permission,
+            expires_at=expires_at,
+        )
+
+    async def list_validation_run_invites(
+        self,
+        *,
+        run_id: str,
+        context: RequestContext,
+    ) -> list[SharedValidationInviteRecord]:
+        record = self._require_run(run_id=run_id, context=context)
+        return self._identity_service.list_run_share_invites(
+            context=context,
+            run_id=record.run.id,
+            owner_user_id=record.owner_user_id,
+        )
+
+    async def revoke_validation_invite(
+        self,
+        *,
+        invite_id: str,
+        context: RequestContext,
+    ) -> SharedValidationInviteRecord:
+        return self._identity_service.revoke_run_share_invite(
+            context=context,
+            invite_id=invite_id,
+        )
+
+    async def accept_validation_invite_on_login(
+        self,
+        *,
+        invite_id: str,
+        accepted_email: str,
+        context: RequestContext,
+    ) -> SharedValidationInviteRecord:
+        return self._identity_service.accept_run_share_invite(
+            context=context,
+            invite_id=invite_id,
+            accepted_email=accepted_email,
         )
 
     async def submit_validation_run_review(

@@ -78,8 +78,8 @@ def _is_platform_request(path: str) -> bool:
 def _is_v2_validation_request(path: str) -> bool:
     return (
         path.startswith("/v2/validation")
-        or path.startswith("/v2/shared-validation")
-        or path.startswith("/v2/bots")
+        or path.startswith("/v2/validation-sharing")
+        or path.startswith("/v2/validation-bots")
     )
 
 
@@ -90,12 +90,21 @@ def _header_or_fallback(request: Request, *, header: str, fallback: str) -> str:
     return fallback
 
 
+def _is_v2_validation_public_route(request: Request) -> bool:
+    if request.method.upper() != "POST":
+        return False
+    return request.url.path in {
+        "/v2/validation-bots/registrations/invite-code",
+        "/v2/validation-bots/registrations/partner-bootstrap",
+    }
+
+
 @app.middleware("http")
 async def platform_api_observability_context_middleware(request: Request, call_next):
     """Attach request correlation identifiers and emit structured request logs."""
     if _is_platform_request(request.url.path):
         request.state.request_id = request.headers.get("X-Request-Id") or f"req-{uuid4()}"
-        if _is_v2_validation_request(request.url.path):
+        if _is_v2_validation_request(request.url.path) and not _is_v2_validation_public_route(request):
             try:
                 identity = resolve_validation_identity(
                     authorization=request.headers.get("Authorization"),

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
+import hmac
 import json
+import os
 
 from fastapi.testclient import TestClient
 import pytest
@@ -12,6 +15,8 @@ import pytest
 from src.main import app
 from src.platform_api import router_v1 as router_v1_module
 from src.platform_api import router_v2 as router_v2_module
+
+_JWT_SECRET = os.environ.setdefault("PLATFORM_AUTH_JWT_HS256_SECRET", "test-validation-runtime-secret")
 
 
 def _client() -> TestClient:
@@ -21,6 +26,15 @@ def _client() -> TestClient:
 def _jwt_segment(payload: dict[str, str]) -> str:
     encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     return base64.urlsafe_b64encode(encoded).decode("utf-8").rstrip("=")
+
+
+def _jwt_token(claims: dict[str, str]) -> str:
+    header_segment = _jwt_segment({"alg": "HS256", "typ": "JWT"})
+    payload_segment = _jwt_segment(claims)
+    signing_input = f"{header_segment}.{payload_segment}".encode("utf-8")
+    signature = hmac.new(_JWT_SECRET.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    signature_segment = base64.urlsafe_b64encode(signature).decode("utf-8").rstrip("=")
+    return f"{header_segment}.{payload_segment}.{signature_segment}"
 
 
 def _auth_headers(
@@ -33,10 +47,7 @@ def _auth_headers(
     claims: dict[str, str] = {"sub": user_id, "tenant_id": tenant_id}
     if user_email is not None:
         claims["email"] = user_email
-    token = (
-        f"{_jwt_segment({'alg': 'none', 'typ': 'JWT'})}."
-        f"{_jwt_segment(claims)}."
-    )
+    token = _jwt_token(claims)
     return {
         "Authorization": f"Bearer {token}",
         "X-API-Key": "test-key",
@@ -119,48 +130,68 @@ def test_runtime_bot_partner_registration_resolves_actor_identity_for_validation
     )
 
     register = client.post(
-        "/v2/bots/register",
-        headers=headers,
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={**headers, "Idempotency-Key": "idem-runtime-bot-partner-register-001"},
         json={
-            "botId": "runtime-bot-1",
             "partnerKey": "partner-bootstrap",
             "partnerSecret": "partner-secret",
+            "ownerEmail": "owner-runtime-bot@example.com",
+            "botName": "Runtime Bot 1",
+            "botId": "runtime-bot-1",
         },
     )
     assert register.status_code == 201
-    runtime_key = register.json()["runtimeBotKey"]
+    runtime_key = register.json()["issuedKey"]["rawKey"]
+    key_id = register.json()["issuedKey"]["key"]["id"]
 
     rotate = client.post(
-        "/v2/bots/register",
-        headers={**headers, "X-Request-Id": "req-runtime-bot-partner-register-002"},
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={
+            **headers,
+            "X-Request-Id": "req-runtime-bot-partner-register-002",
+            "Idempotency-Key": "idem-runtime-bot-partner-register-002",
+        },
         json={
-            "botId": "runtime-bot-1",
             "partnerKey": "partner-bootstrap",
             "partnerSecret": "partner-secret",
+            "ownerEmail": "owner-runtime-bot@example.com",
+            "botName": "Runtime Bot 1",
+            "botId": "runtime-bot-1",
         },
     )
     assert rotate.status_code == 201
-    runtime_key = rotate.json()["runtimeBotKey"]
+    runtime_key = rotate.json()["issuedKey"]["rawKey"]
+    key_id = rotate.json()["issuedKey"]["key"]["id"]
 
     revoke = client.post(
-        "/v2/bots/runtime-bot-1/keys/revoke",
-        headers={**headers, "X-Request-Id": "req-runtime-bot-revoke-001"},
+        f"/v2/validation-bots/runtime-bot-1/keys/{key_id}/revoke",
+        headers={
+            **headers,
+            "X-Request-Id": "req-runtime-bot-revoke-001",
+            "Idempotency-Key": "idem-runtime-bot-revoke-001",
+        },
         json={},
     )
     assert revoke.status_code == 200
-    assert revoke.json()["revokedKeyIds"]
+    assert revoke.json()["key"]["status"] == "revoked"
 
     reissue = client.post(
-        "/v2/bots/register",
-        headers={**headers, "X-Request-Id": "req-runtime-bot-partner-register-003"},
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={
+            **headers,
+            "X-Request-Id": "req-runtime-bot-partner-register-003",
+            "Idempotency-Key": "idem-runtime-bot-partner-register-003",
+        },
         json={
-            "botId": "runtime-bot-1",
             "partnerKey": "partner-bootstrap",
             "partnerSecret": "partner-secret",
+            "ownerEmail": "owner-runtime-bot@example.com",
+            "botName": "Runtime Bot 1",
+            "botId": "runtime-bot-1",
         },
     )
     assert reissue.status_code == 201
-    runtime_key = reissue.json()["runtimeBotKey"]
+    runtime_key = reissue.json()["issuedKey"]["rawKey"]
 
     create_run = client.post(
         "/v2/validation-runs",
@@ -174,6 +205,8 @@ def test_runtime_bot_partner_registration_resolves_actor_identity_for_validation
     )
     assert create_run.status_code == 202
     run_id = create_run.json()["run"]["id"]
+    assert create_run.json()["run"]["actor"]["actorType"] == "bot"
+    assert create_run.json()["run"]["actor"]["actorId"] == "runtime-bot-1"
 
     artifact = client.get(
         f"/v2/validation-runs/{run_id}/artifact",
@@ -213,7 +246,7 @@ def test_runtime_bot_invite_registration_path_is_single_use_and_rate_limited() -
     }
 
     invite = client.post(
-        "/v2/bots/request-invite",
+        "/v2/validation-bots/request-invite",
         headers=headers,
         json={"botId": "runtime-bot-invite-1"},
     )
@@ -221,39 +254,49 @@ def test_runtime_bot_invite_registration_path_is_single_use_and_rate_limited() -
     invite_code = invite.json()["inviteCode"]
 
     register = client.post(
-        "/v2/bots/register",
-        headers={**headers, "X-Request-Id": "req-runtime-bot-invite-register-001"},
+        "/v2/validation-bots/registrations/invite-code",
+        headers={
+            **headers,
+            "X-Request-Id": "req-runtime-bot-invite-register-001",
+            "Idempotency-Key": "idem-runtime-bot-invite-register-001",
+        },
         json={
-            "botId": "runtime-bot-invite-1",
             "inviteCode": invite_code,
+            "botName": "Runtime Bot Invite 1",
+            "botId": "runtime-bot-invite-1",
         },
     )
     assert register.status_code == 201
-    assert register.json()["registrationMethod"] == "invite"
+    assert register.json()["registration"]["registrationPath"] == "invite_code_trial"
 
     reuse = client.post(
-        "/v2/bots/register",
-        headers={**headers, "X-Request-Id": "req-runtime-bot-invite-register-002"},
+        "/v2/validation-bots/registrations/invite-code",
+        headers={
+            **headers,
+            "X-Request-Id": "req-runtime-bot-invite-register-002",
+            "Idempotency-Key": "idem-runtime-bot-invite-register-002",
+        },
         json={
-            "botId": "runtime-bot-invite-1",
             "inviteCode": invite_code,
+            "botName": "Runtime Bot Invite 1",
+            "botId": "runtime-bot-invite-1",
         },
     )
     assert reuse.status_code == 401
     assert reuse.json()["error"]["code"] == "BOT_INVITE_INVALID"
 
     second = client.post(
-        "/v2/bots/request-invite",
+        "/v2/validation-bots/request-invite",
         headers={**headers, "X-Request-Id": "req-runtime-bot-invite-002"},
         json={"botId": "runtime-bot-invite-2"},
     )
     third = client.post(
-        "/v2/bots/request-invite",
+        "/v2/validation-bots/request-invite",
         headers={**headers, "X-Request-Id": "req-runtime-bot-invite-003"},
         json={"botId": "runtime-bot-invite-3"},
     )
     fourth = client.post(
-        "/v2/bots/request-invite",
+        "/v2/validation-bots/request-invite",
         headers={**headers, "X-Request-Id": "req-runtime-bot-invite-004"},
         json={"botId": "runtime-bot-invite-4"},
     )
@@ -267,7 +310,7 @@ def test_runtime_identity_routes_require_authenticated_identity() -> None:
     client = _client()
 
     shared = client.get(
-        "/v2/shared-validation/runs/valrun-0001",
+        "/v2/validation-sharing/runs/valrun-0001",
         headers={
             "X-Request-Id": "req-shared-unauth-001",
             "X-Tenant-Id": "tenant-unauth",
@@ -278,17 +321,14 @@ def test_runtime_identity_routes_require_authenticated_identity() -> None:
     assert shared.json()["error"]["code"] == "AUTH_UNAUTHORIZED"
 
     register = client.post(
-        "/v2/bots/register",
+        "/v2/validation-bots/runtime-bot-unauth/keys/rotate",
         headers={
             "X-Request-Id": "req-bot-unauth-001",
             "X-Tenant-Id": "tenant-unauth",
             "X-User-Id": "user-unauth",
+            "Idempotency-Key": "idem-bot-unauth-rotate-001",
         },
-        json={
-            "botId": "runtime-bot-unauth",
-            "partnerKey": "partner-bootstrap",
-            "partnerSecret": "partner-secret",
-        },
+        json={},
     )
     assert register.status_code == 401
     assert register.json()["error"]["code"] == "AUTH_UNAUTHORIZED"
@@ -309,16 +349,22 @@ def test_shared_validation_access_owner_invited_and_denied_users() -> None:
     )
     assert create_run.status_code == 202
     run_id = create_run.json()["run"]["id"]
+    assert create_run.json()["run"]["actor"]["actorType"] == "user"
+    assert create_run.json()["run"]["actor"]["actorId"] == "owner-shared-validation"
 
     share = client.post(
-        f"/v2/shared-validation/runs/{run_id}/invites",
-        headers={**owner_headers, "X-Request-Id": "req-shared-validation-share-001"},
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-share-001",
+            "Idempotency-Key": "idem-shared-validation-share-001",
+        },
         json={"email": "invitee@example.com", "permission": "review"},
     )
     assert share.status_code == 201
 
     denied = client.get(
-        f"/v2/shared-validation/runs/{run_id}",
+        f"/v2/validation-sharing/runs/{run_id}",
         headers=_auth_headers(
             request_id="req-shared-validation-denied-001",
             tenant_id="tenant-shared-validation",
@@ -335,11 +381,11 @@ def test_shared_validation_access_owner_invited_and_denied_users() -> None:
         user_id="invitee-user",
         user_email="invitee@example.com",
     )
-    invited_get = client.get(f"/v2/shared-validation/runs/{run_id}", headers=invited_headers)
+    invited_get = client.get(f"/v2/validation-sharing/runs/{run_id}", headers=invited_headers)
     assert invited_get.status_code == 200
 
     invited_review = client.post(
-        f"/v2/shared-validation/runs/{run_id}/review",
+        f"/v2/validation-sharing/runs/{run_id}/review",
         headers={**invited_headers, "Idempotency-Key": "idem-shared-validation-review-001"},
         json={
             "reviewerType": "agent",
@@ -386,14 +432,18 @@ def test_shared_invite_auto_accepts_on_authenticated_login_email_match() -> None
     run_id = create_run.json()["run"]["id"]
 
     share = client.post(
-        f"/v2/shared-validation/runs/{run_id}/invites",
-        headers={**owner_headers, "X-Request-Id": "req-shared-auto-accept-share-001"},
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-auto-accept-share-001",
+            "Idempotency-Key": "idem-shared-auto-accept-share-001",
+        },
         json={"email": "login-user@example.com", "permission": "view"},
     )
     assert share.status_code == 201
 
     before_login = client.get(
-        f"/v2/shared-validation/runs/{run_id}",
+        f"/v2/validation-sharing/runs/{run_id}",
         headers=_auth_headers(
             request_id="req-shared-auto-accept-before-login-001",
             tenant_id="tenant-shared-auto-accept",
@@ -403,7 +453,7 @@ def test_shared_invite_auto_accepts_on_authenticated_login_email_match() -> None
     assert before_login.status_code == 403
 
     spoofed_email = client.get(
-        f"/v2/shared-validation/runs/{run_id}",
+        f"/v2/validation-sharing/runs/{run_id}",
         headers={
             **_auth_headers(
                 request_id="req-shared-auto-accept-spoofed-email-001",
@@ -416,7 +466,7 @@ def test_shared_invite_auto_accepts_on_authenticated_login_email_match() -> None
     assert spoofed_email.status_code == 403
 
     after_login = client.get(
-        f"/v2/shared-validation/runs/{run_id}",
+        f"/v2/validation-sharing/runs/{run_id}",
         headers=_auth_headers(
             request_id="req-shared-auto-accept-after-login-001",
             tenant_id="tenant-shared-auto-accept",

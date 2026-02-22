@@ -2,27 +2,36 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import Annotated, Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, Query, Request, status
 
 from src.platform_api import router_v1 as router_v1_module
+from src.platform_api.errors import PlatformAPIError
 from src.platform_api.schemas_v1 import MarketScanRequest, RequestContext
 from src.platform_api.schemas_v2 import (
+    AcceptValidationInviteRequest,
     BacktestDataExportRequest,
     BacktestDataExportResponse,
-    CreateSharedValidationInviteRequest,
+    BotKeyMetadata,
+    BotKeyMetadataResponse,
+    BotKeyRotationResponse,
+    BotRegistration,
+    BotRegistrationResponse,
+    Bot,
+    BotIssuedApiKey,
     ConversationSessionResponse,
     ConversationTurnResponse,
+    CreateBotInviteRegistrationRequest,
+    CreateBotKeyRevocationRequest,
+    CreateBotKeyRotationRequest,
+    CreateBotPartnerBootstrapRequest,
     CreateConversationSessionRequest,
     CreateConversationTurnRequest,
-    RegisterRuntimeBotRequest,
-    RegisterRuntimeBotResponse,
-    RequestRuntimeBotInviteCodeRequest,
-    RevokeRuntimeBotKeyRequest,
-    RevokeRuntimeBotKeyResponse,
     CreateValidationBaselineRequest,
+    CreateValidationInviteRequest,
     CreateValidationRegressionReplayRequest,
     CreateValidationRenderRequest,
     CreateValidationReviewCommentRequest,
@@ -35,9 +44,13 @@ from src.platform_api.schemas_v2 import (
     KnowledgeSearchRequest,
     KnowledgeSearchResponse,
     MarketScanV2Response,
+    ValidationInvite,
+    ValidationInviteAcceptanceResponse,
+    ValidationInviteListResponse,
+    ValidationInviteResponse,
+    ValidationRunShare,
     RuntimeBotInviteCodeResponse,
-    SharedValidationInvite,
-    SharedValidationInviteResponse,
+    RequestRuntimeBotInviteCodeRequest,
     ValidationArtifactResponse,
     ValidationBaselineResponse,
     ValidationRegressionReplayResponse,
@@ -132,6 +145,65 @@ async def _request_context(
 
 
 ContextDep = Annotated[RequestContext, Depends(_request_context)]
+
+
+def _normalized_bot_id(*, bot_name: str, bot_id: str | None) -> str:
+    if isinstance(bot_id, str) and bot_id.strip():
+        return bot_id
+    normalized = "-".join(part for part in bot_name.lower().strip().split() if part)
+    return normalized or "runtime-bot"
+
+
+def _bot_registration_path(method: Literal["invite", "partner"]) -> Literal["invite_code_trial", "partner_bootstrap"]:
+    if method == "invite":
+        return "invite_code_trial"
+    return "partner_bootstrap"
+
+
+def _bot_key_prefix(raw_key: str) -> str:
+    return raw_key[:16]
+
+
+def _to_validation_invite(invite: object) -> ValidationInvite:
+    invite_id = getattr(invite, "invite_id")
+    run_id = getattr(invite, "run_id")
+    invitee_email = getattr(invite, "invitee_email")
+    status_value = getattr(invite, "status")
+    invited_by_user_id = getattr(invite, "invited_by_user_id")
+    invited_by_actor_type = getattr(invite, "invited_by_actor_type")
+    created_at = getattr(invite, "created_at")
+    expires_at = getattr(invite, "expires_at")
+    accepted_at = getattr(invite, "accepted_at")
+    revoked_at = getattr(invite, "revoked_at")
+    return ValidationInvite(
+        id=invite_id,
+        runId=run_id,
+        email=invitee_email,
+        status=status_value,
+        invitedByUserId=invited_by_user_id,
+        invitedByActorType=invited_by_actor_type,
+        createdAt=created_at,
+        expiresAt=expires_at,
+        acceptedAt=accepted_at,
+        revokedAt=revoked_at,
+    )
+
+
+def _to_validation_run_share(invite: object) -> ValidationRunShare:
+    status_value = getattr(invite, "status")
+    share_status: Literal["active", "revoked"] = "active" if status_value != "revoked" else "revoked"
+    granted_at = getattr(invite, "accepted_at") or getattr(invite, "created_at")
+    return ValidationRunShare(
+        id=f"vshare-{getattr(invite, 'invite_id')}",
+        runId=getattr(invite, "run_id"),
+        ownerUserId=getattr(invite, "owner_user_id"),
+        sharedWithEmail=getattr(invite, "invitee_email"),
+        sharedWithUserId=getattr(invite, "accepted_user_id"),
+        inviteId=getattr(invite, "invite_id"),
+        status=share_status,
+        grantedAt=granted_at,
+        revokedAt=getattr(invite, "revoked_at"),
+    )
 
 
 @router.post("/knowledge/search", response_model=KnowledgeSearchResponse, tags=["Knowledge"])
@@ -241,10 +313,10 @@ async def list_validation_runs_v2(
 
 
 @router.post(
-    "/bots/request-invite",
+    "/validation-bots/request-invite",
     response_model=RuntimeBotInviteCodeResponse,
     status_code=status.HTTP_201_CREATED,
-    tags=["Runtime Identity"],
+    tags=["Validation"],
 )
 async def request_runtime_bot_invite_code_v2(
     payload: RequestRuntimeBotInviteCodeRequest,
@@ -265,53 +337,224 @@ async def request_runtime_bot_invite_code_v2(
 
 
 @router.post(
-    "/bots/register",
-    response_model=RegisterRuntimeBotResponse,
+    "/validation-bots/registrations/invite-code",
+    response_model=BotRegistrationResponse,
     status_code=status.HTTP_201_CREATED,
-    tags=["Runtime Identity"],
+    tags=["Validation"],
+    operation_id="registerValidationBotInviteCodeV2",
 )
-async def register_runtime_bot_v2(
-    payload: RegisterRuntimeBotRequest,
+async def register_validation_bot_invite_code_v2(
+    payload: CreateBotInviteRegistrationRequest,
     context: ContextDep,
-) -> RegisterRuntimeBotResponse:
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> BotRegistrationResponse:
+    del idempotency_key
+    bot_id = _normalized_bot_id(bot_name=payload.botName, bot_id=payload.botId)
     result = _identity_service.register_bot(
         context=context,
-        bot_id=payload.botId,
+        bot_id=bot_id,
         invite_code=payload.inviteCode,
-        partner_key=payload.partnerKey,
-        partner_secret=payload.partnerSecret,
+        partner_key=None,
+        partner_secret=None,
     )
-    return RegisterRuntimeBotResponse(
+    registration_path = _bot_registration_path(result.registration_method)
+    issued_key = BotIssuedApiKey(
+        rawKey=result.runtime_bot_key,
+        key=BotKeyMetadata(
+            id=result.key_id,
+            botId=result.bot_id,
+            keyPrefix=_bot_key_prefix(result.runtime_bot_key),
+            status="active",
+            createdAt=result.created_at,
+            lastUsedAt=None,
+            revokedAt=None,
+        ),
+    )
+    return BotRegistrationResponse(
         requestId=context.request_id,
-        botId=result.bot_id,
-        ownerUserId=result.owner_user_id,
-        actorType=result.actor_type,
-        actorId=result.actor_id,
-        keyId=result.key_id,
-        runtimeBotKey=result.runtime_bot_key,
-        registrationMethod=result.registration_method,
+        bot=Bot(
+            id=result.bot_id,
+            tenantId=context.tenant_id,
+            ownerUserId=result.owner_user_id,
+            name=payload.botName,
+            status="active",
+            registrationPath=registration_path,
+            trialExpiresAt=None,
+            metadata=payload.metadata,
+            createdAt=result.created_at,
+            updatedAt=result.created_at,
+        ),
+        registration=BotRegistration(
+            id=f"botreg-{result.key_id}",
+            botId=result.bot_id,
+            registrationPath=registration_path,
+            status="completed",
+            audit={
+                "source": "invite_code_trial",
+                "inviteCodePrefix": payload.inviteCode[:10],
+                "rateLimitBucket": "bot_invite_trial",
+            },
+            createdAt=result.created_at,
+        ),
+        issuedKey=issued_key,
     )
 
 
 @router.post(
-    "/bots/{botId}/keys/revoke",
-    response_model=RevokeRuntimeBotKeyResponse,
-    tags=["Runtime Identity"],
+    "/validation-bots/registrations/partner-bootstrap",
+    response_model=BotRegistrationResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Validation"],
+    operation_id="registerValidationBotPartnerBootstrapV2",
 )
-async def revoke_runtime_bot_key_v2(
-    botId: str,
-    payload: RevokeRuntimeBotKeyRequest,
+async def register_validation_bot_partner_bootstrap_v2(
+    payload: CreateBotPartnerBootstrapRequest,
     context: ContextDep,
-) -> RevokeRuntimeBotKeyResponse:
-    revoked = _identity_service.revoke_bot_key(
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> BotRegistrationResponse:
+    del idempotency_key
+    bot_id = _normalized_bot_id(bot_name=payload.botName, bot_id=payload.botId)
+    registration_context = context
+    if context.user_id == "user-local":
+        owner_email = payload.ownerEmail.strip().lower()
+        digest = hashlib.sha256(owner_email.encode("utf-8")).hexdigest()
+        derived_user_id = f"user-email-{digest[:12]}"
+        derived_tenant_id = f"tenant-email-{digest[12:24]}"
+        registration_context = context.model_copy(
+            update={
+                "tenant_id": derived_tenant_id,
+                "user_id": derived_user_id,
+                "owner_user_id": derived_user_id,
+                "actor_type": "user",
+                "actor_id": derived_user_id,
+                "user_email": owner_email,
+            }
+        )
+    result = _identity_service.register_bot(
+        context=registration_context,
+        bot_id=bot_id,
+        invite_code=None,
+        partner_key=payload.partnerKey,
+        partner_secret=payload.partnerSecret,
+    )
+    registration_path = _bot_registration_path(result.registration_method)
+    issued_key = BotIssuedApiKey(
+        rawKey=result.runtime_bot_key,
+        key=BotKeyMetadata(
+            id=result.key_id,
+            botId=result.bot_id,
+            keyPrefix=_bot_key_prefix(result.runtime_bot_key),
+            status="active",
+            createdAt=result.created_at,
+            lastUsedAt=None,
+            revokedAt=None,
+        ),
+    )
+    return BotRegistrationResponse(
+        requestId=context.request_id,
+        bot=Bot(
+            id=result.bot_id,
+            tenantId=registration_context.tenant_id,
+            ownerUserId=result.owner_user_id,
+            name=payload.botName,
+            status="active",
+            registrationPath=registration_path,
+            trialExpiresAt=None,
+            metadata=payload.metadata,
+            createdAt=result.created_at,
+            updatedAt=result.created_at,
+        ),
+        registration=BotRegistration(
+            id=f"botreg-{result.key_id}",
+            botId=result.bot_id,
+            registrationPath=registration_path,
+            status="completed",
+            audit={
+                "source": "partner_bootstrap",
+                "partnerKeyId": payload.partnerKey,
+                "ownerEmail": payload.ownerEmail,
+            },
+            createdAt=result.created_at,
+        ),
+        issuedKey=issued_key,
+    )
+
+
+@router.post(
+    "/validation-bots/{botId}/keys/rotate",
+    response_model=BotKeyRotationResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Validation"],
+    operation_id="rotateValidationBotKeyV2",
+)
+async def rotate_validation_bot_key_v2(
+    botId: str,
+    context: ContextDep,
+    payload: CreateBotKeyRotationRequest | None = None,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> BotKeyRotationResponse:
+    del payload, idempotency_key
+    result = _identity_service.rotate_bot_key(
         context=context,
         bot_id=botId,
-        key_id=payload.keyId,
     )
-    return RevokeRuntimeBotKeyResponse(
+    return BotKeyRotationResponse(
         requestId=context.request_id,
         botId=botId,
-        revokedKeyIds=revoked,
+        issuedKey=BotIssuedApiKey(
+            rawKey=result.runtime_bot_key,
+            key=BotKeyMetadata(
+                id=result.key_id,
+                botId=result.bot_id,
+                keyPrefix=_bot_key_prefix(result.runtime_bot_key),
+                status="active",
+                createdAt=result.created_at,
+                lastUsedAt=None,
+                revokedAt=None,
+            ),
+        ),
+    )
+
+
+@router.post(
+    "/validation-bots/{botId}/keys/{keyId}/revoke",
+    response_model=BotKeyMetadataResponse,
+    tags=["Validation"],
+    operation_id="revokeValidationBotKeyV2",
+)
+async def revoke_validation_bot_key_v2(
+    botId: str,
+    keyId: str,
+    context: ContextDep,
+    payload: CreateBotKeyRevocationRequest | None = None,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> BotKeyMetadataResponse:
+    del payload, idempotency_key
+    _identity_service.revoke_bot_key(
+        context=context,
+        bot_id=botId,
+        key_id=keyId,
+    )
+    record = _identity_service.get_bot_key(key_id=keyId)
+    if record is None:
+        raise PlatformAPIError(
+            status_code=404,
+            code="BOT_KEY_NOT_FOUND",
+            message=f"Runtime bot key {keyId} not found.",
+            request_id=context.request_id,
+        )
+    return BotKeyMetadataResponse(
+        requestId=context.request_id,
+        botId=botId,
+        key=BotKeyMetadata(
+            id=record.key_id,
+            botId=record.bot_id,
+            keyPrefix=record.key_id,
+            status="revoked",
+            createdAt=record.created_at,
+            lastUsedAt=record.last_used_at,
+            revokedAt=record.revoked_at,
+        ),
     )
 
 
@@ -536,38 +779,106 @@ async def replay_validation_regression_v2(
 
 
 @router.post(
-    "/shared-validation/runs/{runId}/invites",
-    response_model=SharedValidationInviteResponse,
+    "/validation-sharing/runs/{runId}/invites",
+    response_model=ValidationInviteResponse,
     status_code=status.HTTP_201_CREATED,
-    tags=["Shared Validation"],
+    tags=["Validation"],
+    operation_id="createValidationRunInviteV2",
 )
-async def create_shared_validation_invite_v2(
+async def create_validation_run_invite_v2(
     runId: str,
-    payload: CreateSharedValidationInviteRequest,
+    payload: CreateValidationInviteRequest,
     context: ContextDep,
-) -> SharedValidationInviteResponse:
-    invite = await _validation_service.create_shared_validation_invite(
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> ValidationInviteResponse:
+    del idempotency_key
+    invite = await _validation_service.create_validation_run_invite(
         run_id=runId,
         invitee_email=payload.email,
         permission=payload.permission,
+        expires_at=payload.expiresAt,
         context=context,
     )
-    return SharedValidationInviteResponse(
+    return ValidationInviteResponse(
         requestId=context.request_id,
-        invite=SharedValidationInvite(
-            id=invite.invite_id,
-            runId=invite.run_id,
-            email=invite.invitee_email,
-            permission=invite.permission,
-            status=invite.status,
-            createdAt=invite.created_at,
-            acceptedAt=invite.accepted_at,
-        ),
+        invite=_to_validation_invite(invite),
     )
 
 
 @router.get(
-    "/shared-validation/runs/{runId}",
+    "/validation-sharing/runs/{runId}/invites",
+    response_model=ValidationInviteListResponse,
+    tags=["Validation"],
+    operation_id="listValidationRunInvitesV2",
+)
+async def list_validation_run_invites_v2(
+    runId: str,
+    context: ContextDep,
+    cursor: str | None = None,
+    limit: int = Query(default=25, ge=1, le=100),
+) -> ValidationInviteListResponse:
+    del cursor
+    invites = await _validation_service.list_validation_run_invites(
+        run_id=runId,
+        context=context,
+    )
+    items = [_to_validation_invite(invite) for invite in invites[:limit]]
+    return ValidationInviteListResponse(
+        requestId=context.request_id,
+        items=items,
+        nextCursor=None,
+    )
+
+
+@router.post(
+    "/validation-sharing/invites/{inviteId}/revoke",
+    response_model=ValidationInviteResponse,
+    tags=["Validation"],
+    operation_id="revokeValidationInviteV2",
+)
+async def revoke_validation_invite_v2(
+    inviteId: str,
+    context: ContextDep,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> ValidationInviteResponse:
+    del idempotency_key
+    invite = await _validation_service.revoke_validation_invite(
+        invite_id=inviteId,
+        context=context,
+    )
+    return ValidationInviteResponse(
+        requestId=context.request_id,
+        invite=_to_validation_invite(invite),
+    )
+
+
+@router.post(
+    "/validation-sharing/invites/{inviteId}/accept",
+    response_model=ValidationInviteAcceptanceResponse,
+    tags=["Validation"],
+    operation_id="acceptValidationInviteOnLoginV2",
+)
+async def accept_validation_invite_on_login_v2(
+    inviteId: str,
+    payload: AcceptValidationInviteRequest,
+    context: ContextDep,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> ValidationInviteAcceptanceResponse:
+    del idempotency_key
+    invite = await _validation_service.accept_validation_invite_on_login(
+        invite_id=inviteId,
+        accepted_email=payload.acceptedEmail,
+        context=context,
+    )
+    return ValidationInviteAcceptanceResponse(
+        requestId=context.request_id,
+        invite=_to_validation_invite(invite),
+        share=_to_validation_run_share(invite),
+    )
+
+
+@router.get(
+    "/validation-sharing/runs/{runId}",
     response_model=ValidationRunResponse,
     tags=["Shared Validation"],
 )
@@ -579,7 +890,7 @@ async def get_shared_validation_run_v2(
 
 
 @router.get(
-    "/shared-validation/runs/{runId}/artifact",
+    "/validation-sharing/runs/{runId}/artifact",
     response_model=ValidationArtifactResponse,
     tags=["Shared Validation"],
 )
@@ -591,7 +902,7 @@ async def get_shared_validation_artifact_v2(
 
 
 @router.post(
-    "/shared-validation/runs/{runId}/review",
+    "/validation-sharing/runs/{runId}/review",
     response_model=ValidationRunReviewResponse,
     status_code=status.HTTP_202_ACCEPTED,
     tags=["Shared Validation"],
@@ -600,7 +911,7 @@ async def submit_shared_validation_review_v2(
     runId: str,
     payload: CreateValidationRunReviewRequest,
     context: ContextDep,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> ValidationRunReviewResponse:
     return await _validation_service.submit_shared_validation_run_review(
         run_id=runId,

@@ -161,6 +161,7 @@ ValidationTraderReviewStatus = Literal["not_requested", "requested", "approved",
 ValidationArtifactType = Literal["validation_run", "validation_llm_snapshot"]
 ValidationRenderFormat = Literal["html", "pdf"]
 ValidationReplayGateStatus = Literal["pass", "blocked"]
+ValidationActorType = Literal["user", "bot"]
 
 
 class ValidationPolicyProfile(BaseModel):
@@ -174,12 +175,21 @@ class ValidationPolicyProfile(BaseModel):
     failClosedOnEvidenceUnavailable: bool
 
 
+class ValidationRunActorMetadata(BaseModel):
+    actorType: ValidationActorType
+    actorId: str = Field(min_length=1)
+    userId: str | None = None
+    botId: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class ValidationRun(BaseModel):
     id: str
     status: ValidationRunStatus
     profile: ValidationProfile
     schemaVersion: Literal["validation-run.v1"]
     finalDecision: ValidationRunDecision
+    actor: ValidationRunActorMetadata | None = None
     createdAt: str
     updatedAt: str
 
@@ -285,6 +295,7 @@ class ValidationRunArtifact(BaseModel):
     requestId: str
     tenantId: str
     userId: str
+    actor: ValidationRunActorMetadata | None = None
     strategyRef: ValidationStrategyRef
     inputs: ValidationRunInputs
     outputs: ValidationRunOutputs
@@ -524,6 +535,75 @@ class ValidationRegressionReplayResponse(BaseModel):
     replay: ValidationRegressionReplay
 
 
+BotStatus = Literal["active", "suspended", "revoked"]
+BotRegistrationPath = Literal["invite_code_trial", "partner_bootstrap"]
+BotKeyStatus = Literal["active", "rotated", "revoked"]
+ValidationInviteStatus = Literal["pending", "accepted", "revoked", "expired"]
+ValidationShareStatus = Literal["active", "revoked"]
+
+
+class Bot(BaseModel):
+    id: str
+    tenantId: str
+    ownerUserId: str
+    name: str = Field(min_length=1)
+    status: BotStatus
+    registrationPath: BotRegistrationPath
+    trialExpiresAt: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    createdAt: str
+    updatedAt: str
+
+
+class BotKeyMetadata(BaseModel):
+    id: str
+    botId: str
+    keyPrefix: str
+    status: BotKeyStatus
+    createdAt: str
+    lastUsedAt: str | None = None
+    revokedAt: str | None = None
+
+
+class BotIssuedApiKey(BaseModel):
+    rawKey: str = Field(min_length=16)
+    key: BotKeyMetadata
+
+
+class BotRegistration(BaseModel):
+    id: str
+    botId: str
+    registrationPath: BotRegistrationPath
+    status: Literal["completed"]
+    audit: dict[str, Any] = Field(default_factory=dict)
+    createdAt: str
+
+
+class BotRegistrationResponse(BaseModel):
+    requestId: str
+    bot: Bot
+    registration: BotRegistration
+    issuedKey: BotIssuedApiKey
+
+
+class CreateBotInviteRegistrationRequest(BaseModel):
+    inviteCode: str = Field(min_length=8)
+    botName: str = Field(min_length=1)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    # Runtime extension for deterministic bot id in tests.
+    botId: str | None = None
+
+
+class CreateBotPartnerBootstrapRequest(BaseModel):
+    partnerKey: str = Field(min_length=8)
+    partnerSecret: str = Field(min_length=8)
+    ownerEmail: str = Field(min_length=3)
+    botName: str = Field(min_length=1)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    # Runtime extension for deterministic bot id in tests.
+    botId: str | None = None
+
+
 class RequestRuntimeBotInviteCodeRequest(BaseModel):
     botId: str = Field(min_length=1)
 
@@ -534,49 +614,76 @@ class RuntimeBotInviteCodeResponse(BaseModel):
     expiresAt: str
 
 
-class RegisterRuntimeBotRequest(BaseModel):
-    botId: str = Field(min_length=1)
-    inviteCode: str | None = None
-    partnerKey: str | None = None
-    partnerSecret: str | None = None
+class CreateBotKeyRotationRequest(BaseModel):
+    reason: str | None = None
 
 
-class RegisterRuntimeBotResponse(BaseModel):
+class BotKeyRotationResponse(BaseModel):
     requestId: str
     botId: str
-    ownerUserId: str
-    actorType: Literal["bot"]
-    actorId: str
-    keyId: str
-    runtimeBotKey: str
-    registrationMethod: Literal["invite", "partner"]
+    issuedKey: BotIssuedApiKey
 
 
-class RevokeRuntimeBotKeyRequest(BaseModel):
-    keyId: str | None = None
+class CreateBotKeyRevocationRequest(BaseModel):
+    reason: str | None = None
 
 
-class RevokeRuntimeBotKeyResponse(BaseModel):
+class BotKeyMetadataResponse(BaseModel):
     requestId: str
     botId: str
-    revokedKeyIds: list[str] = Field(default_factory=list)
+    key: BotKeyMetadata
 
 
-class CreateSharedValidationInviteRequest(BaseModel):
-    email: str = Field(min_length=3)
-    permission: Literal["view", "review"] = "view"
-
-
-class SharedValidationInvite(BaseModel):
+class ValidationInvite(BaseModel):
     id: str
     runId: str
     email: str
-    permission: Literal["view", "review"]
-    status: Literal["pending", "accepted", "revoked"]
+    status: ValidationInviteStatus
+    invitedByUserId: str
+    invitedByActorType: ValidationActorType
     createdAt: str
+    expiresAt: str | None = None
     acceptedAt: str | None = None
+    revokedAt: str | None = None
 
 
-class SharedValidationInviteResponse(BaseModel):
+class ValidationRunShare(BaseModel):
+    id: str
+    runId: str
+    ownerUserId: str
+    sharedWithEmail: str
+    sharedWithUserId: str | None = None
+    inviteId: str | None = None
+    status: ValidationShareStatus
+    grantedAt: str
+    revokedAt: str | None = None
+
+
+class CreateValidationInviteRequest(BaseModel):
+    email: str = Field(min_length=3)
+    message: str | None = None
+    expiresAt: str | None = None
+    # Runtime extension for dedicated shared-validation review surface.
+    permission: Literal["view", "review"] = "review"
+
+
+class ValidationInviteResponse(BaseModel):
     requestId: str
-    invite: SharedValidationInvite
+    invite: ValidationInvite
+
+
+class ValidationInviteListResponse(BaseModel):
+    requestId: str
+    items: list[ValidationInvite] = Field(default_factory=list)
+    nextCursor: str | None = None
+
+
+class AcceptValidationInviteRequest(BaseModel):
+    acceptedEmail: str = Field(min_length=3)
+    loginSessionId: str | None = None
+
+
+class ValidationInviteAcceptanceResponse(BaseModel):
+    requestId: str
+    invite: ValidationInvite
+    share: ValidationRunShare

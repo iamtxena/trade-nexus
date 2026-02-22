@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
+
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from src.main import app
+from src.platform_api import router_v2 as router_v2_module
 
 HEADERS = {
     "Authorization": "Bearer test-token",
@@ -39,6 +42,14 @@ def test_openapi_v2_routes_are_registered() -> None:
         ("GET", "/v2/validation-review/runs/{runId}/renders/{format}"),
         ("POST", "/v2/validation-baselines"),
         ("POST", "/v2/validation-regressions/replay"),
+        ("POST", "/v2/validation-bots/registrations/invite-code"),
+        ("POST", "/v2/validation-bots/registrations/partner-bootstrap"),
+        ("POST", "/v2/validation-bots/{botId}/keys/rotate"),
+        ("POST", "/v2/validation-bots/{botId}/keys/{keyId}/revoke"),
+        ("GET", "/v2/validation-sharing/runs/{runId}/invites"),
+        ("POST", "/v2/validation-sharing/runs/{runId}/invites"),
+        ("POST", "/v2/validation-sharing/invites/{inviteId}/revoke"),
+        ("POST", "/v2/validation-sharing/invites/{inviteId}/accept"),
     }
     found: set[tuple[str, str]] = set()
     for route in app.routes:
@@ -50,6 +61,16 @@ def test_openapi_v2_routes_are_registered() -> None:
             found.add((method, route.path))
     missing = expected - found
     assert not missing, f"Missing runtime v2 routes: {missing}"
+
+
+def test_runtime_v2_alias_routes_are_not_registered() -> None:
+    paths = {
+        route.path
+        for route in app.routes
+        if isinstance(route, APIRoute)
+    }
+    assert not any(path.startswith("/v2/bots") for path in paths)
+    assert not any(path.startswith("/v2/shared-validation") for path in paths)
 
 
 def test_openapi_v2_runtime_status_codes() -> None:
@@ -217,6 +238,70 @@ def test_openapi_v2_runtime_status_codes() -> None:
             },
         ).status_code
         == 202
+    )
+
+    router_v2_module._identity_service._partner_credentials = {"partner-openapi": "secret-openapi"}  # noqa: SLF001
+    digest = hashlib.sha256(HEADERS["X-API-Key"].encode("utf-8")).hexdigest()
+    bot_identity_headers = {
+        "X-Tenant-Id": f"tenant-apikey-{digest[:12]}",
+        "X-User-Id": f"user-apikey-{digest[12:24]}",
+    }
+    bot_registration = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={
+            **HEADERS,
+            **bot_identity_headers,
+            "Idempotency-Key": "idem-runtime-v2-bot-register-001",
+        },
+        json={
+            "partnerKey": "partner-openapi",
+            "partnerSecret": "secret-openapi",
+            "ownerEmail": "openapi-owner@example.com",
+            "botName": "OpenAPI Runtime Bot",
+            "botId": "openapi-runtime-bot",
+        },
+    )
+    assert bot_registration.status_code == 201
+    key_id = bot_registration.json()["issuedKey"]["key"]["id"]
+
+    rotate_response = client.post(
+        "/v2/validation-bots/openapi-runtime-bot/keys/rotate",
+        headers={
+            **HEADERS,
+            **bot_identity_headers,
+            "Idempotency-Key": "idem-runtime-v2-bot-rotate-001",
+        },
+        json={},
+    )
+    assert rotate_response.status_code == 201
+    key_id = rotate_response.json()["issuedKey"]["key"]["id"]
+    assert (
+        client.post(
+            f"/v2/validation-bots/openapi-runtime-bot/keys/{key_id}/revoke",
+            headers={
+                **HEADERS,
+                **bot_identity_headers,
+                "Idempotency-Key": "idem-runtime-v2-bot-revoke-001",
+            },
+            json={},
+        ).status_code
+        == 200
+    )
+
+    invite_create = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={**HEADERS, "Idempotency-Key": "idem-runtime-v2-share-invite-001"},
+        json={"email": "reviewer-openapi@example.com", "permission": "review"},
+    )
+    assert invite_create.status_code == 201
+    invite_id = invite_create.json()["invite"]["id"]
+    assert client.get(f"/v2/validation-sharing/runs/{run_id}/invites", headers=HEADERS).status_code == 200
+    assert (
+        client.post(
+            f"/v2/validation-sharing/invites/{invite_id}/revoke",
+            headers={**HEADERS, "Idempotency-Key": "idem-runtime-v2-share-revoke-001"},
+        ).status_code
+        == 200
     )
 
 

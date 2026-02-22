@@ -81,6 +81,7 @@ class BotRegistrationResult:
     key_id: str
     runtime_bot_key: str
     registration_method: RegistrationMethod
+    created_at: str
 
 
 @dataclass(frozen=True)
@@ -92,7 +93,11 @@ class SharedValidationInviteRecord:
     invitee_email: str
     permission: SharePermission
     status: ShareInviteStatus
+    invited_by_user_id: str
+    invited_by_actor_type: ActorType
     created_at: str
+    expires_at: str | None = None
+    revoked_at: str | None = None
     accepted_user_id: str | None = None
     accepted_at: str | None = None
 
@@ -282,6 +287,7 @@ class ValidationIdentityService:
             key_id=key_id,
             runtime_bot_key=f"{self._RUNTIME_KEY_PREFIX}.{normalized_bot_id}.{key_id}.{secret}",
             registration_method=method,
+            created_at=now,
         )
 
     def revoke_bot_key(
@@ -348,6 +354,94 @@ class ValidationIdentityService:
             },
         )
         return revoked
+
+    def rotate_bot_key(
+        self,
+        *,
+        context: RequestContext,
+        bot_id: str,
+    ) -> BotRegistrationResult:
+        try:
+            normalized_bot_id = _normalize_bot_id(bot_id)
+        except ValueError as exc:
+            raise PlatformAPIError(
+                status_code=400,
+                code="BOT_REGISTRATION_INVALID",
+                message=str(exc),
+                request_id=context.request_id,
+                details={"botId": bot_id},
+            ) from exc
+        candidate_key_ids = sorted(self._bot_key_index.get((context.tenant_id, context.user_id, normalized_bot_id), set()))
+        active_key_ids = [item for item in candidate_key_ids if not self._bot_keys[item].revoked]
+        if not active_key_ids:
+            raise PlatformAPIError(
+                status_code=404,
+                code="BOT_KEY_NOT_FOUND",
+                message="No active runtime bot key found for rotation.",
+                request_id=context.request_id,
+                details={"botId": normalized_bot_id},
+            )
+
+        now = utc_now()
+        registration_method = self._bot_keys[active_key_ids[-1]].registration_method
+        for key_id in active_key_ids:
+            record = self._bot_keys[key_id]
+            self._bot_keys[key_id] = BotRuntimeKeyRecord(
+                key_id=record.key_id,
+                tenant_id=record.tenant_id,
+                owner_user_id=record.owner_user_id,
+                bot_id=record.bot_id,
+                secret_hash=record.secret_hash,
+                secret_salt=record.secret_salt,
+                created_at=record.created_at,
+                registration_method=record.registration_method,
+                revoked_at=now,
+                last_used_at=record.last_used_at,
+            )
+
+        key_id = f"botkey-{self._key_counter:06d}"
+        self._key_counter += 1
+        secret = secrets.token_hex(20)
+        salt = secrets.token_hex(16)
+        self._bot_keys[key_id] = BotRuntimeKeyRecord(
+            key_id=key_id,
+            tenant_id=context.tenant_id,
+            owner_user_id=context.user_id,
+            bot_id=normalized_bot_id,
+            secret_hash=_hash_secret(secret=secret, salt=salt),
+            secret_salt=salt,
+            created_at=now,
+            registration_method=registration_method,
+        )
+        self._bot_key_index.setdefault((context.tenant_id, context.user_id, normalized_bot_id), set()).add(key_id)
+
+        self._record_audit(
+            event_type="rotate",
+            request_id=context.request_id,
+            tenant_id=context.tenant_id,
+            owner_user_id=context.user_id,
+            actor_type="user",
+            actor_id=context.user_id,
+            metadata={
+                "botId": normalized_bot_id,
+                "rotatedKeyIds": active_key_ids,
+                "issuedKeyId": key_id,
+            },
+        )
+
+        return BotRegistrationResult(
+            bot_id=normalized_bot_id,
+            owner_user_id=context.user_id,
+            actor_type="bot",
+            actor_id=normalized_bot_id,
+            key_id=key_id,
+            runtime_bot_key=f"{self._RUNTIME_KEY_PREFIX}.{normalized_bot_id}.{key_id}.{secret}",
+            registration_method=registration_method,
+            created_at=now,
+        )
+
+    def get_bot_key(self, *, key_id: str) -> BotRuntimeKeyRecord | None:
+        return self._bot_keys.get(key_id)
 
     def resolve_api_key(
         self,
@@ -421,6 +515,7 @@ class ValidationIdentityService:
         owner_user_id: str,
         invitee_email: str,
         permission: SharePermission,
+        expires_at: str | None = None,
     ) -> SharedValidationInviteRecord:
         try:
             normalized_email = _normalize_email(invitee_email)
@@ -451,7 +546,10 @@ class ValidationIdentityService:
             invitee_email=normalized_email,
             permission=permission,
             status="pending",
+            invited_by_user_id=context.user_id,
+            invited_by_actor_type=context.actor_type,
             created_at=utc_now(),
+            expires_at=expires_at,
         )
         self._share_invites_by_run.setdefault(run_id, []).append(record)
 
@@ -471,6 +569,198 @@ class ValidationIdentityService:
         )
         return record
 
+    def list_run_share_invites(
+        self,
+        *,
+        context: RequestContext,
+        run_id: str,
+        owner_user_id: str,
+    ) -> list[SharedValidationInviteRecord]:
+        invites = self._share_invites_by_run.get(run_id, [])
+        return [
+            invite
+            for invite in invites
+            if invite.tenant_id == context.tenant_id and invite.owner_user_id == owner_user_id
+        ]
+
+    def revoke_run_share_invite(
+        self,
+        *,
+        context: RequestContext,
+        invite_id: str,
+    ) -> SharedValidationInviteRecord:
+        lookup = self._find_share_invite(invite_id=invite_id)
+        if lookup is None:
+            raise PlatformAPIError(
+                status_code=404,
+                code="VALIDATION_INVITE_NOT_FOUND",
+                message=f"Validation invite {invite_id} not found.",
+                request_id=context.request_id,
+            )
+        run_id, index, invite = lookup
+        if invite.tenant_id != context.tenant_id or invite.owner_user_id != context.user_id:
+            raise PlatformAPIError(
+                status_code=404,
+                code="VALIDATION_INVITE_NOT_FOUND",
+                message=f"Validation invite {invite_id} not found.",
+                request_id=context.request_id,
+            )
+        if invite.status == "revoked":
+            raise PlatformAPIError(
+                status_code=409,
+                code="VALIDATION_INVITE_STATE_INVALID",
+                message=f"Validation invite {invite_id} is already revoked.",
+                request_id=context.request_id,
+            )
+
+        now = utc_now()
+        updated = SharedValidationInviteRecord(
+            invite_id=invite.invite_id,
+            run_id=invite.run_id,
+            tenant_id=invite.tenant_id,
+            owner_user_id=invite.owner_user_id,
+            invitee_email=invite.invitee_email,
+            permission=invite.permission,
+            status="revoked",
+            invited_by_user_id=invite.invited_by_user_id,
+            invited_by_actor_type=invite.invited_by_actor_type,
+            created_at=invite.created_at,
+            expires_at=invite.expires_at,
+            revoked_at=now,
+            accepted_user_id=invite.accepted_user_id,
+            accepted_at=invite.accepted_at,
+        )
+        self._share_invites_by_run[run_id][index] = updated
+        if invite.accepted_user_id is not None:
+            self._recalculate_run_grants_for_user(run_id=run_id, user_id=invite.accepted_user_id)
+
+        self._record_audit(
+            event_type="revoke",
+            request_id=context.request_id,
+            tenant_id=context.tenant_id,
+            owner_user_id=invite.owner_user_id,
+            actor_type=context.actor_type,
+            actor_id=context.actor_id,
+            metadata={
+                "runId": run_id,
+                "inviteId": invite.invite_id,
+                "inviteeEmail": invite.invitee_email,
+            },
+        )
+        return updated
+
+    def accept_run_share_invite(
+        self,
+        *,
+        context: RequestContext,
+        invite_id: str,
+        accepted_email: str,
+    ) -> SharedValidationInviteRecord:
+        lookup = self._find_share_invite(invite_id=invite_id)
+        if lookup is None:
+            raise PlatformAPIError(
+                status_code=404,
+                code="VALIDATION_INVITE_NOT_FOUND",
+                message=f"Validation invite {invite_id} not found.",
+                request_id=context.request_id,
+            )
+        run_id, index, invite = lookup
+        if invite.tenant_id != context.tenant_id:
+            raise PlatformAPIError(
+                status_code=404,
+                code="VALIDATION_INVITE_NOT_FOUND",
+                message=f"Validation invite {invite_id} not found.",
+                request_id=context.request_id,
+            )
+
+        authenticated_email = context.user_email
+        if authenticated_email is None:
+            raise PlatformAPIError(
+                status_code=403,
+                code="VALIDATION_INVITE_EMAIL_MISMATCH",
+                message="Invite acceptance requires authenticated email identity.",
+                request_id=context.request_id,
+            )
+        try:
+            normalized_authenticated_email = _normalize_email(authenticated_email)
+            normalized_accepted_email = _normalize_email(accepted_email)
+        except ValueError as exc:
+            raise PlatformAPIError(
+                status_code=400,
+                code="VALIDATION_SHARE_INVALID",
+                message=str(exc),
+                request_id=context.request_id,
+            ) from exc
+
+        if normalized_authenticated_email != normalized_accepted_email:
+            raise PlatformAPIError(
+                status_code=403,
+                code="VALIDATION_INVITE_EMAIL_MISMATCH",
+                message="acceptedEmail does not match authenticated email identity.",
+                request_id=context.request_id,
+            )
+        if invite.invitee_email != normalized_authenticated_email:
+            raise PlatformAPIError(
+                status_code=403,
+                code="VALIDATION_INVITE_EMAIL_MISMATCH",
+                message="Invite email does not match authenticated email identity.",
+                request_id=context.request_id,
+            )
+        if invite.status == "revoked":
+            raise PlatformAPIError(
+                status_code=409,
+                code="VALIDATION_INVITE_STATE_INVALID",
+                message=f"Validation invite {invite_id} is revoked.",
+                request_id=context.request_id,
+            )
+        if invite.status == "accepted":
+            return invite
+        if _invite_expired(invite.expires_at):
+            raise PlatformAPIError(
+                status_code=409,
+                code="VALIDATION_INVITE_EXPIRED",
+                message=f"Validation invite {invite_id} has expired.",
+                request_id=context.request_id,
+            )
+
+        now = utc_now()
+        updated = SharedValidationInviteRecord(
+            invite_id=invite.invite_id,
+            run_id=invite.run_id,
+            tenant_id=invite.tenant_id,
+            owner_user_id=invite.owner_user_id,
+            invitee_email=invite.invitee_email,
+            permission=invite.permission,
+            status="accepted",
+            invited_by_user_id=invite.invited_by_user_id,
+            invited_by_actor_type=invite.invited_by_actor_type,
+            created_at=invite.created_at,
+            expires_at=invite.expires_at,
+            revoked_at=invite.revoked_at,
+            accepted_user_id=context.user_id,
+            accepted_at=now,
+        )
+        self._share_invites_by_run[run_id][index] = updated
+        existing = self._share_grants_by_run.setdefault(run_id, {}).get(context.user_id)
+        self._share_grants_by_run.setdefault(run_id, {})[context.user_id] = _max_permission(existing, updated.permission)
+
+        self._record_audit(
+            event_type="accept",
+            request_id=context.request_id,
+            tenant_id=context.tenant_id,
+            owner_user_id=invite.owner_user_id,
+            actor_type=context.actor_type,
+            actor_id=context.actor_id,
+            metadata={
+                "runId": run_id,
+                "inviteId": invite.invite_id,
+                "inviteeEmail": invite.invitee_email,
+                "grantedToUserId": context.user_id,
+                "permission": updated.permission,
+            },
+        )
+        return updated
+
     def activate_email_invites(self, *, context: RequestContext) -> list[SharedValidationInviteRecord]:
         if context.user_email is None:
             return []
@@ -486,6 +776,8 @@ class ValidationIdentityService:
                     continue
                 if invite.tenant_id != context.tenant_id or invite.invitee_email != normalized_email:
                     continue
+                if _invite_expired(invite.expires_at):
+                    continue
 
                 updated = SharedValidationInviteRecord(
                     invite_id=invite.invite_id,
@@ -495,7 +787,11 @@ class ValidationIdentityService:
                     invitee_email=invite.invitee_email,
                     permission=invite.permission,
                     status="accepted",
+                    invited_by_user_id=invite.invited_by_user_id,
+                    invited_by_actor_type=invite.invited_by_actor_type,
                     created_at=invite.created_at,
+                    expires_at=invite.expires_at,
+                    revoked_at=invite.revoked_at,
                     accepted_user_id=context.user_id,
                     accepted_at=utc_now(),
                 )
@@ -676,8 +972,38 @@ class ValidationIdentityService:
                 actor_type=actor_type,
                 actor_id=actor_id,
                 metadata=metadata,
+                )
             )
-        )
+
+    def _find_share_invite(
+        self,
+        *,
+        invite_id: str,
+    ) -> tuple[str, int, SharedValidationInviteRecord] | None:
+        for run_id, invites in self._share_invites_by_run.items():
+            for index, invite in enumerate(invites):
+                if invite.invite_id == invite_id:
+                    return run_id, index, invite
+        return None
+
+    def _recalculate_run_grants_for_user(self, *, run_id: str, user_id: str) -> None:
+        permission: SharePermission | None = None
+        for invite in self._share_invites_by_run.get(run_id, []):
+            if invite.status != "accepted":
+                continue
+            if invite.accepted_user_id != user_id:
+                continue
+            permission = _max_permission(permission, invite.permission)
+
+        grants = self._share_grants_by_run.get(run_id)
+        if grants is None:
+            return
+        if permission is None:
+            grants.pop(user_id, None)
+        else:
+            grants[user_id] = permission
+        if not grants:
+            self._share_grants_by_run.pop(run_id, None)
 
 
 def _hash_secret(*, secret: str, salt: str) -> str:
@@ -737,6 +1063,16 @@ def _max_permission(current: SharePermission | None, new: SharePermission) -> Sh
     if current == "review" or new == "review":
         return "review"
     return "view"
+
+
+def _invite_expired(expires_at: str | None) -> bool:
+    if expires_at is None:
+        return False
+    try:
+        expires_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return datetime.now(tz=UTC) >= expires_dt
 
 
 def _to_utc(value: datetime) -> str:

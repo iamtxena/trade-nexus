@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
 
 from fastapi.testclient import TestClient
 import pytest
@@ -16,9 +18,18 @@ def _client() -> TestClient:
     return TestClient(app)
 
 
+def _jwt_segment(payload: dict[str, str]) -> str:
+    encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(encoded).decode("utf-8").rstrip("=")
+
+
 def _owner_headers(*, request_id: str, tenant_id: str, user_id: str) -> dict[str, str]:
+    token = (
+        f"{_jwt_segment({'alg': 'none', 'typ': 'JWT'})}."
+        f"{_jwt_segment({'sub': user_id, 'tenant_id': tenant_id})}."
+    )
     return {
-        "Authorization": "Bearer test-token",
+        "Authorization": f"Bearer {token}",
         "X-API-Key": "test-key",
         "X-Request-Id": request_id,
         "X-Tenant-Id": tenant_id,
@@ -148,7 +159,6 @@ def test_runtime_bot_partner_registration_resolves_actor_identity_for_validation
             **headers,
             "X-Request-Id": "req-runtime-bot-create-run-001",
             "X-API-Key": runtime_key,
-            "X-User-Id": "ignored-by-bot-key",
             "Idempotency-Key": "idem-runtime-bot-run-001",
         },
         json=_validation_run_payload(),
@@ -305,7 +315,8 @@ def test_shared_validation_access_owner_invited_and_denied_users() -> None:
         f"/v2/validation-runs/{run_id}",
         headers={**invited_headers, "X-Request-Id": "req-shared-validation-owner-surface-denied-001"},
     )
-    assert owner_surface_for_invitee.status_code == 404
+    assert owner_surface_for_invitee.status_code == 401
+    assert owner_surface_for_invitee.json()["error"]["code"] == "AUTH_IDENTITY_MISMATCH"
 
     owner_get = client.get(
         f"/v2/validation-runs/{run_id}",

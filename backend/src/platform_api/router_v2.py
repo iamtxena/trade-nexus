@@ -797,16 +797,37 @@ async def list_validation_run_invites_v2(
     cursor: str | None = None,
     limit: int = Query(default=25, ge=1, le=100),
 ) -> ValidationInviteListResponse:
-    del cursor
+    offset = 0
+    if cursor is not None:
+        try:
+            offset = int(cursor)
+        except ValueError as exc:
+            raise PlatformAPIError(
+                status_code=400,
+                code="VALIDATION_SHARE_INVALID",
+                message="cursor must be a non-negative integer offset.",
+                request_id=context.request_id,
+                details={"cursor": cursor},
+            ) from exc
+        if offset < 0:
+            raise PlatformAPIError(
+                status_code=400,
+                code="VALIDATION_SHARE_INVALID",
+                message="cursor must be a non-negative integer offset.",
+                request_id=context.request_id,
+                details={"cursor": cursor},
+            )
     invites = await _validation_service.list_validation_run_invites(
         run_id=runId,
         context=context,
     )
-    items = [_to_validation_invite(invite) for invite in invites[:limit]]
+    page = invites[offset : offset + limit]
+    items = [_to_validation_invite(invite) for invite in page]
+    next_cursor = str(offset + limit) if (offset + limit) < len(invites) else None
     return ValidationInviteListResponse(
         requestId=context.request_id,
         items=items,
-        nextCursor=None,
+        nextCursor=next_cursor,
     )
 
 

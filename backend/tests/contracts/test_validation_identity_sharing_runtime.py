@@ -535,6 +535,73 @@ def test_shared_validation_invite_rejects_duplicate_pending_email() -> None:
     assert len(invites.json()["items"]) == 1
 
 
+def test_shared_validation_invite_list_supports_cursor_pagination() -> None:
+    client = _client()
+    owner_headers = _auth_headers(
+        request_id="req-shared-validation-pagination-owner-001",
+        tenant_id="tenant-shared-validation-pagination",
+        user_id="owner-shared-validation-pagination",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-validation-pagination-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    first_invite = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-pagination-share-001",
+            "Idempotency-Key": "idem-shared-validation-pagination-share-001",
+        },
+        json={"email": "page-one@example.com"},
+    )
+    assert first_invite.status_code == 201
+
+    second_invite = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-pagination-share-002",
+            "Idempotency-Key": "idem-shared-validation-pagination-share-002",
+        },
+        json={"email": "page-two@example.com"},
+    )
+    assert second_invite.status_code == 201
+
+    page_one = client.get(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        params={"limit": 1},
+        headers={**owner_headers, "X-Request-Id": "req-shared-validation-pagination-list-001"},
+    )
+    assert page_one.status_code == 200
+    assert len(page_one.json()["items"]) == 1
+    assert page_one.json()["items"][0]["email"] == "page-one@example.com"
+    assert page_one.json()["nextCursor"] == "1"
+
+    page_two = client.get(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        params={"limit": 1, "cursor": page_one.json()["nextCursor"]},
+        headers={**owner_headers, "X-Request-Id": "req-shared-validation-pagination-list-002"},
+    )
+    assert page_two.status_code == 200
+    assert len(page_two.json()["items"]) == 1
+    assert page_two.json()["items"][0]["email"] == "page-two@example.com"
+    assert page_two.json()["nextCursor"] is None
+
+    invalid_cursor = client.get(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        params={"limit": 1, "cursor": "invalid"},
+        headers={**owner_headers, "X-Request-Id": "req-shared-validation-pagination-list-003"},
+    )
+    assert invalid_cursor.status_code == 400
+    assert invalid_cursor.json()["error"]["code"] == "VALIDATION_SHARE_INVALID"
+
+
 def test_shared_invite_auto_accepts_on_authenticated_login_email_match() -> None:
     client = _client()
     owner_headers = _auth_headers(

@@ -73,6 +73,50 @@ def test_resolve_validation_identity_rejects_unsigned_jwt_payload_claims() -> No
     assert exc.value.code == "AUTH_UNAUTHORIZED"
 
 
+def test_resolve_validation_identity_rejects_arbitrary_non_runtime_api_key() -> None:
+    with pytest.raises(PlatformAPIError) as exc:
+        resolve_validation_identity(
+            authorization=None,
+            api_key="totally-random-key",
+            tenant_header=None,
+            user_header=None,
+            request_id="req-auth-identity-random-key-001",
+        )
+    assert exc.value.status_code == 401
+    assert exc.value.code == "AUTH_UNAUTHORIZED"
+
+
+def test_resolve_validation_identity_accepts_runtime_key_shape_for_secondary_lookup() -> None:
+    identity = resolve_validation_identity(
+        authorization=None,
+        api_key="tnx.bot.runtime-bot.key-001.secret-001",
+        tenant_header=None,
+        user_header=None,
+        request_id="req-auth-identity-runtime-key-shape-001",
+    )
+    assert identity.tenant_id.startswith("tenant-apikey-")
+    assert identity.user_id.startswith("user-apikey-")
+
+
+def test_resolve_validation_identity_prefers_verified_jwt_over_api_key() -> None:
+    token = _jwt_token(
+        {
+            "sub": "user-auth-identity-jwt-canonical-001",
+            "tenant_id": "tenant-auth-identity-jwt-canonical-001",
+            "exp": _future_exp(),
+        }
+    )
+    identity = resolve_validation_identity(
+        authorization=f"Bearer {token}",
+        api_key="tnx.bot.invalid",
+        tenant_header="tenant-auth-identity-jwt-canonical-001",
+        user_header="user-auth-identity-jwt-canonical-001",
+        request_id="req-auth-identity-jwt-canonical-001",
+    )
+    assert identity.user_id == "user-auth-identity-jwt-canonical-001"
+    assert identity.tenant_id == "tenant-auth-identity-jwt-canonical-001"
+
+
 def test_resolve_validation_identity_rejects_tampered_jwt_signature() -> None:
     token = _jwt_token(
         {

@@ -33,18 +33,18 @@
 | `bot_api_keys` | `bot_key_owner_all` | ALL | `EXISTS(bots WHERE bot.user_id = jwt.sub)` |
 | `validation_runs` | `validation_run_owner_all` | ALL | `jwt.sub = user_id` |
 | `validation_runs` | `validation_run_shared_select` | SELECT | `EXISTS(shares WHERE email = jwt.email AND not revoked)` |
-| `validation_run_shares` | `share_creator_all` | ALL | `jwt.sub = shared_by_user_id` |
+| `validation_run_shares` | `share_creator_all` | ALL | `jwt.sub = shared_by_user_id AND owns run` |
 | `validation_run_shares` | `share_recipient_select` | SELECT | `jwt.email = shared_with_email` |
 
 ### Fixed KB Tables (from migration 002)
 
 | Table | Read Policy | Write Policy |
 |-------|-------------|-------------|
-| `kb_patterns` | `kb_patterns_read` (all authenticated) | `kb_patterns_service_*` (service_role only) |
-| `kb_market_regimes` | `kb_regimes_read` (all authenticated) | `kb_regimes_service_*` (service_role only) |
-| `kb_lessons_learned` | `kb_lessons_read` (all authenticated) | `kb_lessons_service_*` (service_role only) |
-| `kb_macro_events` | `kb_macro_events_read` (all authenticated) | `kb_macro_events_service_*` (service_role only) |
-| `kb_correlations` | `kb_correlations_read` (all authenticated) | `kb_correlations_service_*` (service_role only) |
+| `kb_patterns` | `kb_patterns_read` (authenticated role only, anon blocked) | `kb_patterns_service_*` (service_role only) |
+| `kb_market_regimes` | `kb_regimes_read` (authenticated role only, anon blocked) | `kb_regimes_service_*` (service_role only) |
+| `kb_lessons_learned` | `kb_lessons_read` (authenticated role only, anon blocked) | `kb_lessons_service_*` (service_role only) |
+| `kb_macro_events` | `kb_macro_events_read` (authenticated role only, anon blocked) | `kb_macro_events_service_*` (service_role only) |
+| `kb_correlations` | `kb_correlations_read` (authenticated role only, anon blocked) | `kb_correlations_service_*` (service_role only) |
 
 ## Security Properties
 

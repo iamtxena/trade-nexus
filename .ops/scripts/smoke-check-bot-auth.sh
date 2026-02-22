@@ -12,7 +12,7 @@ smoke() {
   local desc="$1"
   local method="$2"
   local path="$3"
-  local expected_status="$4"
+  local expected_status="$4"  # supports pipe-separated alternatives e.g. "401|403"
   local body="${5:-}"
 
   local args=(-s -o /dev/null -w "%{http_code}" -X "$method")
@@ -26,7 +26,17 @@ smoke() {
   local status
   status=$(curl "${args[@]}" 2>/dev/null || echo "000")
 
-  if [[ "$status" == "$expected_status" ]]; then
+  # Support pipe-separated expected statuses (e.g. "401|403")
+  local match=false
+  IFS='|' read -ra expected_codes <<< "$expected_status"
+  for code in "${expected_codes[@]}"; do
+    if [[ "$status" == "$code" ]]; then
+      match=true
+      break
+    fi
+  done
+
+  if [[ "$match" == "true" ]]; then
     echo "  PASS: $desc (HTTP $status)"
     PASS=$((PASS + 1))
   else
@@ -53,7 +63,7 @@ smoke "Share without auth → 401" POST "/v1/validation-runs/shares" "401" '{"ru
 echo ""
 echo "--- 3. Invalid Partner Key (should be rejected) ---"
 smoke "Bot register with bad partner key → 401 or 403" \
-  POST "/v1/bots/register" "401" \
+  POST "/v1/bots/register" "401|403" \
   '{"name":"bad-bot","partner_key":"invalid-key-12345"}'
 
 echo ""

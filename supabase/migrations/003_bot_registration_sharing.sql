@@ -157,10 +157,10 @@ create policy "validation_run_shared_select" on validation_runs
 -- 5. Fix missing RLS on kb_* tables (from migration 002)
 -- =============================================================
 
--- kb_patterns: service-role write, authenticated read
+-- kb_patterns: service-role write, authenticated read only
 alter table kb_patterns enable row level security;
 create policy "kb_patterns_read" on kb_patterns
-  for select using (true);
+  for select using (auth.role() = 'authenticated');
 create policy "kb_patterns_service_write" on kb_patterns
   for insert with check (auth.role() = 'service_role');
 create policy "kb_patterns_service_update" on kb_patterns
@@ -168,10 +168,10 @@ create policy "kb_patterns_service_update" on kb_patterns
 create policy "kb_patterns_service_delete" on kb_patterns
   for delete using (auth.role() = 'service_role');
 
--- kb_market_regimes: service-role write, authenticated read
+-- kb_market_regimes: service-role write, authenticated read only
 alter table kb_market_regimes enable row level security;
 create policy "kb_regimes_read" on kb_market_regimes
-  for select using (true);
+  for select using (auth.role() = 'authenticated');
 create policy "kb_regimes_service_write" on kb_market_regimes
   for insert with check (auth.role() = 'service_role');
 create policy "kb_regimes_service_update" on kb_market_regimes
@@ -179,10 +179,10 @@ create policy "kb_regimes_service_update" on kb_market_regimes
 create policy "kb_regimes_service_delete" on kb_market_regimes
   for delete using (auth.role() = 'service_role');
 
--- kb_lessons_learned: service-role write, authenticated read
+-- kb_lessons_learned: service-role write, authenticated read only
 alter table kb_lessons_learned enable row level security;
 create policy "kb_lessons_read" on kb_lessons_learned
-  for select using (true);
+  for select using (auth.role() = 'authenticated');
 create policy "kb_lessons_service_write" on kb_lessons_learned
   for insert with check (auth.role() = 'service_role');
 create policy "kb_lessons_service_update" on kb_lessons_learned
@@ -190,10 +190,10 @@ create policy "kb_lessons_service_update" on kb_lessons_learned
 create policy "kb_lessons_service_delete" on kb_lessons_learned
   for delete using (auth.role() = 'service_role');
 
--- kb_macro_events: service-role write, authenticated read
+-- kb_macro_events: service-role write, authenticated read only
 alter table kb_macro_events enable row level security;
 create policy "kb_macro_events_read" on kb_macro_events
-  for select using (true);
+  for select using (auth.role() = 'authenticated');
 create policy "kb_macro_events_service_write" on kb_macro_events
   for insert with check (auth.role() = 'service_role');
 create policy "kb_macro_events_service_update" on kb_macro_events
@@ -201,10 +201,10 @@ create policy "kb_macro_events_service_update" on kb_macro_events
 create policy "kb_macro_events_service_delete" on kb_macro_events
   for delete using (auth.role() = 'service_role');
 
--- kb_correlations: service-role write, authenticated read
+-- kb_correlations: service-role write, authenticated read only
 alter table kb_correlations enable row level security;
 create policy "kb_correlations_read" on kb_correlations
-  for select using (true);
+  for select using (auth.role() = 'authenticated');
 create policy "kb_correlations_service_write" on kb_correlations
   for insert with check (auth.role() = 'service_role');
 create policy "kb_correlations_service_update" on kb_correlations

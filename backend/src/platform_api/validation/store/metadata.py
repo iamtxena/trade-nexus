@@ -25,6 +25,7 @@ from src.platform_api.state_store import utc_now
 ValidationProfile = Literal["FAST", "STANDARD", "EXPERT"]
 ValidationRunStatus = Literal["queued", "running", "completed", "failed"]
 ValidationRunDecision = Literal["pending", "pass", "conditional_pass", "fail"]
+ValidationActorType = Literal["user", "bot"]
 ValidationArtifactType = Literal["validation_run", "validation_llm_snapshot"]
 ValidationReplayDecision = Literal["pass", "conditional_pass", "fail", "unknown"]
 ValidationReplayGateStatus = Literal["pass", "blocked"]
@@ -45,6 +46,7 @@ VALIDATION_STORAGE_FAIL_CLOSED_CODE = "VALIDATION_STORAGE_FAIL_CLOSED"
 _VALID_PROFILES: set[str] = {"FAST", "STANDARD", "EXPERT"}
 _VALID_RUN_STATUSES: set[str] = {"queued", "running", "completed", "failed"}
 _VALID_RUN_DECISIONS: set[str] = {"pending", "pass", "conditional_pass", "fail"}
+_VALID_ACTOR_TYPES: set[str] = {"user", "bot"}
 _VALID_ARTIFACT_TYPES: set[str] = {"validation_run", "validation_llm_snapshot"}
 _VALID_REPLAY_DECISIONS: set[str] = {"pass", "conditional_pass", "fail", "unknown"}
 _VALID_REPLAY_GATE_STATUSES: set[str] = {"pass", "blocked"}
@@ -117,6 +119,11 @@ def _validate_run_decision(value: str) -> None:
         raise ValueError(
             f"final_decision must be one of {sorted(_VALID_RUN_DECISIONS)}, got {value!r}."
         )
+
+
+def _validate_actor_type(value: str) -> None:
+    if value not in _VALID_ACTOR_TYPES:
+        raise ValueError(f"actor_type must be one of {sorted(_VALID_ACTOR_TYPES)}, got {value!r}.")
 
 
 def _validate_artifact_type(value: str) -> None:
@@ -258,6 +265,9 @@ class ValidationRunMetadata:
     status: ValidationRunStatus
     final_decision: ValidationRunDecision
     artifact_ref: str
+    owner_user_id: str | None = None
+    actor_type: ValidationActorType = "user"
+    actor_id: str | None = None
     artifact_type: ValidationArtifactType = "validation_run"
     artifact_schema_version: str = "validation-run.v1"
     created_at: str = field(default_factory=utc_now)
@@ -268,6 +278,16 @@ class ValidationRunMetadata:
         _require_non_empty(self.request_id, field_name="request_id")
         _require_non_empty(self.tenant_id, field_name="tenant_id")
         _require_non_empty(self.user_id, field_name="user_id")
+        owner_user_id = self.owner_user_id or self.user_id
+        _require_non_empty(owner_user_id, field_name="owner_user_id")
+        object.__setattr__(self, "owner_user_id", owner_user_id)
+        _validate_actor_type(self.actor_type)
+        actor_id = self.actor_id
+        if self.actor_type == "user":
+            actor_id = actor_id or self.user_id
+        if actor_id is None or actor_id.strip() == "":
+            raise ValueError("actor_id must be non-empty for actor_type=bot.")
+        object.__setattr__(self, "actor_id", actor_id)
         _validate_profile(self.profile)
         _validate_run_status(self.status)
         _validate_run_decision(self.final_decision)
@@ -951,6 +971,9 @@ def _run_row_from_metadata(metadata: ValidationRunMetadata) -> dict[str, object]
         "request_id": metadata.request_id,
         "tenant_id": metadata.tenant_id,
         "user_id": metadata.user_id,
+        "owner_user_id": metadata.owner_user_id,
+        "actor_type": metadata.actor_type,
+        "actor_id": metadata.actor_id,
         "profile": metadata.profile,
         "status": metadata.status,
         "final_decision": metadata.final_decision,
@@ -963,11 +986,19 @@ def _run_row_from_metadata(metadata: ValidationRunMetadata) -> dict[str, object]
 
 
 def _run_metadata_from_row(row: dict[str, Any]) -> ValidationRunMetadata:
+    user_id = _as_str(row, "user_id")
+    owner_user_id = _as_optional_str(row, "owner_user_id")
+    actor_type_raw = row.get("actor_type")
+    actor_type = actor_type_raw if isinstance(actor_type_raw, str) and actor_type_raw.strip() else "user"
+    actor_id = _as_optional_str(row, "actor_id")
     return ValidationRunMetadata(
         run_id=_as_str(row, "run_id"),
         request_id=_as_str(row, "request_id"),
         tenant_id=_as_str(row, "tenant_id"),
-        user_id=_as_str(row, "user_id"),
+        user_id=user_id,
+        owner_user_id=owner_user_id or user_id,
+        actor_type=cast(ValidationActorType, actor_type),
+        actor_id=actor_id or (user_id if actor_type == "user" else None),
         profile=cast(ValidationProfile, _as_str(row, "profile")),
         status=cast(ValidationRunStatus, _as_str(row, "status")),
         final_decision=cast(ValidationRunDecision, _as_str(row, "final_decision")),

@@ -37,6 +37,23 @@ class RequestContext(BaseModel):
     request_id: str
     tenant_id: str
     user_id: str
+    owner_user_id: str | None = None
+    actor_type: Literal["user", "bot"] = "user"
+    actor_id: str | None = None
+    user_email: str | None = None
+
+    @model_validator(mode="after")
+    def _normalize_actor_identity(self) -> "RequestContext":
+        owner = self.owner_user_id or self.user_id
+        actor_id = self.actor_id
+        if self.actor_type == "user":
+            actor_id = actor_id or self.user_id
+        elif actor_id is None or actor_id.strip() == "":
+            raise ValueError("actor_id is required when actor_type=bot.")
+
+        self.owner_user_id = owner
+        self.actor_id = actor_id
+        return self
 
 
 class HealthResponse(BaseModel):

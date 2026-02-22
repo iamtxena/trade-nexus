@@ -5,11 +5,17 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import hmac
 import json
+import os
+import time
 from dataclasses import dataclass
 from typing import Any
 
 from src.platform_api.errors import PlatformAPIError
+
+_JWT_SECRET_ENV = "PLATFORM_AUTH_JWT_HS256_SECRET"
+_JWT_TIME_LEEWAY_SECONDS = 15
 
 
 def _non_empty(value: str | None) -> str | None:
@@ -25,6 +31,7 @@ class AuthenticatedIdentity:
 
     tenant_id: str
     user_id: str
+    user_email: str | None = None
 
 
 def resolve_validation_identity(
@@ -41,6 +48,13 @@ def resolve_validation_identity(
     bearer_token = _parse_bearer_token(authorization)
     if bearer_token is not None:
         identity = _identity_from_bearer_claims(bearer_token)
+        if identity is None and _is_jwt_like_token(bearer_token):
+            raise PlatformAPIError(
+                status_code=401,
+                code="AUTH_UNAUTHORIZED",
+                message="Bearer token is invalid.",
+                request_id=request_id,
+            )
 
     normalized_api_key = _non_empty(api_key)
     if identity is None and normalized_api_key is not None:
@@ -80,7 +94,7 @@ def _parse_bearer_token(authorization: str | None) -> str | None:
 
 
 def _identity_from_bearer_claims(token: str) -> AuthenticatedIdentity | None:
-    claims = _decode_jwt_payload(token)
+    claims = _decode_verified_jwt_payload(token)
     if claims is None:
         return None
 
@@ -91,16 +105,26 @@ def _identity_from_bearer_claims(token: str) -> AuthenticatedIdentity | None:
     tenant_id = _claim_value(claims, keys=("tenant_id", "tenantId", "org_id", "orgId"))
     if tenant_id is None:
         tenant_id = f"tenant-clerk-{user_id}"
-    return AuthenticatedIdentity(tenant_id=tenant_id, user_id=user_id)
+    user_email = _claim_value(
+        claims,
+        keys=("email", "email_address", "user_email", "userEmail"),
+    )
+    if user_email is not None:
+        user_email = user_email.lower()
+    return AuthenticatedIdentity(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        user_email=user_email,
+    )
 
 
-def _decode_jwt_payload(token: str) -> dict[str, Any] | None:
-    parts = token.split(".")
-    if len(parts) != 3:
-        return None
-    payload_segment = parts[1]
+def _is_jwt_like_token(token: str) -> bool:
+    return token.count(".") == 2
+
+
+def _decode_jwt_payload_segment(segment: str) -> dict[str, Any] | None:
     try:
-        padded = payload_segment + ("=" * (-len(payload_segment) % 4))
+        padded = segment + ("=" * (-len(segment) % 4))
         decoded = base64.urlsafe_b64decode(padded)
     except (ValueError, binascii.Error):
         return None
@@ -109,6 +133,67 @@ def _decode_jwt_payload(token: str) -> dict[str, Any] | None:
     except (UnicodeDecodeError, json.JSONDecodeError):
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def _decode_jwt_signature(segment: str) -> bytes | None:
+    try:
+        padded = segment + ("=" * (-len(segment) % 4))
+        return base64.urlsafe_b64decode(padded)
+    except (ValueError, binascii.Error):
+        return None
+
+
+def _jwt_secret() -> str | None:
+    return _non_empty(os.getenv(_JWT_SECRET_ENV))
+
+
+def _claims_time_window_valid(claims: dict[str, Any]) -> bool:
+    now = int(time.time())
+    exp = claims.get("exp")
+    if not isinstance(exp, (int, float)):
+        return False
+    if now >= int(exp) + _JWT_TIME_LEEWAY_SECONDS:
+        return False
+    nbf = claims.get("nbf")
+    if isinstance(nbf, (int, float)) and now + _JWT_TIME_LEEWAY_SECONDS < int(nbf):
+        return False
+    return True
+
+
+def _decode_verified_jwt_payload(token: str) -> dict[str, Any] | None:
+    parts = token.split(".")
+    if len(parts) != 3:
+        return None
+    header_segment, payload_segment, signature_segment = parts
+    header = _decode_jwt_payload_segment(header_segment)
+    payload = _decode_jwt_payload_segment(payload_segment)
+    if header is None or payload is None:
+        return None
+
+    algorithm = header.get("alg")
+    if algorithm != "HS256":
+        return None
+
+    secret = _jwt_secret()
+    if secret is None:
+        return None
+
+    provided_signature = _decode_jwt_signature(signature_segment)
+    if provided_signature is None:
+        return None
+
+    signing_input = f"{header_segment}.{payload_segment}".encode("utf-8")
+    expected_signature = hmac.new(
+        secret.encode("utf-8"),
+        signing_input,
+        hashlib.sha256,
+    ).digest()
+    if not hmac.compare_digest(provided_signature, expected_signature):
+        return None
+
+    if not _claims_time_window_valid(payload):
+        return None
+    return payload
 
 
 def _claim_value(payload: dict[str, Any], *, keys: tuple[str, ...]) -> str | None:
@@ -126,6 +211,7 @@ def _identity_from_api_key(api_key: str) -> AuthenticatedIdentity:
     return AuthenticatedIdentity(
         tenant_id=f"tenant-apikey-{digest[:12]}",
         user_id=f"user-apikey-{digest[12:24]}",
+        user_email=None,
     )
 
 

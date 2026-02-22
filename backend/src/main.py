@@ -117,12 +117,18 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                     except PlatformAPIError:
                         request.state.tenant_id = "tenant-public-registration"
                         request.state.user_id = "user-public-registration"
+                        request.state.user_email_authenticated = False
+                        request.state.user_email = None
                     else:
                         request.state.tenant_id = identity.tenant_id
                         request.state.user_id = identity.user_id
+                        request.state.user_email_authenticated = bool(identity.user_email)
+                        request.state.user_email = identity.user_email
                 else:
                     request.state.tenant_id = "tenant-public-registration"
                     request.state.user_id = "user-public-registration"
+                    request.state.user_email_authenticated = False
+                    request.state.user_email = None
             else:
                 try:
                     identity = resolve_validation_identity(
@@ -135,6 +141,8 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                 except PlatformAPIError as exc:
                     request.state.tenant_id = "tenant-unauthenticated"
                     request.state.user_id = "user-unauthenticated"
+                    request.state.user_email_authenticated = False
+                    request.state.user_email = None
                     log_request_event(
                         logger,
                         level=logging.WARNING,
@@ -149,6 +157,8 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                     return await platform_api_error_handler(request, exc)
                 request.state.tenant_id = identity.tenant_id
                 request.state.user_id = identity.user_id
+                request.state.user_email_authenticated = bool(identity.user_email)
+                request.state.user_email = identity.user_email
         else:
             request.state.tenant_id = _header_or_fallback(
                 request,
@@ -160,6 +170,8 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                 header="X-User-Id",
                 fallback="user-local",
             )
+            request.state.user_email_authenticated = False
+            request.state.user_email = None
         log_request_event(
             logger,
             level=logging.INFO,

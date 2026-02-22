@@ -162,11 +162,6 @@ ValidationArtifactType = Literal["validation_run", "validation_llm_snapshot"]
 ValidationRenderFormat = Literal["html", "pdf"]
 ValidationReplayGateStatus = Literal["pass", "blocked"]
 ValidationActorType = Literal["user", "bot"]
-BotStatus = Literal["active", "suspended", "revoked"]
-BotRegistrationPath = Literal["invite_code_trial", "partner_bootstrap"]
-BotKeyStatus = Literal["active", "rotated", "revoked"]
-ValidationInviteStatus = Literal["pending", "accepted", "revoked", "expired"]
-ValidationShareStatus = Literal["active", "revoked"]
 
 
 class ValidationPolicyProfile(BaseModel):
@@ -180,12 +175,21 @@ class ValidationPolicyProfile(BaseModel):
     failClosedOnEvidenceUnavailable: bool
 
 
+class ValidationRunActorMetadata(BaseModel):
+    actorType: ValidationActorType
+    actorId: str = Field(min_length=1)
+    userId: str | None = None
+    botId: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class ValidationRun(BaseModel):
     id: str
     status: ValidationRunStatus
     profile: ValidationProfile
     schemaVersion: Literal["validation-run.v1"]
     finalDecision: ValidationRunDecision
+    actor: ValidationRunActorMetadata | None = None
     createdAt: str
     updatedAt: str
 
@@ -291,6 +295,7 @@ class ValidationRunArtifact(BaseModel):
     requestId: str
     tenantId: str
     userId: str
+    actor: ValidationRunActorMetadata | None = None
     strategyRef: ValidationStrategyRef
     inputs: ValidationRunInputs
     outputs: ValidationRunOutputs
@@ -530,6 +535,13 @@ class ValidationRegressionReplayResponse(BaseModel):
     replay: ValidationRegressionReplay
 
 
+BotStatus = Literal["active", "suspended", "revoked"]
+BotRegistrationPath = Literal["invite_code_trial", "partner_bootstrap"]
+BotKeyStatus = Literal["active", "rotated", "revoked"]
+ValidationInviteStatus = Literal["pending", "accepted", "revoked", "expired"]
+ValidationShareStatus = Literal["active", "revoked"]
+
+
 class Bot(BaseModel):
     id: str
     tenantId: str
@@ -583,7 +595,7 @@ class CreateBotInviteRegistrationRequest(BaseModel):
 class CreateBotPartnerBootstrapRequest(BaseModel):
     partnerKey: str = Field(min_length=8)
     partnerSecret: str = Field(min_length=8)
-    ownerEmail: str
+    ownerEmail: str = Field(min_length=3, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     botName: str = Field(min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
 

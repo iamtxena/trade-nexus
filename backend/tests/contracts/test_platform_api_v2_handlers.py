@@ -5,7 +5,11 @@ from __future__ import annotations
 import asyncio
 import base64
 import copy
+import hashlib
+import hmac
 import json
+import os
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,14 +24,27 @@ HEADERS = {
     "X-Request-Id": "req-v2-contract-001",
 }
 
+_JWT_SECRET = os.environ.setdefault("PLATFORM_AUTH_JWT_HS256_SECRET", "test-platform-v2-secret")
+
 
 def _client() -> TestClient:
     return TestClient(app)
 
 
-def _jwt_segment(payload: dict[str, str]) -> str:
+def _jwt_segment(payload: dict[str, object]) -> str:
     encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     return base64.urlsafe_b64encode(encoded).decode("utf-8").rstrip("=")
+
+
+def _jwt_token(payload: dict[str, object]) -> str:
+    claims_payload = dict(payload)
+    claims_payload.setdefault("exp", int(time.time()) + 300)
+    header = _jwt_segment({"alg": "HS256", "typ": "JWT"})
+    claims = _jwt_segment(claims_payload)
+    signing_input = f"{header}.{claims}".encode("utf-8")
+    signature = hmac.new(_JWT_SECRET.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    encoded_signature = base64.urlsafe_b64encode(signature).decode("utf-8").rstrip("=")
+    return f"{header}.{claims}.{encoded_signature}"
 
 
 def _validation_headers(
@@ -39,10 +56,7 @@ def _validation_headers(
     spoof_tenant_id: str | None = None,
     spoof_user_id: str | None = None,
 ) -> dict[str, str]:
-    token = (
-        f"{_jwt_segment({'alg': 'none', 'typ': 'JWT'})}."
-        f"{_jwt_segment({'sub': user_id, 'tenant_id': tenant_id})}."
-    )
+    token = _jwt_token({"sub": user_id, "tenant_id": tenant_id})
     headers: dict[str, str] = {
         "Authorization": f"Bearer {token}",
         "X-API-Key": HEADERS["X-API-Key"],
@@ -504,6 +518,87 @@ def test_validation_v2_requires_authentication() -> None:
     assert response.status_code == 401
     payload = response.json()
     assert payload["requestId"] == "req-v2-validation-unauth-001"
+    assert payload["error"]["code"] == "AUTH_UNAUTHORIZED"
+
+
+def test_validation_v2_rejects_unsigned_jwt_claims() -> None:
+    client = _client()
+    unsigned_token = (
+        f"{_jwt_segment({'alg': 'none', 'typ': 'JWT'})}."
+        f"{_jwt_segment({'sub': 'forged-user', 'tenant_id': 'forged-tenant'})}."
+    )
+    response = client.post(
+        "/v2/validation-runs",
+        headers={
+            "Authorization": f"Bearer {unsigned_token}",
+            "X-API-Key": HEADERS["X-API-Key"],
+            "X-Request-Id": "req-v2-validation-forgery-unsigned-001",
+            "X-Tenant-Id": "forged-tenant",
+            "X-User-Id": "forged-user",
+            "Idempotency-Key": "idem-v2-validation-forgery-unsigned-001",
+        },
+        json={
+            "strategyId": "strat-001",
+            "providerRefId": "lona-strategy-123",
+            "prompt": "Unsigned jwt should be rejected.",
+            "requestedIndicators": ["zigzag", "ema"],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+            "policy": {
+                "profile": "STANDARD",
+                "blockMergeOnFail": True,
+                "blockReleaseOnFail": True,
+                "blockMergeOnAgentFail": True,
+                "blockReleaseOnAgentFail": False,
+                "requireTraderReview": False,
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": True,
+            },
+        },
+    )
+    assert response.status_code == 401
+    payload = response.json()
+    assert payload["error"]["code"] == "AUTH_UNAUTHORIZED"
+
+
+def test_validation_v2_rejects_tampered_signed_jwt_claims() -> None:
+    client = _client()
+    token = _jwt_token({"sub": "user-v2-validation-tampered", "tenant_id": "tenant-v2-validation-tampered"})
+    header_segment, _, signature_segment = token.split(".")
+    tampered_payload = _jwt_segment({"sub": "user-v2-validation-tampered", "tenant_id": "tenant-v2-validation-other"})
+    tampered_token = f"{header_segment}.{tampered_payload}.{signature_segment}"
+
+    response = client.post(
+        "/v2/validation-runs",
+        headers={
+            "Authorization": f"Bearer {tampered_token}",
+            "X-API-Key": HEADERS["X-API-Key"],
+            "X-Request-Id": "req-v2-validation-forgery-tampered-001",
+            "X-Tenant-Id": "tenant-v2-validation-other",
+            "X-User-Id": "user-v2-validation-tampered",
+            "Idempotency-Key": "idem-v2-validation-forgery-tampered-001",
+        },
+        json={
+            "strategyId": "strat-001",
+            "providerRefId": "lona-strategy-123",
+            "prompt": "Tampered jwt should be rejected.",
+            "requestedIndicators": ["zigzag", "ema"],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+            "policy": {
+                "profile": "STANDARD",
+                "blockMergeOnFail": True,
+                "blockReleaseOnFail": True,
+                "blockMergeOnAgentFail": True,
+                "blockReleaseOnAgentFail": False,
+                "requireTraderReview": False,
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": True,
+            },
+        },
+    )
+    assert response.status_code == 401
+    payload = response.json()
     assert payload["error"]["code"] == "AUTH_UNAUTHORIZED"
 
 

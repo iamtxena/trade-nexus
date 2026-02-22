@@ -10,13 +10,22 @@ from fastapi import APIRouter, Depends, Header, Query, Request, status
 from src.platform_api import router_v1 as router_v1_module
 from src.platform_api.schemas_v1 import MarketScanRequest, RequestContext
 from src.platform_api.schemas_v2 import (
+    AcceptValidationInviteRequest,
     BacktestDataExportRequest,
     BacktestDataExportResponse,
+    BotKeyMetadataResponse,
+    BotKeyRotationResponse,
+    BotRegistrationResponse,
     ConversationSessionResponse,
     ConversationTurnResponse,
+    CreateBotInviteRegistrationRequest,
+    CreateBotKeyRevocationRequest,
+    CreateBotKeyRotationRequest,
+    CreateBotPartnerBootstrapRequest,
     CreateConversationSessionRequest,
     CreateConversationTurnRequest,
     CreateValidationBaselineRequest,
+    CreateValidationInviteRequest,
     CreateValidationRegressionReplayRequest,
     CreateValidationRenderRequest,
     CreateValidationReviewCommentRequest,
@@ -39,6 +48,9 @@ from src.platform_api.schemas_v2 import (
     ValidationReviewRunDetailResponse,
     ValidationReviewRunListResponse,
     ValidationRunListResponse,
+    ValidationInviteAcceptanceResponse,
+    ValidationInviteListResponse,
+    ValidationInviteResponse,
     ValidationRunResponse,
     ValidationRunReviewResponse,
 )
@@ -407,6 +419,158 @@ async def replay_validation_regression_v2(
     idempotency_key: str = Header(alias="Idempotency-Key"),
 ) -> ValidationRegressionReplayResponse:
     return await _validation_service.replay_validation_regression(
+        request=request,
+        context=context,
+        idempotency_key=idempotency_key,
+    )
+
+
+@router.post(
+    "/validation-bots/registrations/invite-code",
+    response_model=BotRegistrationResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Validation"],
+)
+async def register_validation_bot_invite_code_v2(
+    request: CreateBotInviteRegistrationRequest,
+    context: ContextDep,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> BotRegistrationResponse:
+    return await _validation_service.register_validation_bot_invite_code(
+        request=request,
+        context=context,
+        idempotency_key=idempotency_key,
+    )
+
+
+@router.post(
+    "/validation-bots/registrations/partner-bootstrap",
+    response_model=BotRegistrationResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Validation"],
+)
+async def register_validation_bot_partner_bootstrap_v2(
+    request: CreateBotPartnerBootstrapRequest,
+    context: ContextDep,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> BotRegistrationResponse:
+    return await _validation_service.register_validation_bot_partner_bootstrap(
+        request=request,
+        context=context,
+        idempotency_key=idempotency_key,
+    )
+
+
+@router.post(
+    "/validation-bots/{botId}/keys/rotate",
+    response_model=BotKeyRotationResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Validation"],
+)
+async def rotate_validation_bot_key_v2(
+    botId: str,
+    context: ContextDep,
+    request: CreateBotKeyRotationRequest | None = None,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> BotKeyRotationResponse:
+    return await _validation_service.rotate_validation_bot_key(
+        bot_id=botId,
+        request=request,
+        context=context,
+        idempotency_key=idempotency_key,
+    )
+
+
+@router.post(
+    "/validation-bots/{botId}/keys/{keyId}/revoke",
+    response_model=BotKeyMetadataResponse,
+    tags=["Validation"],
+)
+async def revoke_validation_bot_key_v2(
+    botId: str,
+    keyId: str,
+    context: ContextDep,
+    request: CreateBotKeyRevocationRequest | None = None,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> BotKeyMetadataResponse:
+    return await _validation_service.revoke_validation_bot_key(
+        bot_id=botId,
+        key_id=keyId,
+        request=request,
+        context=context,
+        idempotency_key=idempotency_key,
+    )
+
+
+@router.get(
+    "/validation-sharing/runs/{runId}/invites",
+    response_model=ValidationInviteListResponse,
+    tags=["Validation"],
+)
+async def list_validation_run_invites_v2(
+    runId: str,
+    context: ContextDep,
+    cursor: str | None = None,
+    limit: int = Query(default=25, ge=1, le=100),
+) -> ValidationInviteListResponse:
+    return await _validation_service.list_validation_run_invites(
+        run_id=runId,
+        context=context,
+        cursor=cursor,
+        limit=limit,
+    )
+
+
+@router.post(
+    "/validation-sharing/runs/{runId}/invites",
+    response_model=ValidationInviteResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Validation"],
+)
+async def create_validation_run_invite_v2(
+    runId: str,
+    request: CreateValidationInviteRequest,
+    context: ContextDep,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> ValidationInviteResponse:
+    return await _validation_service.create_validation_run_invite(
+        run_id=runId,
+        request=request,
+        context=context,
+        idempotency_key=idempotency_key,
+    )
+
+
+@router.post(
+    "/validation-sharing/invites/{inviteId}/revoke",
+    response_model=ValidationInviteResponse,
+    tags=["Validation"],
+)
+async def revoke_validation_invite_v2(
+    inviteId: str,
+    context: ContextDep,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> ValidationInviteResponse:
+    return await _validation_service.revoke_validation_invite(
+        invite_id=inviteId,
+        context=context,
+        idempotency_key=idempotency_key,
+    )
+
+
+@router.post(
+    "/validation-sharing/invites/{inviteId}/accept",
+    response_model=ValidationInviteAcceptanceResponse,
+    tags=["Validation"],
+)
+async def accept_validation_invite_on_login_v2(
+    inviteId: str,
+    request: AcceptValidationInviteRequest,
+    context: ContextDep,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> ValidationInviteAcceptanceResponse:
+    return await _validation_service.accept_validation_invite_on_login(
+        invite_id=inviteId,
         request=request,
         context=context,
         idempotency_key=idempotency_key,

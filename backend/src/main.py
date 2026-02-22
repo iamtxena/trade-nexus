@@ -122,7 +122,7 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                     else:
                         request.state.tenant_id = identity.tenant_id
                         request.state.user_id = identity.user_id
-                        request.state.user_email_authenticated = True
+                        request.state.user_email_authenticated = bool(identity.user_email)
                         request.state.user_email = identity.user_email
                 else:
                     request.state.tenant_id = "tenant-public-registration"
@@ -155,7 +155,7 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                     return await platform_api_error_handler(request, exc)
                 request.state.tenant_id = identity.tenant_id
                 request.state.user_id = identity.user_id
-                request.state.user_email_authenticated = True
+                request.state.user_email_authenticated = bool(identity.user_email)
                 request.state.user_email = identity.user_email
         else:
             request.state.tenant_id = _header_or_fallback(

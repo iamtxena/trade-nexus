@@ -141,7 +141,7 @@ async def _request_context(
         actor_id=actor_id,
         user_email=user_email,
     )
-    if context.actor_type == "user" and user_email_authenticated:
+    if context.actor_type == "user" and context.user_email is not None:
         _identity_service.activate_email_invites(context=context)
     return context
 
@@ -391,7 +391,11 @@ async def register_validation_bot_partner_bootstrap_v2(
     del idempotency_key
     bot_id = _normalized_bot_id(bot_name=payload.botName)
     registration_context = context
-    if context.user_id == "user-local":
+    is_public_registration_identity = (
+        context.user_id == "user-public-registration"
+        or context.tenant_id == "tenant-public-registration"
+    )
+    if is_public_registration_identity:
         owner_email = payload.ownerEmail.strip().lower()
         digest = hashlib.sha256(owner_email.encode("utf-8")).hexdigest()
         derived_user_id = f"user-email-{digest[:12]}"

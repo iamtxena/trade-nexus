@@ -256,6 +256,54 @@ def test_runtime_bot_partner_registration_resolves_actor_identity_for_validation
     assert any(item.event_type == "revoke" for item in audit_events)
 
 
+def test_runtime_bot_partner_registration_public_path_derives_owner_identity() -> None:
+    client = _client()
+    router_v2_module._identity_service._partner_credentials = {"partner-bootstrap": "partner-secret"}  # noqa: SLF001
+
+    owner_email = "public-owner@example.com"
+    digest = hashlib.sha256(owner_email.encode("utf-8")).hexdigest()
+    derived_user_id = f"user-email-{digest[:12]}"
+    derived_tenant_id = f"tenant-email-{digest[12:24]}"
+
+    register = client.post(
+        "/v2/validation-bots/registrations/partner-bootstrap",
+        headers={
+            "X-Request-Id": "req-runtime-bot-public-partner-register-001",
+            "Idempotency-Key": "idem-runtime-bot-public-partner-register-001",
+        },
+        json={
+            "partnerKey": "partner-bootstrap",
+            "partnerSecret": "partner-secret",
+            "ownerEmail": owner_email,
+            "botName": "Public Runtime Bot",
+        },
+    )
+    assert register.status_code == 201
+    assert register.json()["bot"]["ownerUserId"] == derived_user_id
+    assert register.json()["bot"]["tenantId"] == derived_tenant_id
+    runtime_key = register.json()["issuedKey"]["rawKey"]
+
+    derived_owner_headers = _auth_headers(
+        request_id="req-runtime-bot-public-derived-owner-001",
+        tenant_id=derived_tenant_id,
+        user_id=derived_user_id,
+        user_email=owner_email,
+    )
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={
+            **derived_owner_headers,
+            "X-Request-Id": "req-runtime-bot-public-derived-run-001",
+            "X-API-Key": runtime_key,
+            "Idempotency-Key": "idem-runtime-bot-public-derived-run-001",
+        },
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    assert create_run.json()["run"]["actor"]["actorType"] == "bot"
+    assert create_run.json()["run"]["actor"]["actorId"] == "public-runtime-bot"
+
+
 def test_runtime_bot_invite_registration_path_is_single_use_and_rate_limited() -> None:
     client = _client()
     tenant_id = "tenant-runtime-bot-invite"

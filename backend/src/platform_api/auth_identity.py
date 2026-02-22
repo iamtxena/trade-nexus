@@ -16,6 +16,7 @@ from src.platform_api.errors import PlatformAPIError
 
 _JWT_SECRET_ENV = "PLATFORM_AUTH_JWT_HS256_SECRET"
 _JWT_TIME_LEEWAY_SECONDS = 15
+_RUNTIME_BOT_KEY_PREFIX = "tnx.bot"
 
 
 def _non_empty(value: str | None) -> str | None:
@@ -206,7 +207,9 @@ def _claim_value(payload: dict[str, Any], *, keys: tuple[str, ...]) -> str | Non
     return None
 
 
-def _identity_from_api_key(api_key: str) -> AuthenticatedIdentity:
+def _identity_from_api_key(api_key: str) -> AuthenticatedIdentity | None:
+    if not api_key.startswith(f"{_RUNTIME_BOT_KEY_PREFIX}."):
+        return None
     digest = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
     return AuthenticatedIdentity(
         tenant_id=f"tenant-apikey-{digest[:12]}",

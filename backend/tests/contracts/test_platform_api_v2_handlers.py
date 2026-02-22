@@ -521,6 +521,32 @@ def test_validation_v2_requires_authentication() -> None:
     assert payload["error"]["code"] == "AUTH_UNAUTHORIZED"
 
 
+def test_validation_v2_rejects_arbitrary_non_runtime_api_key() -> None:
+    client = _client()
+    response = client.get(
+        "/v2/validation-runs",
+        headers={
+            "X-Request-Id": "req-v2-validation-random-key-001",
+            "X-API-Key": "totally-random-key",
+        },
+    )
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "AUTH_UNAUTHORIZED"
+
+
+def test_validation_v2_rejects_malformed_runtime_api_key() -> None:
+    client = _client()
+    response = client.get(
+        "/v2/validation-runs",
+        headers={
+            "X-Request-Id": "req-v2-validation-malformed-runtime-key-001",
+            "X-API-Key": "tnx.bot.invalid",
+        },
+    )
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "BOT_API_KEY_INVALID"
+
+
 def test_validation_v2_rejects_unsigned_jwt_claims() -> None:
     client = _client()
     unsigned_token = (

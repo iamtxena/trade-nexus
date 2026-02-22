@@ -398,10 +398,15 @@ def test_openapi_v2_runtime_status_codes() -> None:
 
 def test_validation_v2_write_routes_require_idempotency_key_header() -> None:
     client = TestClient(app)
+    validation_headers = _auth_headers(
+        request_id="req-runtime-v2-idempotency-missing-001",
+        tenant_id="tenant-runtime-v2-idempotency-missing",
+        user_id="user-runtime-v2-idempotency-missing",
+    )
 
     create_run = client.post(
         "/v2/validation-runs",
-        headers=HEADERS,
+        headers=validation_headers,
         json={
             "strategyId": "strat-001",
             "providerRefId": "lona-strategy-123",
@@ -425,7 +430,7 @@ def test_validation_v2_write_routes_require_idempotency_key_header() -> None:
 
     review = client.post(
         "/v2/validation-runs/valrun-missing/review",
-        headers=HEADERS,
+        headers=validation_headers,
         json={
             "reviewerType": "agent",
             "decision": "pass",
@@ -438,21 +443,21 @@ def test_validation_v2_write_routes_require_idempotency_key_header() -> None:
 
     render = client.post(
         "/v2/validation-runs/valrun-missing/render",
-        headers=HEADERS,
+        headers=validation_headers,
         json={"format": "html"},
     )
     assert render.status_code == 422
 
     review_comment = client.post(
         "/v2/validation-review/runs/valrun-missing/comments",
-        headers=HEADERS,
+        headers=validation_headers,
         json={"body": "Missing idempotency key should fail."},
     )
     assert review_comment.status_code == 422
 
     review_decision = client.post(
         "/v2/validation-review/runs/valrun-missing/decisions",
-        headers=HEADERS,
+        headers=validation_headers,
         json={
             "action": "reject",
             "decision": "fail",
@@ -463,21 +468,21 @@ def test_validation_v2_write_routes_require_idempotency_key_header() -> None:
 
     review_render = client.post(
         "/v2/validation-review/runs/valrun-missing/renders",
-        headers=HEADERS,
+        headers=validation_headers,
         json={"format": "html"},
     )
     assert review_render.status_code == 422
 
     baseline = client.post(
         "/v2/validation-baselines",
-        headers=HEADERS,
+        headers=validation_headers,
         json={"runId": "valrun-missing", "name": "missing"},
     )
     assert baseline.status_code == 422
 
     replay = client.post(
         "/v2/validation-regressions/replay",
-        headers=HEADERS,
+        headers=validation_headers,
         json={
             "baselineId": "valbase-missing",
             "candidateRunId": "valrun-missing",
@@ -487,14 +492,14 @@ def test_validation_v2_write_routes_require_idempotency_key_header() -> None:
 
     register_invite = client.post(
         "/v2/validation-bots/registrations/invite-code",
-        headers=HEADERS,
+        headers=validation_headers,
         json={"inviteCode": "INV-TRIAL-00000001", "botName": "missing"},
     )
     assert register_invite.status_code == 422
 
     register_partner = client.post(
         "/v2/validation-bots/registrations/partner-bootstrap",
-        headers=HEADERS,
+        headers=validation_headers,
         json={
             "partnerKey": "pk_live_partner_01234567",
             "partnerSecret": "ps_live_partner_89abcdef",
@@ -506,34 +511,34 @@ def test_validation_v2_write_routes_require_idempotency_key_header() -> None:
 
     rotate_bot_key = client.post(
         "/v2/validation-bots/bot-missing/keys/rotate",
-        headers=HEADERS,
+        headers=validation_headers,
         json={"reason": "missing idempotency key"},
     )
     assert rotate_bot_key.status_code == 422
 
     revoke_bot_key = client.post(
         "/v2/validation-bots/bot-missing/keys/botkey-missing/revoke",
-        headers=HEADERS,
+        headers=validation_headers,
         json={"reason": "missing idempotency key"},
     )
     assert revoke_bot_key.status_code == 422
 
     create_share_invite = client.post(
         "/v2/validation-sharing/runs/valrun-missing/invites",
-        headers=HEADERS,
+        headers=validation_headers,
         json={"email": "reviewer@example.com"},
     )
     assert create_share_invite.status_code == 422
 
     revoke_share_invite = client.post(
         "/v2/validation-sharing/invites/vinvite-missing/revoke",
-        headers=HEADERS,
+        headers=validation_headers,
     )
     assert revoke_share_invite.status_code == 422
 
     accept_share_invite = client.post(
         "/v2/validation-sharing/invites/vinvite-missing/accept",
-        headers=HEADERS,
+        headers=validation_headers,
         json={"acceptedEmail": "reviewer@example.com"},
     )
     assert accept_share_invite.status_code == 422

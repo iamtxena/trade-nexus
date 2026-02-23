@@ -14,8 +14,36 @@ interface ValidationPlatformCallOptions {
   backendBaseUrl?: string;
 }
 
-const DEFAULT_PLATFORM_BASE_URL = process.env.ML_BACKEND_URL ?? 'http://localhost:8000';
 const VALIDATION_RUN_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+function resolvePlatformBaseUrl(): string {
+  const url = process.env.ML_BACKEND_URL;
+
+  if (!url) {
+    if (process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'ML_BACKEND_URL is not set. This environment variable is required in production. ' +
+          'Set it to the ML backend origin (e.g. https://api-nexus.lona.agency).',
+      );
+    }
+    // Local development fallback
+    return 'http://localhost:8000';
+  }
+
+  if (
+    (process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production') &&
+    (url.includes('localhost') || url.includes('127.0.0.1'))
+  ) {
+    throw new Error(
+      `ML_BACKEND_URL points to a local address (${url}) in a production environment. ` +
+        'Set it to the ML backend origin (e.g. https://api-nexus.lona.agency).',
+    );
+  }
+
+  return url;
+}
+
+const DEFAULT_PLATFORM_BASE_URL = resolvePlatformBaseUrl();
 
 function resolveBaseUrl(baseUrl: string): string {
   if (baseUrl.endsWith('/')) {

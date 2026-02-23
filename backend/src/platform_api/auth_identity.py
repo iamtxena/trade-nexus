@@ -10,11 +10,23 @@ import json
 import os
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any
+
+import jwt
+from jwt import PyJWKClient
+from jwt.algorithms import RSAAlgorithm
+from jwt.exceptions import InvalidKeyError, InvalidTokenError, PyJWKClientError
 
 from src.platform_api.errors import PlatformAPIError
 
 _JWT_SECRET_ENV = "PLATFORM_AUTH_JWT_HS256_SECRET"
+_JWT_JWKS_JSON_ENV = "PLATFORM_AUTH_JWKS_JSON"
+_JWT_JWKS_URL_ENV = "PLATFORM_AUTH_JWKS_URL"
+_JWT_ISSUER_ENV = "PLATFORM_AUTH_JWT_ISSUER"
+_JWT_AUDIENCE_ENV = "PLATFORM_AUTH_JWT_AUDIENCE"
+_CLERK_JWKS_URL_ENV = "CLERK_JWKS_URL"
+_CLERK_ISSUER_ENV = "CLERK_ISSUER"
 _JWT_TIME_LEEWAY_SECONDS = 15
 _RUNTIME_BOT_KEY_PREFIX = "tnx.bot"
 
@@ -148,6 +160,59 @@ def _jwt_secret() -> str | None:
     return _non_empty(os.getenv(_JWT_SECRET_ENV))
 
 
+def _jwt_issuer() -> str | None:
+    return _non_empty(os.getenv(_JWT_ISSUER_ENV)) or _non_empty(os.getenv(_CLERK_ISSUER_ENV))
+
+
+def _jwt_audience() -> str | list[str] | None:
+    raw = _non_empty(os.getenv(_JWT_AUDIENCE_ENV))
+    if raw is None:
+        return None
+    audiences = [value.strip() for value in raw.split(",") if value.strip()]
+    if not audiences:
+        return None
+    if len(audiences) == 1:
+        return audiences[0]
+    return audiences
+
+
+def _jwt_jwks_url() -> str | None:
+    configured = _non_empty(os.getenv(_JWT_JWKS_URL_ENV)) or _non_empty(os.getenv(_CLERK_JWKS_URL_ENV))
+    if configured is not None:
+        return configured
+    issuer = _jwt_issuer()
+    if issuer is None:
+        return None
+    return f"{issuer.rstrip('/')}/.well-known/jwks.json"
+
+
+def _jwt_jwks_payload() -> dict[str, Any] | None:
+    raw = _non_empty(os.getenv(_JWT_JWKS_JSON_ENV))
+    if raw is None:
+        return None
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    keys = payload.get("keys")
+    if not isinstance(keys, list):
+        return None
+    return payload
+
+
+@lru_cache(maxsize=4)
+def _jwks_client(jwks_url: str) -> PyJWKClient:
+    return PyJWKClient(
+        jwks_url,
+        cache_keys=True,
+        cache_jwk_set=True,
+        lifespan=300,
+        timeout=5,
+    )
+
+
 def _claims_time_window_valid(claims: dict[str, Any]) -> bool:
     now = int(time.time())
     exp = claims.get("exp")
@@ -167,14 +232,32 @@ def _decode_verified_jwt_payload(token: str) -> dict[str, Any] | None:
         return None
     header_segment, payload_segment, signature_segment = parts
     header = _decode_jwt_payload_segment(header_segment)
-    payload = _decode_jwt_payload_segment(payload_segment)
-    if header is None or payload is None:
+    if header is None:
         return None
 
     algorithm = header.get("alg")
-    if algorithm != "HS256":
-        return None
+    if algorithm == "HS256":
+        payload = _decode_jwt_payload_segment(payload_segment)
+        if payload is None:
+            return None
+        return _decode_verified_hs256_payload(
+            payload=payload,
+            header_segment=header_segment,
+            payload_segment=payload_segment,
+            signature_segment=signature_segment,
+        )
+    if algorithm == "RS256":
+        return _decode_verified_rs256_payload(token)
+    return None
 
+
+def _decode_verified_hs256_payload(
+    *,
+    payload: dict[str, Any],
+    header_segment: str,
+    payload_segment: str,
+    signature_segment: str,
+) -> dict[str, Any] | None:
     secret = _jwt_secret()
     if secret is None:
         return None
@@ -183,7 +266,7 @@ def _decode_verified_jwt_payload(token: str) -> dict[str, Any] | None:
     if provided_signature is None:
         return None
 
-    signing_input = f"{header_segment}.{payload_segment}".encode("utf-8")
+    signing_input = f"{header_segment}.{payload_segment}".encode()
     expected_signature = hmac.new(
         secret.encode("utf-8"),
         signing_input,
@@ -195,6 +278,75 @@ def _decode_verified_jwt_payload(token: str) -> dict[str, Any] | None:
     if not _claims_time_window_valid(payload):
         return None
     return payload
+
+
+def _decode_verified_rs256_payload(token: str) -> dict[str, Any] | None:
+    signing_key = _jwt_signing_key(token)
+    if signing_key is None:
+        return None
+
+    issuer = _jwt_issuer()
+    audience = _jwt_audience()
+    options = {
+        "require": ["exp"],
+        "verify_aud": audience is not None,
+        "verify_iss": issuer is not None,
+    }
+    try:
+        claims = jwt.decode(
+            token,
+            key=signing_key,
+            algorithms=["RS256"],
+            issuer=issuer,
+            audience=audience,
+            leeway=_JWT_TIME_LEEWAY_SECONDS,
+            options=options,
+        )
+    except InvalidTokenError:
+        return None
+    return claims if isinstance(claims, dict) else None
+
+
+def _jwt_signing_key(token: str) -> Any | None:
+    jwks_payload = _jwt_jwks_payload()
+    if jwks_payload is not None:
+        return _jwt_signing_key_from_jwks_payload(token=token, jwks_payload=jwks_payload)
+
+    jwks_url = _jwt_jwks_url()
+    if jwks_url is None:
+        return None
+    try:
+        return _jwks_client(jwks_url).get_signing_key_from_jwt(token).key
+    except (InvalidTokenError, PyJWKClientError):
+        return None
+
+
+def _jwt_signing_key_from_jwks_payload(
+    *,
+    token: str,
+    jwks_payload: dict[str, Any],
+) -> Any | None:
+    keys = jwks_payload.get("keys")
+    if not isinstance(keys, list):
+        return None
+    try:
+        header = jwt.get_unverified_header(token)
+    except InvalidTokenError:
+        return None
+    kid = header.get("kid")
+    candidates = [candidate for candidate in keys if isinstance(candidate, dict)]
+    if kid is not None:
+        candidates = [candidate for candidate in candidates if candidate.get("kid") == kid]
+    elif len(candidates) != 1:
+        return None
+    if not candidates:
+        return None
+    for candidate in candidates:
+        try:
+            return RSAAlgorithm.from_jwk(json.dumps(candidate))
+        except (InvalidKeyError, TypeError, ValueError):
+            continue
+    return None
 
 
 def _claim_value(payload: dict[str, Any], *, keys: tuple[str, ...]) -> str | None:

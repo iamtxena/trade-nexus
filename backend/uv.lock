@@ -4044,6 +4044,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "filelock" },
     { name = "httpx" },
@@ -4056,6 +4057,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pyjwt", extra = ["crypto"] },
     { name = "python-dotenv" },
     { name = "rich" },
     { name = "scikit-learn" },
@@ -4079,6 +4081,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.13.3" },
+    { name = "cryptography", specifier = ">=43.0.0" },
     { name = "fastapi" },
     { name = "filelock", specifier = ">=3.20.3" },
     { name = "httpx" },
@@ -4094,6 +4097,7 @@ requires-dist = [
     { name = "pandas" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.11.0" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "python-dotenv" },

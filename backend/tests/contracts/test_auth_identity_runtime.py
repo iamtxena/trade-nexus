@@ -140,6 +140,41 @@ def test_resolve_validation_identity_rejects_clerk_jwks_token_with_untrusted_iss
     assert exc.value.code == "AUTH_UNAUTHORIZED"
 
 
+def test_resolve_validation_identity_rejects_non_rsa_jwks_entries(monkeypatch: pytest.MonkeyPatch) -> None:
+    token = _clerk_token(
+        {
+            "sub": "user-auth-identity-clerk-non-rsa",
+            "org_id": "tenant-auth-identity-clerk-non-rsa",
+            "iss": _CLERK_ISSUER,
+        }
+    )
+    monkeypatch.setenv(
+        "PLATFORM_AUTH_JWKS_JSON",
+        json.dumps(
+            {
+                "keys": [
+                    {
+                        "kid": _CLERK_KEY_ID,
+                        "kty": "oct",
+                        "k": "ZmFrZS1zeW1tZXRyaWMta2V5",
+                    }
+                ]
+            }
+        ),
+    )
+    monkeypatch.setenv("PLATFORM_AUTH_JWT_ISSUER", _CLERK_ISSUER)
+    with pytest.raises(PlatformAPIError) as exc:
+        resolve_validation_identity(
+            authorization=f"Bearer {token}",
+            api_key=None,
+            tenant_header="tenant-auth-identity-clerk-non-rsa",
+            user_header="user-auth-identity-clerk-non-rsa",
+            request_id="req-auth-identity-clerk-non-rsa-001",
+        )
+    assert exc.value.status_code == 401
+    assert exc.value.code == "AUTH_UNAUTHORIZED"
+
+
 def test_resolve_validation_identity_rejects_unsigned_jwt_payload_claims() -> None:
     unsigned = (
         f"{_jwt_segment({'alg': 'none', 'typ': 'JWT'})}."

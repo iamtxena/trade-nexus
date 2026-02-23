@@ -16,7 +16,7 @@ from typing import Any
 import jwt
 from jwt import PyJWKClient
 from jwt.algorithms import RSAAlgorithm
-from jwt.exceptions import InvalidTokenError, PyJWKClientError
+from jwt.exceptions import InvalidKeyError, InvalidTokenError, PyJWKClientError
 
 from src.platform_api.errors import PlatformAPIError
 
@@ -344,7 +344,7 @@ def _jwt_signing_key_from_jwks_payload(
     for candidate in candidates:
         try:
             return RSAAlgorithm.from_jwk(json.dumps(candidate))
-        except (TypeError, ValueError):
+        except (InvalidKeyError, TypeError, ValueError):
             continue
     return None
 

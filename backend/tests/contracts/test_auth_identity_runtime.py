@@ -8,13 +8,20 @@ import hmac
 import json
 import os
 import time
+from functools import lru_cache
 
+import jwt
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from jwt.algorithms import RSAAlgorithm
 
 from src.platform_api.auth_identity import resolve_validation_identity
 from src.platform_api.errors import PlatformAPIError
 
 _JWT_SECRET = os.environ.setdefault("PLATFORM_AUTH_JWT_HS256_SECRET", "test-auth-identity-secret")
+_CLERK_ISSUER = "https://clerk.auth-identity.test"
+_CLERK_KEY_ID = "clerk-auth-identity-test-key"
 
 
 def _jwt_segment(payload: dict[str, object]) -> str:
@@ -25,7 +32,7 @@ def _jwt_segment(payload: dict[str, object]) -> str:
 def _jwt_token(payload: dict[str, object]) -> str:
     header = _jwt_segment({"alg": "HS256", "typ": "JWT"})
     claims = _jwt_segment(payload)
-    signing_input = f"{header}.{claims}".encode("utf-8")
+    signing_input = f"{header}.{claims}".encode()
     signature = hmac.new(_JWT_SECRET.encode("utf-8"), signing_input, hashlib.sha256).digest()
     encoded_signature = base64.urlsafe_b64encode(signature).decode("utf-8").rstrip("=")
     return f"{header}.{claims}.{encoded_signature}"
@@ -33,6 +40,38 @@ def _jwt_token(payload: dict[str, object]) -> str:
 
 def _future_exp(seconds: int = 300) -> int:
     return int(time.time()) + seconds
+
+
+@lru_cache(maxsize=1)
+def _clerk_signing_material() -> tuple[str, str]:
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("utf-8")
+    public_jwk = json.loads(RSAAlgorithm.to_jwk(private_key.public_key()))
+    public_jwk["kid"] = _CLERK_KEY_ID
+    jwks = json.dumps({"keys": [public_jwk]}, separators=(",", ":"))
+    return private_pem, jwks
+
+
+def _clerk_token(payload: dict[str, object]) -> str:
+    claims = dict(payload)
+    claims.setdefault("exp", _future_exp())
+    private_key, _ = _clerk_signing_material()
+    return jwt.encode(
+        claims,
+        private_key,
+        algorithm="RS256",
+        headers={"kid": _CLERK_KEY_ID},
+    )
+
+
+def _configure_clerk_jwks(monkeypatch: pytest.MonkeyPatch, *, issuer: str = _CLERK_ISSUER) -> None:
+    _, jwks = _clerk_signing_material()
+    monkeypatch.setenv("PLATFORM_AUTH_JWKS_JSON", jwks)
+    monkeypatch.setenv("PLATFORM_AUTH_JWT_ISSUER", issuer)
 
 
 def test_resolve_validation_identity_uses_verified_jwt_claims() -> None:
@@ -54,6 +93,51 @@ def test_resolve_validation_identity_uses_verified_jwt_claims() -> None:
     assert identity.user_id == "user-auth-identity-001"
     assert identity.tenant_id == "tenant-auth-identity-001"
     assert identity.user_email == "auth-user@example.com"
+
+
+def test_resolve_validation_identity_uses_verified_clerk_jwks_claims(monkeypatch: pytest.MonkeyPatch) -> None:
+    _configure_clerk_jwks(monkeypatch)
+    token = _clerk_token(
+        {
+            "sub": "user-auth-identity-clerk-001",
+            "org_id": "tenant-auth-identity-clerk-001",
+            "email": "clerk-user@example.com",
+            "iss": _CLERK_ISSUER,
+        }
+    )
+    identity = resolve_validation_identity(
+        authorization=f"Bearer {token}",
+        api_key=None,
+        tenant_header="tenant-auth-identity-clerk-001",
+        user_header="user-auth-identity-clerk-001",
+        request_id="req-auth-identity-clerk-verified-001",
+    )
+    assert identity.user_id == "user-auth-identity-clerk-001"
+    assert identity.tenant_id == "tenant-auth-identity-clerk-001"
+    assert identity.user_email == "clerk-user@example.com"
+
+
+def test_resolve_validation_identity_rejects_clerk_jwks_token_with_untrusted_issuer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_clerk_jwks(monkeypatch, issuer="https://clerk.auth-identity.allowed")
+    token = _clerk_token(
+        {
+            "sub": "user-auth-identity-clerk-issuer",
+            "org_id": "tenant-auth-identity-clerk-issuer",
+            "iss": "https://clerk.auth-identity.untrusted",
+        }
+    )
+    with pytest.raises(PlatformAPIError) as exc:
+        resolve_validation_identity(
+            authorization=f"Bearer {token}",
+            api_key=None,
+            tenant_header="tenant-auth-identity-clerk-issuer",
+            user_header="user-auth-identity-clerk-issuer",
+            request_id="req-auth-identity-clerk-issuer-001",
+        )
+    assert exc.value.status_code == 401
+    assert exc.value.code == "AUTH_UNAUTHORIZED"
 
 
 def test_resolve_validation_identity_rejects_unsigned_jwt_payload_claims() -> None:

@@ -10,9 +10,14 @@ import hmac
 import json
 import os
 import time
+from functools import lru_cache
 
+import jwt
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
+from jwt.algorithms import RSAAlgorithm
 
 from src.main import app
 from src.platform_api import router_v1 as router_v1_module
@@ -25,6 +30,8 @@ HEADERS = {
 }
 
 _JWT_SECRET = os.environ.setdefault("PLATFORM_AUTH_JWT_HS256_SECRET", "test-platform-v2-secret")
+_CLERK_ISSUER = "https://clerk.platform-v2.test"
+_CLERK_KEY_ID = "clerk-platform-v2-test-key"
 
 
 def _client() -> TestClient:
@@ -41,10 +48,51 @@ def _jwt_token(payload: dict[str, object]) -> str:
     claims_payload.setdefault("exp", int(time.time()) + 300)
     header = _jwt_segment({"alg": "HS256", "typ": "JWT"})
     claims = _jwt_segment(claims_payload)
-    signing_input = f"{header}.{claims}".encode("utf-8")
+    signing_input = f"{header}.{claims}".encode()
     signature = hmac.new(_JWT_SECRET.encode("utf-8"), signing_input, hashlib.sha256).digest()
     encoded_signature = base64.urlsafe_b64encode(signature).decode("utf-8").rstrip("=")
     return f"{header}.{claims}.{encoded_signature}"
+
+
+@lru_cache(maxsize=1)
+def _clerk_signing_material() -> tuple[str, str]:
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("utf-8")
+    public_jwk = json.loads(RSAAlgorithm.to_jwk(private_key.public_key()))
+    public_jwk["kid"] = _CLERK_KEY_ID
+    jwks = json.dumps({"keys": [public_jwk]}, separators=(",", ":"))
+    return private_pem, jwks
+
+
+def _clerk_token(payload: dict[str, object]) -> str:
+    claims = dict(payload)
+    claims.setdefault("exp", int(time.time()) + 300)
+    private_key, _ = _clerk_signing_material()
+    return jwt.encode(
+        claims,
+        private_key,
+        algorithm="RS256",
+        headers={"kid": _CLERK_KEY_ID},
+    )
+
+
+def _clerk_validation_headers(
+    *,
+    request_id: str,
+    tenant_id: str,
+    user_id: str,
+) -> dict[str, str]:
+    token = _clerk_token({"sub": user_id, "org_id": tenant_id, "iss": _CLERK_ISSUER})
+    return {
+        "Authorization": f"Bearer {token}",
+        "X-Request-Id": request_id,
+        "X-Tenant-Id": tenant_id,
+        "X-User-Id": user_id,
+    }
 
 
 def _validation_headers(
@@ -519,6 +567,52 @@ def test_validation_v2_requires_authentication() -> None:
     payload = response.json()
     assert payload["requestId"] == "req-v2-validation-unauth-001"
     assert payload["error"]["code"] == "AUTH_UNAUTHORIZED"
+
+
+def test_validation_v2_allows_clerk_jwks_authenticated_flow(monkeypatch: pytest.MonkeyPatch) -> None:
+    _, jwks = _clerk_signing_material()
+    monkeypatch.setenv("PLATFORM_AUTH_JWKS_JSON", jwks)
+    monkeypatch.setenv("PLATFORM_AUTH_JWT_ISSUER", _CLERK_ISSUER)
+
+    client = _client()
+    tenant_id = "tenant-v2-validation-clerk-001"
+    user_id = "user-v2-validation-clerk-001"
+    headers = _clerk_validation_headers(
+        request_id="req-v2-validation-clerk-001",
+        tenant_id=tenant_id,
+        user_id=user_id,
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-v2-validation-clerk-001"},
+        json={
+            "strategyId": "strat-001",
+            "providerRefId": "lona-strategy-123",
+            "prompt": "Build zig-zag strategy for BTC 1h with trend filter",
+            "requestedIndicators": ["zigzag", "ema"],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+            "policy": {
+                "profile": "STANDARD",
+                "blockMergeOnFail": True,
+                "blockReleaseOnFail": True,
+                "blockMergeOnAgentFail": True,
+                "blockReleaseOnAgentFail": False,
+                "requireTraderReview": False,
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": True,
+            },
+        },
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    artifact = client.get(f"/v2/validation-runs/{run_id}/artifact", headers=headers)
+    assert artifact.status_code == 200
+    payload = artifact.json()["artifact"]
+    assert payload["tenantId"] == tenant_id
+    assert payload["userId"] == user_id
 
 
 def test_validation_v2_rejects_arbitrary_non_runtime_api_key() -> None:

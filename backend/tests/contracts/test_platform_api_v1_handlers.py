@@ -3,23 +3,68 @@
 from __future__ import annotations
 
 import copy
+import json
+import time
+from functools import lru_cache
 
+import jwt
+import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
+from jwt.algorithms import RSAAlgorithm
 
 from src.main import app
 from src.platform_api import router_v1
 from src.platform_api.state_store import OrderRecord
-
 
 HEADERS = {
     "Authorization": "Bearer test-token",
     "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
     "X-Request-Id": "req-contract-001",
 }
+_CLERK_ISSUER = "https://clerk.platform-v1.test"
+_CLERK_KEY_ID = "clerk-platform-v1-test-key"
 
 
 def _client() -> TestClient:
     return TestClient(app)
+
+
+@lru_cache(maxsize=1)
+def _clerk_signing_material() -> tuple[str, str]:
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("utf-8")
+    public_jwk = json.loads(RSAAlgorithm.to_jwk(private_key.public_key()))
+    public_jwk["kid"] = _CLERK_KEY_ID
+    jwks = json.dumps({"keys": [public_jwk]}, separators=(",", ":"))
+    return private_pem, jwks
+
+
+def _clerk_token(payload: dict[str, object]) -> str:
+    claims = dict(payload)
+    claims.setdefault("exp", int(time.time()) + 300)
+    private_key, _ = _clerk_signing_material()
+    return jwt.encode(
+        claims,
+        private_key,
+        algorithm="RS256",
+        headers={"kid": _CLERK_KEY_ID},
+    )
+
+
+def _clerk_headers(*, request_id: str, tenant_id: str, user_id: str) -> dict[str, str]:
+    token = _clerk_token({"sub": user_id, "org_id": tenant_id, "iss": _CLERK_ISSUER})
+    return {
+        "Authorization": f"Bearer {token}",
+        "X-Request-Id": request_id,
+        "X-Tenant-Id": tenant_id,
+        "X-User-Id": user_id,
+    }
 
 
 def test_health_and_research_routes() -> None:
@@ -70,6 +115,25 @@ def test_protected_v1_strategy_routes_require_authentication() -> None:
 def test_protected_v1_strategy_routes_allow_authorized_requests() -> None:
     client = _client()
     response = client.get("/v1/strategies", headers=HEADERS)
+    assert response.status_code == 200
+
+
+def test_protected_v1_strategy_routes_allow_clerk_jwks_authorized_requests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, jwks = _clerk_signing_material()
+    monkeypatch.setenv("PLATFORM_AUTH_JWKS_JSON", jwks)
+    monkeypatch.setenv("PLATFORM_AUTH_JWT_ISSUER", _CLERK_ISSUER)
+
+    client = _client()
+    response = client.get(
+        "/v1/strategies",
+        headers=_clerk_headers(
+            request_id="req-v1-auth-clerk-001",
+            tenant_id="tenant-v1-auth-clerk-001",
+            user_id="user-v1-auth-clerk-001",
+        ),
+    )
     assert response.status_code == 200
 
 

@@ -7,6 +7,8 @@ import {
   FileJson,
   FileText,
   Loader2,
+  MailPlus,
+  Share2,
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
@@ -27,6 +29,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  inviteActionLabel,
+  markInviteRevoked,
+  mergeInviteIntoList,
+} from '@/lib/validation/invite-lifecycle';
+import {
   type TraderReviewTone,
   resolveTraderReviewLaneState,
 } from '@/lib/validation/review-lane-state';
@@ -38,6 +45,7 @@ import {
 } from '@/lib/validation/review-run-timeline';
 import {
   type CreateValidationRunRequestPayload,
+  type CreateValidationShareInvitePayload,
   type ErrorPayload,
   type ValidationArtifactResponse,
   type ValidationDecision,
@@ -48,6 +56,10 @@ import {
   type ValidationRunResponse,
   type ValidationRunReviewRequestPayload,
   type ValidationRunSummary,
+  type ValidationShareInvite,
+  type ValidationShareInviteListResponse,
+  type ValidationShareInviteResponse,
+  type ValidationSharePermission,
   isValidationRunArtifact,
 } from '@/lib/validation/types';
 
@@ -69,6 +81,12 @@ interface ValidationReviewFormState {
   comments: string;
 }
 
+interface ValidationShareInviteFormState {
+  email: string;
+  permission: ValidationSharePermission;
+  message: string;
+}
+
 const DEFAULT_CREATE_FORM_STATE: ValidationCreateFormState = {
   strategyId: '',
   providerRefId: '',
@@ -85,6 +103,12 @@ const DEFAULT_REVIEW_FORM_STATE: ValidationReviewFormState = {
   decision: 'pass',
   summary: '',
   comments: '',
+};
+
+const DEFAULT_SHARE_INVITE_FORM_STATE: ValidationShareInviteFormState = {
+  email: '',
+  permission: 'view',
+  message: '',
 };
 
 function parseListInput(value: string): string[] {
@@ -171,6 +195,26 @@ function resolveTimelineIcon(tone: ValidationTimelineEvent['tone']) {
   }
 }
 
+function sharePermissionToBadgeVariant(permission: ValidationSharePermission) {
+  if (permission === 'decide') {
+    return 'default';
+  }
+  if (permission === 'comment') {
+    return 'secondary';
+  }
+  return 'outline';
+}
+
+function normalizeInvite(
+  invite: ValidationShareInvite,
+  fallbackPermission: ValidationSharePermission = 'view',
+): ValidationShareInvite {
+  return {
+    ...invite,
+    permission: invite.permission ?? fallbackPermission,
+  };
+}
+
 export default function ValidationPage() {
   const lastDeepLinkedRunIdRef = useRef<string | null>(null);
   const [runLookupId, setRunLookupId] = useState('');
@@ -185,10 +229,17 @@ export default function ValidationPage() {
     useState<ValidationCreateFormState>(DEFAULT_CREATE_FORM_STATE);
   const [reviewForm, setReviewForm] =
     useState<ValidationReviewFormState>(DEFAULT_REVIEW_FORM_STATE);
+  const [shareInviteForm, setShareInviteForm] = useState<ValidationShareInviteFormState>(
+    DEFAULT_SHARE_INVITE_FORM_STATE,
+  );
+  const [runInvites, setRunInvites] = useState<ValidationShareInvite[]>([]);
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [isLoadingRun, setIsLoadingRun] = useState(false);
   const [isCreatingRun, setIsCreatingRun] = useState(false);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [isLoadingInvites, setIsLoadingInvites] = useState(false);
+  const [isSubmittingInvite, setIsSubmittingInvite] = useState(false);
+  const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
   const [requestingRender, setRequestingRender] = useState<Record<ValidationRenderFormat, boolean>>(
     {
       html: false,
@@ -244,6 +295,42 @@ export default function ValidationPage() {
     setIsLoadingList(false);
   }, []);
 
+  const loadRunInvites = useCallback(
+    async (
+      runId: string,
+      options?: {
+        suppressErrors?: boolean;
+      },
+    ): Promise<void> => {
+      setIsLoadingInvites(true);
+      try {
+        const response = await fetch(`/api/validation/runs/${runId}/invites`);
+        const responsePayload = await response.json().catch(() => null);
+        if (!response.ok) {
+          if (!options?.suppressErrors) {
+            setErrorMessage(
+              extractErrorMessage(
+                responsePayload,
+                `Invite list request failed (${response.status})`,
+              ),
+            );
+          }
+          return;
+        }
+
+        const invitePayload = responsePayload as ValidationShareInviteListResponse;
+        setRunInvites((invitePayload.items ?? []).map((invite) => normalizeInvite(invite)));
+      } catch (error) {
+        if (!options?.suppressErrors) {
+          setErrorMessage(error instanceof Error ? error.message : 'Failed to load run invites.');
+        }
+      } finally {
+        setIsLoadingInvites(false);
+      }
+    },
+    [],
+  );
+
   const loadRunById = useCallback(
     async (
       runId: string,
@@ -287,6 +374,7 @@ export default function ValidationPage() {
         setRunLookupId(runId);
         setRenderJobs({});
         setRunList(upsertReviewRunHistory(nextRunResponse.run));
+        await loadRunInvites(runId, { suppressErrors: true });
         setNoticeMessage(successNotice);
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : 'Failed to load validation run.');
@@ -294,7 +382,7 @@ export default function ValidationPage() {
         setIsLoadingRun(false);
       }
     },
-    [],
+    [loadRunInvites],
   );
 
   useEffect(() => {
@@ -463,6 +551,85 @@ export default function ValidationPage() {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to submit review.');
     } finally {
       setIsSubmittingReview(false);
+    }
+  }
+
+  async function handleCreateShareInvite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeRunId) {
+      setErrorMessage('Load a validation run before inviting collaborators.');
+      return;
+    }
+
+    const email = shareInviteForm.email.trim().toLowerCase();
+    if (!email) {
+      setErrorMessage('Invite email is required.');
+      return;
+    }
+
+    setIsSubmittingInvite(true);
+    setErrorMessage(null);
+    setNoticeMessage(null);
+    try {
+      const payload: CreateValidationShareInvitePayload = {
+        email,
+        permission: shareInviteForm.permission,
+        message: shareInviteForm.message.trim() || undefined,
+      };
+      const response = await fetch(`/api/validation/runs/${activeRunId}/invites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const responsePayload = await response.json().catch(() => null);
+      if (!response.ok) {
+        setErrorMessage(
+          extractErrorMessage(responsePayload, `Invite creation failed (${response.status})`),
+        );
+        return;
+      }
+
+      const invite = normalizeInvite(
+        (responsePayload as ValidationShareInviteResponse).invite,
+        shareInviteForm.permission,
+      );
+      setRunInvites((previous) => mergeInviteIntoList(previous, invite));
+      setShareInviteForm(DEFAULT_SHARE_INVITE_FORM_STATE);
+      setNoticeMessage(`Invite created for ${invite.email} with ${invite.permission} access.`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to create invite.');
+    } finally {
+      setIsSubmittingInvite(false);
+    }
+  }
+
+  async function handleRevokeShareInvite(invite: ValidationShareInvite) {
+    setRevokingInviteId(invite.id);
+    setErrorMessage(null);
+    setNoticeMessage(null);
+    try {
+      const response = await fetch(`/api/validation/invites/${invite.id}/revoke`, {
+        method: 'POST',
+      });
+      const responsePayload = await response.json().catch(() => null);
+      if (!response.ok) {
+        setErrorMessage(
+          extractErrorMessage(responsePayload, `Invite revoke failed (${response.status})`),
+        );
+        return;
+      }
+
+      const revoked = normalizeInvite((responsePayload as ValidationShareInviteResponse).invite);
+      setRunInvites((previous) => markInviteRevoked(previous, revoked));
+      setNoticeMessage(
+        invite.status === 'accepted'
+          ? `Access revoked for ${invite.email}.`
+          : `Invite revoked for ${invite.email}.`,
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to revoke invite.');
+    } finally {
+      setRevokingInviteId(null);
     }
   }
 
@@ -893,6 +1060,145 @@ export default function ValidationPage() {
         </Card>
 
         <div className="space-y-6">
+          <Card className="py-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Share2 className="size-4 text-primary" />
+                Run Sharing
+              </CardTitle>
+              <CardDescription>
+                Invite collaborators by email with run-level permissions only.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form className="space-y-3" onSubmit={handleCreateShareInvite}>
+                <div className="space-y-2">
+                  <Label htmlFor="share-email">Invite Email</Label>
+                  <Input
+                    id="share-email"
+                    type="email"
+                    placeholder="reviewer@example.com"
+                    value={shareInviteForm.email}
+                    onChange={(event) =>
+                      setShareInviteForm((previous) => ({
+                        ...previous,
+                        email: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="share-permission">Permission</Label>
+                  <Select
+                    value={shareInviteForm.permission}
+                    onValueChange={(value: ValidationSharePermission) =>
+                      setShareInviteForm((previous) => ({ ...previous, permission: value }))
+                    }
+                  >
+                    <SelectTrigger id="share-permission" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="view">view</SelectItem>
+                      <SelectItem value="comment">comment</SelectItem>
+                      <SelectItem value="decide">decide</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="share-message">Message (optional)</Label>
+                  <Textarea
+                    id="share-message"
+                    placeholder="Please review this run in Shared Validation."
+                    value={shareInviteForm.message}
+                    onChange={(event) =>
+                      setShareInviteForm((previous) => ({
+                        ...previous,
+                        message: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isSubmittingInvite || !activeRunId}
+                >
+                  {isSubmittingInvite ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      Inviting…
+                    </>
+                  ) : (
+                    <>
+                      <MailPlus className="size-4" />
+                      Invite Collaborator
+                    </>
+                  )}
+                </Button>
+              </form>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Active Invite Lifecycle</p>
+                {isLoadingInvites ? (
+                  <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                    Loading invites…
+                  </div>
+                ) : runInvites.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                    No invites for this run yet.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {runInvites.map((invite) => (
+                      <div
+                        key={invite.id}
+                        className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-medium">{invite.email}</p>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant={sharePermissionToBadgeVariant(invite.permission)}>
+                              {invite.permission}
+                            </Badge>
+                            <Badge variant="outline">{invite.status}</Badge>
+                          </div>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">
+                          Created {new Date(invite.createdAt).toLocaleString()}
+                          {invite.acceptedAt
+                            ? ` • Accepted ${new Date(invite.acceptedAt).toLocaleString()}`
+                            : ''}
+                        </p>
+                        {invite.status !== 'revoked' ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="mt-2 h-7 px-2"
+                            disabled={revokingInviteId === invite.id}
+                            onClick={() => {
+                              void handleRevokeShareInvite(invite);
+                            }}
+                          >
+                            {revokingInviteId === invite.id ? (
+                              <>
+                                <Loader2 className="size-3.5 animate-spin" />
+                                Revoking…
+                              </>
+                            ) : (
+                              inviteActionLabel(invite)
+                            )}
+                          </Button>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="py-4">
             <CardHeader>
               <CardTitle>Review Verdict</CardTitle>

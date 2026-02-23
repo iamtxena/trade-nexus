@@ -1,20 +1,9 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { type NextRequest, NextResponse } from 'next/server';
 
-const isProtectedRoute = createRouteMatcher([
-  '/dashboard(.*)',
-  '/strategist(.*)',
-  '/strategies(.*)',
-  '/validation(.*)',
-  '/agents(.*)',
-  '/portfolio(.*)',
-  '/api/validation(.*)',
-  '/api/strategies(.*)',
-  '/api/agents(.*)',
-  '/api/predictions(.*)',
-  '/api/portfolio(.*)',
-  '/api/strategist(.*)',
-]);
+import { PROTECTED_ROUTE_PATTERNS } from '@/lib/auth/protected-routes';
+
+const isProtectedRoute = createRouteMatcher(PROTECTED_ROUTE_PATTERNS);
 
 const clerkProtectedMiddleware = clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {

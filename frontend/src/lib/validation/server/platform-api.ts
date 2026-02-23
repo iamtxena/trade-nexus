@@ -103,3 +103,36 @@ export async function proxyValidationPlatformCall(
     );
   }
 }
+
+interface ValidationFallbackProxyOptions extends Omit<ValidationPlatformCallOptions, 'path'> {
+  paths: string[];
+}
+
+const FALLBACK_CONTINUE_STATUSES = new Set([404, 405, 501]);
+
+export async function proxyValidationPlatformCallWithFallback(
+  options: ValidationFallbackProxyOptions,
+): Promise<NextResponse> {
+  let lastResponse: NextResponse | null = null;
+
+  for (const path of options.paths) {
+    const response = await proxyValidationPlatformCall({
+      ...options,
+      path,
+    });
+    lastResponse = response;
+    if (!FALLBACK_CONTINUE_STATUSES.has(response.status)) {
+      return response;
+    }
+  }
+
+  return (
+    lastResponse ??
+    NextResponse.json(
+      {
+        error: 'No validation platform endpoint path configured.',
+      },
+      { status: 502 },
+    )
+  );
+}

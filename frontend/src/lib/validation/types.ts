@@ -219,3 +219,197 @@ export function isValidationRunArtifact(
     'policy' in artifact
   );
 }
+
+export type ValidationSharePermission = 'view' | 'comment' | 'decide';
+export type ValidationInviteStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
+export type ValidationShareStatus = 'active' | 'revoked';
+export type ValidationBotStatus = 'active' | 'suspended' | 'revoked';
+export type ValidationBotRegistrationPath = 'invite_code_trial' | 'partner_bootstrap';
+export type ValidationBotKeyStatus = 'active' | 'rotated' | 'revoked';
+
+export interface ValidationBot {
+  id: string;
+  tenantId: string;
+  ownerUserId: string;
+  name: string;
+  status: ValidationBotStatus;
+  registrationPath: ValidationBotRegistrationPath;
+  trialExpiresAt?: string | null;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ValidationBotKeyMetadata {
+  id: string;
+  botId: string;
+  keyPrefix: string;
+  status: ValidationBotKeyStatus;
+  createdAt: string;
+  lastUsedAt?: string | null;
+  revokedAt?: string | null;
+}
+
+export interface ValidationBotUsageMetadata {
+  totalRequests?: number;
+  successfulRequests?: number;
+  failedRequests?: number;
+  lastSeenAt?: string | null;
+}
+
+export interface ValidationBotSummary extends ValidationBot {
+  keys: ValidationBotKeyMetadata[];
+  usage?: ValidationBotUsageMetadata;
+}
+
+export interface ValidationBotListResponse {
+  requestId: string;
+  bots: ValidationBotSummary[];
+}
+
+export interface ValidationBotIssuedApiKey {
+  rawKey: string;
+  key: ValidationBotKeyMetadata;
+}
+
+export interface ValidationBotRegistration {
+  id: string;
+  botId: string;
+  registrationPath: ValidationBotRegistrationPath;
+  status: 'completed';
+  audit?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface ValidationBotRegistrationResponse {
+  requestId: string;
+  bot: ValidationBot;
+  registration: ValidationBotRegistration;
+  issuedKey: ValidationBotIssuedApiKey;
+}
+
+export interface ValidationBotKeyRotationResponse {
+  requestId: string;
+  botId: string;
+  issuedKey: ValidationBotIssuedApiKey;
+}
+
+export interface ValidationBotKeyMetadataResponse {
+  requestId: string;
+  botId: string;
+  key: ValidationBotKeyMetadata;
+}
+
+export interface CreateValidationBotInviteCodeRegistrationPayload {
+  inviteCode: string;
+  botName: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CreateValidationBotPartnerBootstrapPayload {
+  partnerKey: string;
+  partnerSecret: string;
+  ownerEmail: string;
+  botName: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CreateValidationBotKeyRotationPayload {
+  reason?: string;
+}
+
+export interface CreateValidationBotKeyRevocationPayload {
+  reason?: string;
+}
+
+export interface ValidationShareInvite {
+  id: string;
+  runId: string;
+  email: string;
+  permission: ValidationSharePermission;
+  status: ValidationInviteStatus;
+  invitedByUserId: string;
+  invitedByActorType?: 'user' | 'bot';
+  createdAt: string;
+  expiresAt?: string | null;
+  acceptedAt?: string | null;
+  revokedAt?: string | null;
+}
+
+export interface ValidationShareInviteResponse {
+  requestId: string;
+  invite: ValidationShareInvite;
+}
+
+export interface ValidationShareInviteListResponse {
+  requestId: string;
+  items: ValidationShareInvite[];
+  nextCursor?: string | null;
+}
+
+export interface CreateValidationShareInvitePayload {
+  email: string;
+  permission: ValidationSharePermission;
+  message?: string;
+  expiresAt?: string;
+}
+
+export interface ValidationSharedRunSummary {
+  runId: string;
+  permission: ValidationSharePermission;
+  status: ValidationRunStatus;
+  profile: ValidationProfile;
+  finalDecision: ValidationDecision;
+  ownerUserId?: string;
+  sharedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ValidationSharedRunListResponse {
+  requestId: string;
+  items: ValidationSharedRunSummary[];
+  nextCursor?: string | null;
+}
+
+export interface ValidationReviewComment {
+  id: string;
+  runId: string;
+  tenantId?: string;
+  userId?: string;
+  body: string;
+  evidenceRefs: string[];
+  createdAt: string;
+}
+
+export interface ValidationReviewDecision {
+  runId: string;
+  action: 'approve' | 'reject';
+  decision: ValidationDecision;
+  reason: string;
+  evidenceRefs: string[];
+  decidedByTenantId?: string;
+  decidedByUserId?: string;
+  createdAt: string;
+}
+
+export interface ValidationSharedRunDetailResponse {
+  requestId: string;
+  run: ValidationRunSummary;
+  artifact: ValidationRunArtifact;
+  permission: ValidationSharePermission;
+  comments?: ValidationReviewComment[];
+  decision?: ValidationReviewDecision | null;
+}
+
+export interface CreateSharedValidationCommentPayload {
+  body: string;
+  evidenceRefs?: string[];
+}
+
+export interface CreateSharedValidationDecisionPayload {
+  decision: ValidationDecision;
+  reason: string;
+  action: 'approve' | 'reject';
+  evidenceRefs?: string[];
+}

@@ -10,10 +10,12 @@ import {
   Activity,
   Bot,
   Brain,
+  Fingerprint,
   LayoutDashboard,
   LineChart,
   Menu,
   ShieldCheck,
+  Users,
   Wallet,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -25,6 +27,8 @@ const navItems = [
   { href: '/strategist', label: 'Strategist', icon: Brain },
   { href: '/strategies', label: 'Strategies', icon: LineChart },
   { href: '/validation', label: 'Validation', icon: ShieldCheck },
+  { href: '/shared-validation', label: 'Shared Validation', icon: Users },
+  { href: '/bots', label: 'Bots', icon: Fingerprint },
   { href: '/agents', label: 'Agents', icon: Bot },
   { href: '/portfolio', label: 'Portfolio', icon: Wallet },
 ];

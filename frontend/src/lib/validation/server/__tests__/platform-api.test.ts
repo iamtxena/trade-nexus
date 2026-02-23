@@ -5,6 +5,7 @@ import {
   callValidationPlatform,
   isValidValidationRunId,
   proxyValidationPlatformCall,
+  proxyValidationPlatformCallWithFallback,
 } from '../platform-api';
 
 function getHeader(headers: RequestInit['headers'], key: string): string | null {
@@ -171,6 +172,44 @@ describe('proxyValidationPlatformCall', () => {
 
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ error: 'backend timeout' });
+  });
+});
+
+describe('proxyValidationPlatformCallWithFallback', () => {
+  test('tries fallback path when primary endpoint is missing', async () => {
+    const fetchMock = mock((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/v2/validation-sharing/runs/shared-with-me')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: 'not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ requestId: 'req-shared-001', items: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    });
+
+    const response = await proxyValidationPlatformCallWithFallback({
+      method: 'GET',
+      paths: ['/v2/validation-sharing/runs/shared-with-me', '/v2/shared-validation/runs'],
+      backendBaseUrl: 'https://api.trade-nexus.local',
+      access: {
+        userId: 'user-101',
+        tenantId: 'tenant-101',
+        requestId: 'req-web-shared-101',
+      },
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ requestId: 'req-shared-001', items: [] });
   });
 });
 

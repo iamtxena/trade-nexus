@@ -20,7 +20,7 @@ function resolvePlatformBaseUrl(): string {
   const url = process.env.ML_BACKEND_URL;
 
   if (!url) {
-    if (process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production') {
+    if (process.env.VERCEL_ENV || process.env.NODE_ENV === 'production') {
       throw new Error(
         'ML_BACKEND_URL is not set. This environment variable is required in production. ' +
           'Set it to the ML backend origin (e.g. https://api-nexus.lona.agency).',
@@ -31,7 +31,7 @@ function resolvePlatformBaseUrl(): string {
   }
 
   if (
-    (process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production') &&
+    (process.env.VERCEL_ENV || process.env.NODE_ENV === 'production') &&
     (url.includes('localhost') || url.includes('127.0.0.1'))
   ) {
     throw new Error(

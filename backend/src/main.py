@@ -117,8 +117,8 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                 identity = resolve_validation_identity(
                     authorization=request.headers.get("Authorization"),
                     api_key=request.headers.get("X-API-Key"),
-                    tenant_header=None,
-                    user_header=None,
+                    tenant_header=request.headers.get("X-Tenant-Id"),
+                    user_header=request.headers.get("X-User-Id"),
                     request_id=request.state.request_id,
                 )
             except PlatformAPIError as exc:
@@ -138,16 +138,8 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                     method=request.method,
                 )
                 return await platform_api_error_handler(request, exc)
-            request.state.tenant_id = _header_or_fallback(
-                request,
-                header="X-Tenant-Id",
-                fallback=identity.tenant_id,
-            )
-            request.state.user_id = _header_or_fallback(
-                request,
-                header="X-User-Id",
-                fallback=identity.user_id,
-            )
+            request.state.tenant_id = identity.tenant_id
+            request.state.user_id = identity.user_id
             request.state.user_email_authenticated = bool(identity.user_email)
             request.state.user_email = identity.user_email
         elif _is_v2_validation_request(request.url.path):

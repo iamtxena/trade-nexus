@@ -13,8 +13,8 @@ class OpenClawClientConfig:
     base_url: str
     api_token: str = "test-token"
     api_key: str = "tnx.bot.runtime-openclaw-default.secret-001"
-    tenant_id: str = "tenant-local"
-    user_id: str = "user-local"
+    tenant_id: str = "tenant-apikey-43169556e3a2"
+    user_id: str = "user-apikey-8de7078687e2"
     timeout_seconds: float = 20.0
 
 

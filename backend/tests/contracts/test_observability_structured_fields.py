@@ -2,17 +2,67 @@
 
 from __future__ import annotations
 
+import base64
 import copy
+import hashlib
+import hmac
+import json
 import logging
+import os
+import time
 
 from fastapi.testclient import TestClient
 
 from src.main import app
 from src.platform_api import router_v1 as router_v1_module
 
+_JWT_SECRET = os.environ.setdefault("PLATFORM_AUTH_JWT_HS256_SECRET", "test-auth-identity-secret")
+
 
 def _client() -> TestClient:
     return TestClient(app)
+
+
+def _jwt_segment(payload: dict[str, object]) -> str:
+    encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(encoded).decode("utf-8").rstrip("=")
+
+
+def _jwt_token(payload: dict[str, object]) -> str:
+    header = _jwt_segment({"alg": "HS256", "typ": "JWT"})
+    claims = _jwt_segment(payload)
+    signing_input = f"{header}.{claims}".encode("utf-8")
+    signature = hmac.new(_JWT_SECRET.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    encoded_signature = base64.urlsafe_b64encode(signature).decode("utf-8").rstrip("=")
+    return f"{header}.{claims}.{encoded_signature}"
+
+
+def _future_exp(seconds: int = 300) -> int:
+    return int(time.time()) + seconds
+
+
+def _auth_headers(
+    *,
+    request_id: str,
+    tenant_id: str,
+    user_id: str,
+    tenant_header: str | None = None,
+    user_header: str | None = None,
+) -> dict[str, str]:
+    token = _jwt_token(
+        {
+            "sub": user_id,
+            "tenant_id": tenant_id,
+            "exp": _future_exp(),
+        }
+    )
+    return {
+        "Authorization": f"Bearer {token}",
+        "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
+        "X-Request-Id": request_id,
+        "X-Tenant-Id": tenant_id if tenant_header is None else tenant_header,
+        "X-User-Id": user_id if user_header is None else user_header,
+    }
 
 
 def _records_by_component(caplog, component: str) -> list[logging.LogRecord]:  # type: ignore[no-untyped-def]
@@ -40,13 +90,11 @@ def test_structured_observability_fields_for_research_risk_and_execution(caplog)
 
         research_resp = client.post(
             "/v2/research/market-scan",
-            headers={
-                "Authorization": "Bearer test-token",
-                "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
-                "X-Request-Id": "req-obs-rsch-001",
-                "X-Tenant-Id": "tenant-obs",
-                "X-User-Id": "user-obs",
-            },
+            headers=_auth_headers(
+                request_id="req-obs-rsch-001",
+                tenant_id="tenant-obs",
+                user_id="user-obs",
+            ),
             json={"assetClasses": ["crypto"], "capital": 25000},
         )
         assert research_resp.status_code == 200
@@ -54,11 +102,11 @@ def test_structured_observability_fields_for_research_risk_and_execution(caplog)
         order_resp = client.post(
             "/v1/orders",
             headers={
-                "Authorization": "Bearer test-token",
-                "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
-                "X-Request-Id": "req-obs-exec-001",
-                "X-Tenant-Id": "tenant-obs",
-                "X-User-Id": "user-obs",
+                **_auth_headers(
+                    request_id="req-obs-exec-001",
+                    tenant_id="tenant-obs",
+                    user_id="user-obs",
+                ),
                 "Idempotency-Key": "idem-obs-order-001",
             },
             json={
@@ -98,13 +146,13 @@ def test_v2_request_context_falls_back_for_blank_identity_headers(caplog) -> Non
 
     response = client.post(
         "/v2/research/market-scan",
-        headers={
-            "Authorization": "Bearer test-token",
-            "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
-            "X-Request-Id": "req-obs-blank-identity-001",
-            "X-Tenant-Id": "   ",
-            "X-User-Id": "",
-        },
+        headers=_auth_headers(
+            request_id="req-obs-blank-identity-001",
+            tenant_id="tenant-obs",
+            user_id="user-obs",
+            tenant_header="   ",
+            user_header="",
+        ),
         json={"assetClasses": ["crypto"], "capital": 25000},
     )
     assert response.status_code == 200
@@ -142,26 +190,22 @@ def test_structured_observability_fields_for_conversation_and_reconciliation(cap
 
     create_session = client.post(
         "/v2/conversations/sessions",
-        headers={
-            "Authorization": "Bearer test-token",
-            "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
-            "X-Request-Id": "req-obs-conv-001",
-            "X-Tenant-Id": "tenant-obs",
-            "X-User-Id": "user-obs",
-        },
+        headers=_auth_headers(
+            request_id="req-obs-conv-001",
+            tenant_id="tenant-obs",
+            user_id="user-obs",
+        ),
         json={"channel": "web", "topic": "observability test"},
     )
     assert create_session.status_code == 201
 
     list_deployments = client.get(
         "/v1/deployments",
-        headers={
-            "Authorization": "Bearer test-token",
-            "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
-            "X-Request-Id": "req-obs-recon-001",
-            "X-Tenant-Id": "tenant-obs",
-            "X-User-Id": "user-obs",
-        },
+        headers=_auth_headers(
+            request_id="req-obs-recon-001",
+            tenant_id="tenant-obs",
+            user_id="user-obs",
+        ),
     )
     assert list_deployments.status_code == 200
 

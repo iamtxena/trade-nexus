@@ -16,13 +16,20 @@ interface ValidationPlatformCallOptions {
 
 const VALIDATION_RUN_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
+function isDeployedEnvironment(): boolean {
+  const vercelEnv = process.env.VERCEL_ENV;
+  // vercel dev sets VERCEL_ENV=development — treat that as local
+  if (vercelEnv && vercelEnv !== 'development') return true;
+  return process.env.NODE_ENV === 'production';
+}
+
 function resolvePlatformBaseUrl(): string {
   const url = process.env.ML_BACKEND_URL;
 
   if (!url) {
-    if (process.env.VERCEL_ENV || process.env.NODE_ENV === 'production') {
+    if (isDeployedEnvironment()) {
       throw new Error(
-        'ML_BACKEND_URL is not set. This environment variable is required in production. ' +
+        'ML_BACKEND_URL is not set. This environment variable is required in deployed environments. ' +
           'Set it to the ML backend origin (e.g. https://api-nexus.lona.agency).',
       );
     }
@@ -31,7 +38,7 @@ function resolvePlatformBaseUrl(): string {
   }
 
   if (
-    (process.env.VERCEL_ENV || process.env.NODE_ENV === 'production') &&
+    isDeployedEnvironment() &&
     (url.includes('localhost') || url.includes('127.0.0.1'))
   ) {
     throw new Error(

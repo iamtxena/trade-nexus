@@ -34,13 +34,13 @@ class TestCORSOrigins:
         assert response.status_code == 200
         assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
 
-    def test_production_api_origin_allowed(self, client: TestClient) -> None:
+    def test_production_api_origin_not_allowlisted(self, client: TestClient) -> None:
         response = client.get(
             "/health",
             headers={"Origin": "https://api-nexus.lona.agency"},
         )
         assert response.status_code == 200
-        assert response.headers["access-control-allow-origin"] == "https://api-nexus.lona.agency"
+        assert "access-control-allow-origin" not in response.headers
 
     def test_unlisted_origin_rejected(self, client: TestClient) -> None:
         response = client.get(

@@ -68,7 +68,6 @@ app.add_middleware(
         "http://localhost:3000",
         "https://*.vercel.app",
         "https://trade-nexus.lona.agency",
-        "https://api-nexus.lona.agency",
     ],
     allow_credentials=True,
     allow_methods=["*"],

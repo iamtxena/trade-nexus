@@ -16,7 +16,7 @@ FIXTURES = REPO_ROOT / "contracts" / "fixtures"
 
 HEADERS = {
     "Authorization": "Bearer test-token",
-    "X-API-Key": "test-key",
+    "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
     "X-Request-Id": "req-runtime-contract-001",
 }
 

@@ -13,7 +13,7 @@ from src.platform_api.state_store import OrderRecord
 
 HEADERS = {
     "Authorization": "Bearer test-token",
-    "X-API-Key": "test-key",
+    "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
     "X-Request-Id": "req-contract-001",
 }
 
@@ -42,6 +42,35 @@ def test_health_and_research_routes() -> None:
     payload = market_scan.json()
     assert payload["requestId"] == HEADERS["X-Request-Id"]
     assert len(payload["strategyIdeas"]) == 2
+
+
+def test_protected_v1_strategy_routes_require_authentication() -> None:
+    client = _client()
+
+    missing_auth = client.get(
+        "/v1/strategies",
+        headers={"X-Request-Id": "req-v1-auth-missing-001"},
+    )
+    assert missing_auth.status_code == 401
+    assert missing_auth.json()["requestId"] == "req-v1-auth-missing-001"
+    assert missing_auth.json()["error"]["code"] == "AUTH_UNAUTHORIZED"
+
+    invalid_bearer = client.get(
+        "/v1/strategies",
+        headers={
+            "Authorization": "Bearer invalid.jwt.token",
+            "X-Request-Id": "req-v1-auth-invalid-001",
+        },
+    )
+    assert invalid_bearer.status_code == 401
+    assert invalid_bearer.json()["requestId"] == "req-v1-auth-invalid-001"
+    assert invalid_bearer.json()["error"]["code"] == "AUTH_UNAUTHORIZED"
+
+
+def test_protected_v1_strategy_routes_allow_authorized_requests() -> None:
+    client = _client()
+    response = client.get("/v1/strategies", headers=HEADERS)
+    assert response.status_code == 200
 
 
 def test_research_route_returns_provider_budget_exceeded_error() -> None:

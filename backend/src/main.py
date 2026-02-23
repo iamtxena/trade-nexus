@@ -75,6 +75,20 @@ def _is_platform_request(path: str) -> bool:
     return path.startswith("/v1/") or path.startswith("/v2/")
 
 
+def _is_v1_request(path: str) -> bool:
+    return path.startswith("/v1/")
+
+
+def _is_v1_public_request(path: str) -> bool:
+    return path in {
+        "/v1/health",
+    }
+
+
+def _is_v1_protected_request(path: str) -> bool:
+    return _is_v1_request(path) and not _is_v1_public_request(path)
+
+
 def _is_v2_validation_request(path: str) -> bool:
     return path.startswith("/v2/validation")
 
@@ -98,7 +112,37 @@ async def platform_api_observability_context_middleware(request: Request, call_n
     """Attach request correlation identifiers and emit structured request logs."""
     if _is_platform_request(request.url.path):
         request.state.request_id = request.headers.get("X-Request-Id") or f"req-{uuid4()}"
-        if _is_v2_validation_request(request.url.path):
+        if _is_v1_protected_request(request.url.path):
+            try:
+                identity = resolve_validation_identity(
+                    authorization=request.headers.get("Authorization"),
+                    api_key=request.headers.get("X-API-Key"),
+                    tenant_header=request.headers.get("X-Tenant-Id"),
+                    user_header=request.headers.get("X-User-Id"),
+                    request_id=request.state.request_id,
+                )
+            except PlatformAPIError as exc:
+                request.state.tenant_id = "tenant-unauthenticated"
+                request.state.user_id = "user-unauthenticated"
+                request.state.user_email_authenticated = False
+                request.state.user_email = None
+                log_request_event(
+                    logger,
+                    level=logging.WARNING,
+                    message="Platform API request rejected.",
+                    request=request,
+                    component="api",
+                    operation="request_rejected",
+                    status_code=exc.status_code,
+                    errorCode=exc.code,
+                    method=request.method,
+                )
+                return await platform_api_error_handler(request, exc)
+            request.state.tenant_id = identity.tenant_id
+            request.state.user_id = identity.user_id
+            request.state.user_email_authenticated = bool(identity.user_email)
+            request.state.user_email = identity.user_email
+        elif _is_v2_validation_request(request.url.path):
             is_public_registration_route = _is_v2_validation_public_registration_request(request.url.path)
             has_auth_headers = bool(
                 (request.headers.get("Authorization") or "").strip()

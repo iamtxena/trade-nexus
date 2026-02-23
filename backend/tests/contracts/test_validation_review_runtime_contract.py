@@ -41,7 +41,7 @@ def _validation_headers(
     token = _jwt_token({"sub": user_id, "tenant_id": tenant_id})
     return {
         "Authorization": f"Bearer {token}",
-        "X-API-Key": "test-key",
+        "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
         "X-Request-Id": request_id,
         "X-Tenant-Id": tenant_id,
         "X-User-Id": user_id,

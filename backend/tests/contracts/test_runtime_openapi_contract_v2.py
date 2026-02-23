@@ -17,7 +17,7 @@ from src.platform_api.schemas_v1 import RequestContext
 
 HEADERS = {
     "Authorization": "Bearer test-token",
-    "X-API-Key": "test-key",
+    "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
     "X-Request-Id": "req-runtime-v2-001",
 }
 
@@ -46,7 +46,7 @@ def _auth_headers(
     tenant_id: str,
     user_id: str,
     user_email: str | None = None,
-    api_key: str = "test-key",
+    api_key: str = "tnx.bot.runtime-contract-001.secret-001",
 ) -> dict[str, str]:
     claims: dict[str, object] = {"sub": user_id, "tenant_id": tenant_id}
     if user_email is not None:

@@ -42,7 +42,7 @@ def test_structured_observability_fields_for_research_risk_and_execution(caplog)
             "/v2/research/market-scan",
             headers={
                 "Authorization": "Bearer test-token",
-                "X-API-Key": "test-key",
+                "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
                 "X-Request-Id": "req-obs-rsch-001",
                 "X-Tenant-Id": "tenant-obs",
                 "X-User-Id": "user-obs",
@@ -55,7 +55,7 @@ def test_structured_observability_fields_for_research_risk_and_execution(caplog)
             "/v1/orders",
             headers={
                 "Authorization": "Bearer test-token",
-                "X-API-Key": "test-key",
+                "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
                 "X-Request-Id": "req-obs-exec-001",
                 "X-Tenant-Id": "tenant-obs",
                 "X-User-Id": "user-obs",
@@ -100,7 +100,7 @@ def test_v2_request_context_falls_back_for_blank_identity_headers(caplog) -> Non
         "/v2/research/market-scan",
         headers={
             "Authorization": "Bearer test-token",
-            "X-API-Key": "test-key",
+            "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
             "X-Request-Id": "req-obs-blank-identity-001",
             "X-Tenant-Id": "   ",
             "X-User-Id": "",
@@ -144,7 +144,7 @@ def test_structured_observability_fields_for_conversation_and_reconciliation(cap
         "/v2/conversations/sessions",
         headers={
             "Authorization": "Bearer test-token",
-            "X-API-Key": "test-key",
+            "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
             "X-Request-Id": "req-obs-conv-001",
             "X-Tenant-Id": "tenant-obs",
             "X-User-Id": "user-obs",
@@ -157,7 +157,7 @@ def test_structured_observability_fields_for_conversation_and_reconciliation(cap
         "/v1/deployments",
         headers={
             "Authorization": "Bearer test-token",
-            "X-API-Key": "test-key",
+            "X-API-Key": "tnx.bot.runtime-contract-001.secret-001",
             "X-Request-Id": "req-obs-recon-001",
             "X-Tenant-Id": "tenant-obs",
             "X-User-Id": "user-obs",

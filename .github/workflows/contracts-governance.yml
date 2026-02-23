@@ -49,6 +49,7 @@ jobs:
             pytest-asyncio \
             fastapi \
             httpx \
+            'pyjwt[crypto]>=2.11.0' \
             pydantic \
             pydantic-settings \
             python-dotenv

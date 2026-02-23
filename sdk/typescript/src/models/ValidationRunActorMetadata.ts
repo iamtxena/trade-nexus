@@ -13,52 +13,55 @@
  */
 
 import { mapValues } from '../runtime';
-import type { ValidationActorType } from './ValidationActorType';
-import {
-    ValidationActorTypeFromJSON,
-    ValidationActorTypeFromJSONTyped,
-    ValidationActorTypeToJSON,
-    ValidationActorTypeToJSONTyped,
-} from './ValidationActorType';
-
 /**
- * 
+ * Runtime guarantees actor linkage on successful v2 responses.
  * @export
  * @interface ValidationRunActorMetadata
  */
 export interface ValidationRunActorMetadata {
     /**
+     * Canonical actor discriminator.
+     * `user` means actorId maps to userId.
+     * `bot` means actorId maps to botId.
      * 
-     * @type {ValidationActorType}
+     * @type {string}
      * @memberof ValidationRunActorMetadata
      */
-    actorType: ValidationActorType;
+    actorType: ValidationRunActorMetadataActorTypeEnum;
     /**
-     * 
+     * Canonical actor identifier for ownership/audit linkage.
      * @type {string}
      * @memberof ValidationRunActorMetadata
      */
     actorId: string;
     /**
-     * 
+     * Present when actorType is `user`; omitted otherwise.
      * @type {string}
      * @memberof ValidationRunActorMetadata
      */
     userId?: string | null;
     /**
-     * 
+     * Present when actorType is `bot`; omitted otherwise.
      * @type {string}
      * @memberof ValidationRunActorMetadata
      */
     botId?: string | null;
     /**
-     * 
+     * Must include `ownerUserId` for ownership auditability.
      * @type {{ [key: string]: any; }}
      * @memberof ValidationRunActorMetadata
      */
     metadata: { [key: string]: any; };
 }
 
+/**
+* @export
+* @enum {string}
+*/
+export enum ValidationRunActorMetadataActorTypeEnum {
+    User = 'user',
+    Bot = 'bot'
+}
 
 
 /**
@@ -81,7 +84,7 @@ export function ValidationRunActorMetadataFromJSONTyped(json: any, ignoreDiscrim
     }
     return {
         
-        'actorType': ValidationActorTypeFromJSON(json['actorType']),
+        'actorType': json['actorType'],
         'actorId': json['actorId'],
         'userId': json['userId'] == null ? undefined : json['userId'],
         'botId': json['botId'] == null ? undefined : json['botId'],
@@ -100,7 +103,7 @@ export function ValidationRunActorMetadataToJSONTyped(value?: ValidationRunActor
 
     return {
         
-        'actorType': ValidationActorTypeToJSON(value['actorType']),
+        'actorType': value['actorType'],
         'actorId': value['actorId'],
         'userId': value['userId'],
         'botId': value['botId'],

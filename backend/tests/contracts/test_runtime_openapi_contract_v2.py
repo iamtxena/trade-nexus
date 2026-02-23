@@ -396,6 +396,69 @@ def test_openapi_v2_runtime_status_codes() -> None:
     )
 
 
+def test_validation_run_actor_linkage_is_present_across_runtime_surfaces() -> None:
+    client = TestClient(app)
+    headers = _auth_headers(
+        request_id="req-runtime-v2-actor-parity-001",
+        tenant_id="tenant-runtime-actor-parity",
+        user_id="owner-runtime-actor-parity",
+        user_email="owner-runtime-actor-parity@example.com",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**headers, "Idempotency-Key": "idem-runtime-v2-actor-parity-run-001"},
+        json={
+            "strategyId": "strat-001",
+            "providerRefId": "lona-strategy-123",
+            "prompt": "Runtime actor parity contract check.",
+            "requestedIndicators": ["zigzag", "ema"],
+            "datasetIds": ["dataset-btc-1h-2025"],
+            "backtestReportRef": "blob://validation/candidate/backtest-report.json",
+            "policy": {
+                "profile": "STANDARD",
+                "blockMergeOnFail": True,
+                "blockReleaseOnFail": True,
+                "blockMergeOnAgentFail": True,
+                "blockReleaseOnAgentFail": False,
+                "requireTraderReview": False,
+                "hardFailOnMissingIndicators": True,
+                "failClosedOnEvidenceUnavailable": True,
+            },
+        },
+    )
+    assert create_run.status_code == 202
+    run_payload = create_run.json()["run"]
+    run_id = run_payload["id"]
+    assert run_payload["actor"]["actorType"] == "user"
+    assert run_payload["actor"]["actorId"] == "owner-runtime-actor-parity"
+    assert run_payload["actor"]["userId"] == "owner-runtime-actor-parity"
+    assert run_payload["actor"]["botId"] is None
+    assert run_payload["actor"]["metadata"]["ownerUserId"] == "owner-runtime-actor-parity"
+
+    listed = client.get("/v2/validation-runs", headers=headers)
+    assert listed.status_code == 200
+    listed_run = next(item for item in listed.json()["runs"] if item["id"] == run_id)
+    assert listed_run["actor"]["actorType"] == "user"
+    assert listed_run["actor"]["actorId"] == "owner-runtime-actor-parity"
+
+    fetched = client.get(f"/v2/validation-runs/{run_id}", headers=headers)
+    assert fetched.status_code == 200
+    fetched_actor = fetched.json()["run"]["actor"]
+    assert fetched_actor["actorType"] == "user"
+    assert fetched_actor["actorId"] == "owner-runtime-actor-parity"
+    assert fetched_actor["metadata"]["ownerUserId"] == "owner-runtime-actor-parity"
+
+    artifact = client.get(f"/v2/validation-runs/{run_id}/artifact", headers=headers)
+    assert artifact.status_code == 200
+    artifact_actor = artifact.json()["artifact"]["actor"]
+    assert artifact_actor["actorType"] == "user"
+    assert artifact_actor["actorId"] == "owner-runtime-actor-parity"
+    assert artifact_actor["userId"] == "owner-runtime-actor-parity"
+    assert artifact_actor["botId"] is None
+    assert artifact_actor["metadata"]["ownerUserId"] == "owner-runtime-actor-parity"
+
+
 def test_validation_v2_write_routes_require_idempotency_key_header() -> None:
     client = TestClient(app)
     validation_headers = _auth_headers(

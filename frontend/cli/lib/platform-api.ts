@@ -1,6 +1,18 @@
 import { getLonaConfig, initializeLonaCredentials } from './config';
 
+/** Default local-development URL; overridden by ML_BACKEND_URL env var. */
 export const PLATFORM_API_URL = 'http://localhost:8000';
+
+function warnIfLocalhostFallback(): void {
+  if (!process.env.ML_BACKEND_URL) {
+    console.warn(
+      '[trade-nexus-cli] ML_BACKEND_URL is not set — falling back to ' +
+        `${PLATFORM_API_URL}. Set ML_BACKEND_URL for non-local environments.`,
+    );
+  }
+}
+
+warnIfLocalhostFallback();
 
 type RequestOptions = {
   requestId?: string;

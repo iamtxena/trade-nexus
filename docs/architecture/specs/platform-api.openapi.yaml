@@ -3543,10 +3543,12 @@ components:
 
     ValidationRunActorMetadata:
       type: object
+      description: Runtime guarantees actor linkage on successful v2 responses.
       required: [actorType, actorId, metadata]
       properties:
         actorType:
-          $ref: '#/components/schemas/ValidationActorType'
+          type: string
+          enum: [user, bot]
           description: |
             Canonical actor discriminator.
             `user` means actorId maps to userId.
@@ -3585,7 +3587,6 @@ components:
           $ref: '#/components/schemas/ValidationRunDecision'
         actor:
           $ref: '#/components/schemas/ValidationRunActorMetadata'
-          description: Runtime guarantees actor linkage on successful v2 responses.
         createdAt:
           type: string
           format: date-time
@@ -3840,7 +3841,6 @@ components:
           type: string
         actor:
           $ref: '#/components/schemas/ValidationRunActorMetadata'
-          description: Runtime guarantees actor linkage on successful v2 responses.
         strategyRef:
           $ref: '#/components/schemas/ValidationStrategyRef'
         inputs:

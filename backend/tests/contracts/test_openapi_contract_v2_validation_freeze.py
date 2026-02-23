@@ -142,11 +142,17 @@ def test_validation_actor_linkage_contract_stays_declared_on_run_and_artifact() 
 
     run_block = spec.split("ValidationRun:", maxsplit=1)[1].split("ValidationRunResponse:", maxsplit=1)[0]
     assert "actor:" in run_block
-    assert "Runtime guarantees actor linkage on successful v2 responses." in run_block
+    assert "#/components/schemas/ValidationRunActorMetadata" in run_block
 
     artifact_block = spec.split("ValidationRunArtifact:", maxsplit=1)[1].split(
         "ValidationSnapshotDeterministicChecks:",
         maxsplit=1,
     )[0]
     assert "actor:" in artifact_block
-    assert "Runtime guarantees actor linkage on successful v2 responses." in artifact_block
+    assert "#/components/schemas/ValidationRunActorMetadata" in artifact_block
+
+    actor_block = spec.split("ValidationRunActorMetadata:", maxsplit=1)[1].split(
+        "ValidationActorType:",
+        maxsplit=1,
+    )[0]
+    assert "Runtime guarantees actor linkage on successful v2 responses." in actor_block

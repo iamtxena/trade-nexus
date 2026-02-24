@@ -1,6 +1,8 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
+import { resolveValidationSmokeApiKey } from '@/lib/validation/server/smoke-auth';
+
 export interface ValidationAuthSnapshot {
   userId: string | null;
   orgId?: string | null;
@@ -8,13 +10,21 @@ export interface ValidationAuthSnapshot {
 }
 
 export interface ValidationAccessContext {
-  userId: string;
-  tenantId: string;
   requestId: string;
+  userId?: string;
+  tenantId?: string;
   authorization?: string;
+  apiKey?: string;
+  authMode: 'clerk_session' | 'smoke_shared_key';
 }
 
 export type ValidationAuthReader = () => Promise<ValidationAuthSnapshot>;
+
+export interface ResolveValidationAccessOptions {
+  readAuth?: ValidationAuthReader;
+  requestHeaders?: Pick<Headers, 'get'>;
+  allowSmokeKey?: boolean;
+}
 
 export type ValidationAccessResolution =
   | { ok: true; access: ValidationAccessContext }
@@ -33,8 +43,25 @@ export function buildValidationRequestId(): string {
 }
 
 export async function resolveValidationAccess(
-  readAuth: ValidationAuthReader = auth as unknown as ValidationAuthReader,
+  options: ResolveValidationAccessOptions = {},
 ): Promise<ValidationAccessResolution> {
+  const requestId = buildValidationRequestId();
+
+  if (options.allowSmokeKey && options.requestHeaders) {
+    const smokeApiKey = resolveValidationSmokeApiKey(options.requestHeaders);
+    if (smokeApiKey) {
+      return {
+        ok: true,
+        access: {
+          requestId,
+          apiKey: smokeApiKey,
+          authMode: 'smoke_shared_key',
+        },
+      };
+    }
+  }
+
+  const readAuth = options.readAuth ?? (auth as unknown as ValidationAuthReader);
   const snapshot = await readAuth();
   const userId = snapshot.userId?.trim() ?? null;
   if (!userId) {
@@ -52,8 +79,9 @@ export async function resolveValidationAccess(
     access: {
       userId,
       tenantId: buildTenantId(snapshot.orgId, userId),
-      requestId: buildValidationRequestId(),
+      requestId,
       authorization,
+      authMode: 'clerk_session',
     },
   };
 }

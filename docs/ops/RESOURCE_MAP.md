@@ -117,8 +117,8 @@
 | ACR_PASSWORD | Registry access token | **Remove after MI migration** |
 | NPM_TOKEN | npm publishing (SDK) | Annual |
 | VALIDATION_PROXY_SMOKE_BASE_URL | Frontend smoke target URL | On endpoint change |
-| VALIDATION_PROXY_SMOKE_CLERK_SECRET_KEY | Credentialed smoke auth secret | On compromise |
-| VALIDATION_PROXY_SMOKE_CLERK_USER_ID | Credentialed smoke user identity | On account rotation |
+| VALIDATION_PROXY_SMOKE_SHARED_KEY | Proxy smoke shared credential | On compromise |
+| VALIDATION_PROXY_SMOKE_API_KEY | Runtime bot key forwarded by smoke | On compromise |
 
 ## CI/CD Workflows
 

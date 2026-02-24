@@ -28,18 +28,20 @@ Set these in GitHub repository settings:
 | Secret | Required | Example | Purpose |
 |--------|----------|---------|---------|
 | `VALIDATION_PROXY_SMOKE_BASE_URL` | Yes | `https://trade-nexus.lona.agency` | Frontend base URL for proxy route calls |
-| `VALIDATION_PROXY_SMOKE_CLERK_SECRET_KEY` | Yes | `sk_live_...` | Clerk Backend API key used to mint a short-lived session token |
-| `VALIDATION_PROXY_SMOKE_CLERK_USER_ID` | Yes | `user_...` | Dedicated smoke account identity |
+| `VALIDATION_PROXY_SMOKE_SHARED_KEY` | Yes | `smoke-shared-...` | Shared key accepted only by proxy smoke auth path |
+| `VALIDATION_PROXY_SMOKE_API_KEY` | No | `tnx.bot.validation-proxy-smoke` | Runtime bot API key forwarded to backend (`tnx.bot.*`) |
 
 Optional environment overrides are supported by the script, but are not required for standard runs.
 
 ## Controlled Credential Model
 
-1. Workflow uses `VALIDATION_PROXY_SMOKE_CLERK_SECRET_KEY` + dedicated smoke `user_id` (controlled identity).
-2. Script creates a short-lived Clerk session and session JWT non-interactively.
-3. Script calls proxy routes with bearer + `__session` cookie auth.
-4. Script revokes the temporary Clerk session after execution.
-5. Script never writes token material into artifacts.
+1. Workflow sends `VALIDATION_PROXY_SMOKE_SHARED_KEY` in `X-Validation-Smoke-Key`.
+2. Proxy accepts smoke auth only for:
+   - `POST /api/validation/runs`
+   - `GET /api/validation/runs/{runId}`
+   - `GET /api/validation/runs/{runId}/artifact`
+3. Proxy forwards runtime bot API key (`VALIDATION_PROXY_SMOKE_API_KEY` or default `tnx.bot.validation-proxy-smoke`) to backend via `X-API-Key`.
+4. Script never writes shared key or full API key into artifacts.
 
 ## Rotation & Ownership
 
@@ -48,11 +50,12 @@ Optional environment overrides are supported by the script, but are not required
 
 Rotation procedure:
 
-1. Rotate Clerk backend secret key in Clerk Dashboard.
-2. Update GitHub secret `VALIDATION_PROXY_SMOKE_CLERK_SECRET_KEY`.
-3. If smoke user changes, update `VALIDATION_PROXY_SMOKE_CLERK_USER_ID`.
-4. Trigger `validation-proxy-smoke` workflow manually.
-5. Verify artifact result is `PASS` and all three routes are non-401.
+1. Generate a new smoke shared key.
+2. Update frontend server env `VALIDATION_PROXY_SMOKE_SHARED_KEY` (Vercel project `trade-nexus`) and redeploy.
+3. Update GitHub Actions secret `VALIDATION_PROXY_SMOKE_SHARED_KEY`.
+4. If rotating runtime bot identity, update `VALIDATION_PROXY_SMOKE_API_KEY`.
+5. Trigger `validation-proxy-smoke` workflow manually.
+6. Verify artifact result is `PASS` and all three routes are non-401.
 
 ## Logging / Secret Hygiene
 

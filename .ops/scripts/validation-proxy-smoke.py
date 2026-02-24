@@ -16,9 +16,8 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_CLERK_API_BASE = "https://api.clerk.com/v1"
 DEFAULT_TIMEOUT_SECONDS = 30.0
-DEFAULT_SESSION_TOKEN_TTL_SECONDS = 300
+DEFAULT_RUNTIME_BOT_API_KEY = "tnx.bot.validation-proxy-smoke"
 
 
 @dataclass
@@ -250,19 +249,14 @@ def parse_args() -> argparse.Namespace:
         help="Frontend base URL (for example: https://trade-nexus.lona.agency).",
     )
     parser.add_argument(
-        "--clerk-secret-key",
-        default=os.getenv("VALIDATION_PROXY_SMOKE_CLERK_SECRET_KEY", ""),
-        help="Clerk backend secret key (sk_*).",
+        "--smoke-shared-key",
+        default=os.getenv("VALIDATION_PROXY_SMOKE_SHARED_KEY", ""),
+        help="Shared proxy smoke credential key.",
     )
     parser.add_argument(
-        "--clerk-user-id",
-        default=os.getenv("VALIDATION_PROXY_SMOKE_CLERK_USER_ID", ""),
-        help="Dedicated Clerk smoke user id (user_*).",
-    )
-    parser.add_argument(
-        "--clerk-api-base",
-        default=os.getenv("VALIDATION_PROXY_SMOKE_CLERK_API_BASE", DEFAULT_CLERK_API_BASE),
-        help="Clerk Backend API base URL.",
+        "--runtime-bot-api-key",
+        default=os.getenv("VALIDATION_PROXY_SMOKE_API_KEY", DEFAULT_RUNTIME_BOT_API_KEY),
+        help="Runtime bot API key forwarded to backend via the web proxy.",
     )
     parser.add_argument(
         "--timeout-seconds",
@@ -271,17 +265,6 @@ def parse_args() -> argparse.Namespace:
             os.getenv("VALIDATION_PROXY_SMOKE_TIMEOUT_SECONDS", str(DEFAULT_TIMEOUT_SECONDS))
         ),
         help="HTTP timeout in seconds.",
-    )
-    parser.add_argument(
-        "--session-token-ttl-seconds",
-        type=int,
-        default=int(
-            os.getenv(
-                "VALIDATION_PROXY_SMOKE_SESSION_TOKEN_TTL_SECONDS",
-                str(DEFAULT_SESSION_TOKEN_TTL_SECONDS),
-            )
-        ),
-        help="Session token TTL in seconds when minting Clerk token.",
     )
     parser.add_argument(
         "--strategy-id",
@@ -351,24 +334,21 @@ def main() -> int:
     started_at = utc_now()
     checks: list[RouteCheck] = []
     fatal_error: str | None = None
-    session_id: str | None = None
     run_id: str | None = None
     artifact_type: str | None = None
-    session_revoke_status: int | None = None
-    auth_bootstrap: dict[str, Any] = {}
 
     normalized_base_url = normalize_base_url(args.base_url)
-    normalized_clerk_api_base = normalize_base_url(args.clerk_api_base)
 
     try:
         base_url = require_non_empty(normalized_base_url, "VALIDATION_PROXY_SMOKE_BASE_URL")
-        clerk_secret_key = require_non_empty(
-            args.clerk_secret_key, "VALIDATION_PROXY_SMOKE_CLERK_SECRET_KEY"
+        smoke_shared_key = require_non_empty(
+            args.smoke_shared_key, "VALIDATION_PROXY_SMOKE_SHARED_KEY"
         )
-        clerk_user_id = require_non_empty(args.clerk_user_id, "VALIDATION_PROXY_SMOKE_CLERK_USER_ID")
-        clerk_api_base = require_non_empty(
-            normalized_clerk_api_base, "VALIDATION_PROXY_SMOKE_CLERK_API_BASE"
+        runtime_bot_api_key = require_non_empty(
+            args.runtime_bot_api_key, "VALIDATION_PROXY_SMOKE_API_KEY"
         )
+        if not runtime_bot_api_key.startswith("tnx.bot."):
+            raise ValueError("VALIDATION_PROXY_SMOKE_API_KEY must start with 'tnx.bot.'.")
 
         requested_indicators = parse_csv(args.requested_indicators)
         dataset_ids = parse_csv(args.dataset_ids)
@@ -376,47 +356,6 @@ def main() -> int:
             raise ValueError("VALIDATION_PROXY_SMOKE_REQUESTED_INDICATORS must not be empty.")
         if not dataset_ids:
             raise ValueError("VALIDATION_PROXY_SMOKE_DATASET_IDS must not be empty.")
-
-        clerk_headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {clerk_secret_key}",
-        }
-        session_create_result = http_json_request(
-            method="POST",
-            url=f"{clerk_api_base}/sessions",
-            headers=clerk_headers,
-            timeout_seconds=args.timeout_seconds,
-            payload={"user_id": clerk_user_id},
-        )
-        auth_bootstrap["sessionCreateStatus"] = session_create_result.status
-        if session_create_result.status not in {200, 201}:
-            raise RuntimeError(
-                f"Clerk session create failed with status {session_create_result.status}: "
-                f"{get_error_summary(session_create_result) or 'unknown error'}"
-            )
-
-        session_id_value = session_create_result.json_payload.get("id") if session_create_result.json_payload else None
-        if not isinstance(session_id_value, str) or not session_id_value:
-            raise RuntimeError("Clerk session create response did not include a session id.")
-        session_id = session_id_value
-
-        token_result = http_json_request(
-            method="POST",
-            url=f"{clerk_api_base}/sessions/{session_id}/tokens",
-            headers=clerk_headers,
-            timeout_seconds=args.timeout_seconds,
-            payload={"expires_in_seconds": args.session_token_ttl_seconds},
-        )
-        auth_bootstrap["sessionTokenStatus"] = token_result.status
-        if token_result.status not in {200, 201}:
-            raise RuntimeError(
-                f"Clerk session token mint failed with status {token_result.status}: "
-                f"{get_error_summary(token_result) or 'unknown error'}"
-            )
-        jwt_value = token_result.json_payload.get("jwt") if token_result.json_payload else None
-        if not isinstance(jwt_value, str) or not jwt_value:
-            raise RuntimeError("Clerk token response did not include jwt.")
 
         smoke_payload = {
             "strategyId": args.strategy_id,
@@ -437,20 +376,22 @@ def main() -> int:
             },
         }
 
-        proxy_headers = {
+        base_headers = {
             "Accept": "application/json",
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {jwt_value}",
-            "Cookie": f"__session={jwt_value}",
-            "Idempotency-Key": f"idem-validation-proxy-smoke-{uuid.uuid4()}",
             "User-Agent": "trade-nexus-validation-proxy-smoke/1.0",
+            "X-Validation-Smoke-Key": smoke_shared_key,
+            "X-API-Key": runtime_bot_api_key,
         }
 
         create_path = "/api/validation/runs"
+        create_headers = dict(base_headers)
+        create_headers["Content-Type"] = "application/json"
+        create_headers["Idempotency-Key"] = f"idem-validation-proxy-smoke-{uuid.uuid4()}"
+
         create_result = http_json_request(
             method="POST",
             url=f"{base_url}{create_path}",
-            headers=proxy_headers,
+            headers=create_headers,
             timeout_seconds=args.timeout_seconds,
             payload=smoke_payload,
         )
@@ -469,12 +410,7 @@ def main() -> int:
             get_run_result = http_json_request(
                 method="GET",
                 url=f"{base_url}{run_path}",
-                headers={
-                    "Accept": "application/json",
-                    "Authorization": f"Bearer {jwt_value}",
-                    "Cookie": f"__session={jwt_value}",
-                    "User-Agent": "trade-nexus-validation-proxy-smoke/1.0",
-                },
+                headers=base_headers,
                 timeout_seconds=args.timeout_seconds,
             )
             checks.append(
@@ -492,12 +428,7 @@ def main() -> int:
             get_artifact_result = http_json_request(
                 method="GET",
                 url=f"{base_url}{artifact_path}",
-                headers={
-                    "Accept": "application/json",
-                    "Authorization": f"Bearer {jwt_value}",
-                    "Cookie": f"__session={jwt_value}",
-                    "User-Agent": "trade-nexus-validation-proxy-smoke/1.0",
-                },
+                headers=base_headers,
                 timeout_seconds=args.timeout_seconds,
             )
             artifact_payload = get_artifact_result.json_payload
@@ -550,20 +481,6 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         fatal_error = f"{type(exc).__name__}: {exc}"
 
-    finally:
-        if session_id:
-            revoke_result = http_json_request(
-                method="POST",
-                url=f"{normalize_base_url(args.clerk_api_base)}/sessions/{session_id}/revoke",
-                headers={
-                    "Accept": "application/json",
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {args.clerk_secret_key}",
-                },
-                timeout_seconds=args.timeout_seconds,
-            )
-            session_revoke_status = revoke_result.status
-
     all_non401 = all(check.non401 for check in checks) if checks else False
     all_expected_status = all(check.expected_status for check in checks) if checks else False
     status_value = "pass" if checks and all(check.ok for check in checks) and not fatal_error else "fail"
@@ -583,14 +500,10 @@ def main() -> int:
             ],
         },
         "auth": {
-            "mode": "clerk_backend_session_token",
-            "clerkApiBase": normalized_clerk_api_base,
-            "clerkUserId": args.clerk_user_id,
-            "sessionId": session_id,
-            "tokenTtlSeconds": args.session_token_ttl_seconds,
-            "tokenRedacted": True,
-            "bootstrap": auth_bootstrap,
-            "revokeStatus": session_revoke_status,
+            "mode": "smoke_shared_key_runtime_bot_api_key",
+            "smokeSharedKeyRedacted": True,
+            "runtimeBotApiKeyRedacted": True,
+            "runtimeBotApiKeyConfigured": bool((args.runtime_bot_api_key or "").strip()),
         },
         "result": {
             "allNon401": all_non401,

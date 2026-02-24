@@ -15,8 +15,8 @@
 | `supabase-key` | Azure + Vercel | On compromise | CloudOps | Service role key |
 | `live-engine-service-api-key` | Azure + Vercel | 90 days | CloudOps | Execution bridge |
 | `VALIDATION_PROXY_SMOKE_BASE_URL` | GitHub Actions | On endpoint change | CloudOps | Validation proxy smoke target URL |
-| `VALIDATION_PROXY_SMOKE_CLERK_SECRET_KEY` | GitHub Actions | On compromise | CloudOps | Credentialed validation proxy smoke auth |
-| `VALIDATION_PROXY_SMOKE_CLERK_USER_ID` | GitHub Actions | On account rotation | CloudOps | Dedicated smoke account identity |
+| `VALIDATION_PROXY_SMOKE_SHARED_KEY` | GitHub Actions + Vercel | On compromise | CloudOps | Proxy smoke shared auth key |
+| `VALIDATION_PROXY_SMOKE_API_KEY` | GitHub Actions | On compromise | CloudOps | Runtime bot key forwarded by smoke |
 | `CLERK_SECRET_KEY` | Vercel only | On compromise | Dev Team | Auth provider |
 | `UPSTASH_REDIS_REST_TOKEN` | Vercel only | On compromise | Dev Team | Cache |
 | `SUPABASE_SERVICE_ROLE_KEY` | Vercel only | On compromise | CloudOps | DB admin access |

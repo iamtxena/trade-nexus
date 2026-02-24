@@ -74,8 +74,8 @@
 | `ACR_PASSWORD` | `backend-deploy.yml` | ACR admin password (**remove after MI migration**) |
 | `NPM_TOKEN` | `publish-sdk.yml` | npm publishing |
 | `VALIDATION_PROXY_SMOKE_BASE_URL` | `validation-proxy-smoke.yml` | Frontend proxy base URL (for example `https://trade-nexus.lona.agency`) |
-| `VALIDATION_PROXY_SMOKE_CLERK_SECRET_KEY` | `validation-proxy-smoke.yml` | Clerk Backend API secret key for non-interactive smoke auth |
-| `VALIDATION_PROXY_SMOKE_CLERK_USER_ID` | `validation-proxy-smoke.yml` | Dedicated Clerk smoke user id |
+| `VALIDATION_PROXY_SMOKE_SHARED_KEY` | `validation-proxy-smoke.yml` | Shared key for proxy smoke authentication |
+| `VALIDATION_PROXY_SMOKE_API_KEY` | `validation-proxy-smoke.yml` | Runtime bot API key forwarded to backend (`tnx.bot.*`) |
 
 ## Domain References — Canonical Values
 
@@ -101,4 +101,4 @@
 | #229 | Baseline replay + gates | No new env vars | **N/A** |
 | #230 | Web review lane | Frontend Supabase vars | **Available** |
 | #231 | CLI validation commands | Backend env vars | **Available** |
-| #333 | Credentialed validation proxy smoke | `VALIDATION_PROXY_SMOKE_BASE_URL`, `VALIDATION_PROXY_SMOKE_CLERK_SECRET_KEY`, `VALIDATION_PROXY_SMOKE_CLERK_USER_ID` | **Available** |
+| #333 | Credentialed validation proxy smoke | `VALIDATION_PROXY_SMOKE_BASE_URL`, `VALIDATION_PROXY_SMOKE_SHARED_KEY`, `VALIDATION_PROXY_SMOKE_API_KEY` | **Available** |

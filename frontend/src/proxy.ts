@@ -2,7 +2,6 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { type NextRequest, NextResponse } from 'next/server';
 
 import { PROTECTED_ROUTE_PATTERNS } from '@/lib/auth/protected-routes';
-import { hasValidValidationSmokeSharedKey } from '@/lib/validation/server/smoke-auth';
 
 const isProtectedRoute = createRouteMatcher(PROTECTED_ROUTE_PATTERNS);
 
@@ -18,10 +17,7 @@ function isValidationProxySmokeRoute(pathname: string): boolean {
 
 const clerkProtectedMiddleware = clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {
-    if (
-      isValidationProxySmokeRoute(req.nextUrl.pathname) &&
-      hasValidValidationSmokeSharedKey(req.headers)
-    ) {
+    if (isValidationProxySmokeRoute(req.nextUrl.pathname)) {
       return;
     }
     await auth.protect();

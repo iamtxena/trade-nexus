@@ -1,7 +1,7 @@
 # Trade Nexus — Resource Map
 
 > **Owner**: Team VOps (Cloud DevOps)
-> **Last updated**: 2026-02-21
+> **Last updated**: 2026-02-24
 > **Scope**: All cloud resources for the trade-nexus platform
 
 ## Domain Map
@@ -116,6 +116,9 @@
 | ACR_USERNAME | Registry service account | **Remove after MI migration** |
 | ACR_PASSWORD | Registry access token | **Remove after MI migration** |
 | NPM_TOKEN | npm publishing (SDK) | Annual |
+| VALIDATION_PROXY_SMOKE_BASE_URL | Frontend smoke target URL | On endpoint change |
+| VALIDATION_PROXY_SMOKE_CLERK_SECRET_KEY | Credentialed smoke auth secret | On compromise |
+| VALIDATION_PROXY_SMOKE_CLERK_USER_ID | Credentialed smoke user identity | On account rotation |
 
 ## CI/CD Workflows
 
@@ -126,6 +129,7 @@
 | docs-governance.yml | All `pull_request` events; push to `main` when docs paths change | Docusaurus build, link validation |
 | llm-package-governance.yml | All `pull_request` events; push to `main` when docs/scripts paths change | LLM package generation and drift check |
 | publish-sdk.yml | Manual or sdk-v* tag | SDK regeneration and npm publish |
+| validation-proxy-smoke.yml | Manual (`workflow_dispatch`) | Non-interactive credentialed smoke through validation web proxy routes |
 
 ## Operational Scripts
 
@@ -135,6 +139,7 @@
 | ops-drill.sh | 5-scenario operational readiness | .ops/scripts/ |
 | rollback.sh | Revision rollback with validation | .ops/scripts/ |
 | fix-kv-rbac.sh | Key Vault RBAC remediation | .ops/scripts/ |
+| validation-proxy-smoke.py | Credentialed validation proxy smoke + artifact generation | .ops/scripts/ |
 
 ## Managed Identity
 

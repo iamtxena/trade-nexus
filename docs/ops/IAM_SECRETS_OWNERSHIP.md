@@ -1,7 +1,7 @@
 # Trade Nexus — IAM & Secrets Ownership
 
 > **Owner**: Team VOps
-> **Last updated**: 2026-02-21
+> **Last updated**: 2026-02-24
 > **Governance**: Only VOps provisions, rotates, or modifies secrets and IAM roles.
 
 ## Service Principal
@@ -60,6 +60,9 @@
 | ACR_USERNAME | GitHub Actions secret | VOps | **Remove after MI migration** | Registry (legacy) |
 | ACR_PASSWORD | GitHub Actions secret | VOps | **Remove after MI migration** | Registry (legacy) |
 | NPM_TOKEN | GitHub Actions secret | VOps | Annual | SDK publishing |
+| VALIDATION_PROXY_SMOKE_BASE_URL | GitHub Actions secret | VOps | On endpoint change | Smoke routing target |
+| VALIDATION_PROXY_SMOKE_CLERK_SECRET_KEY | GitHub Actions secret | VOps | On compromise | Credentialed smoke auth |
+| VALIDATION_PROXY_SMOKE_CLERK_USER_ID | GitHub Actions secret | VOps | On account rotation | Dedicated smoke identity |
 | CLERK_SECRET_KEY | Vercel env var | VOps | On compromise | Auth |
 | NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY | Vercel env var | VOps | Static | Auth (public) |
 | SUPABASE_SERVICE_ROLE_KEY | Vercel env var | VOps | On compromise | DB admin |
@@ -88,6 +91,8 @@
 | langsmith-api-key | Unknown | TBD | Document initial rotation |
 | lona-agent-token | Auto (TTL) | 30-day cycle | Self-rotating via TTL |
 | live-engine-service-api-key | 2026-02-21 | On compromise | Just provisioned |
+| VALIDATION_PROXY_SMOKE_CLERK_SECRET_KEY | 2026-02-24 | On compromise | CloudOps-owned smoke credential |
+| VALIDATION_PROXY_SMOKE_CLERK_USER_ID | 2026-02-24 | On account rotation | CloudOps-owned smoke identity |
 
 ## Break-Glass Procedures
 

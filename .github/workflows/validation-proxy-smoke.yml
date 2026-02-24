@@ -1,0 +1,70 @@
+name: validation-proxy-smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validation-proxy-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      VALIDATION_PROXY_SMOKE_BASE_URL: ${{ secrets.VALIDATION_PROXY_SMOKE_BASE_URL }}
+      VALIDATION_PROXY_SMOKE_CLERK_SECRET_KEY: ${{ secrets.VALIDATION_PROXY_SMOKE_CLERK_SECRET_KEY }}
+      VALIDATION_PROXY_SMOKE_CLERK_USER_ID: ${{ secrets.VALIDATION_PROXY_SMOKE_CLERK_USER_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run validation proxy smoke
+        run: |
+          mkdir -p .ops/artifacts
+          RUN_STAMP="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date -u +%Y%m%dT%H%M%SZ)"
+          SMOKE_JSON_PATH=".ops/artifacts/validation-proxy-smoke-${RUN_STAMP}.json"
+          SMOKE_TSV_PATH=".ops/artifacts/validation-proxy-smoke-${RUN_STAMP}.tsv"
+          SMOKE_TXT_PATH=".ops/artifacts/validation-proxy-smoke-${RUN_STAMP}.txt"
+          echo "SMOKE_JSON_PATH=${SMOKE_JSON_PATH}" >> "$GITHUB_ENV"
+          echo "SMOKE_TSV_PATH=${SMOKE_TSV_PATH}" >> "$GITHUB_ENV"
+          echo "SMOKE_TXT_PATH=${SMOKE_TXT_PATH}" >> "$GITHUB_ENV"
+
+          set +e
+          python3 .ops/scripts/validation-proxy-smoke.py \
+            --output-json "${SMOKE_JSON_PATH}" \
+            --output-tsv "${SMOKE_TSV_PATH}" \
+            --output-text "${SMOKE_TXT_PATH}"
+          SMOKE_EXIT_CODE=$?
+          set -e
+
+          echo "SMOKE_EXIT_CODE=${SMOKE_EXIT_CODE}" >> "$GITHUB_ENV"
+          exit "${SMOKE_EXIT_CODE}"
+
+      - name: Summarize smoke report
+        if: always()
+        run: |
+          echo "### Validation Proxy Smoke" >> "$GITHUB_STEP_SUMMARY"
+          if [[ -f "${SMOKE_TXT_PATH}" ]]; then
+            cat "${SMOKE_TXT_PATH}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Smoke summary file missing: ${SMOKE_TXT_PATH}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Workflow run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Artifact name: validation-proxy-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-proxy-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.SMOKE_JSON_PATH }}
+            ${{ env.SMOKE_TSV_PATH }}
+            ${{ env.SMOKE_TXT_PATH }}
+          if-no-files-found: error

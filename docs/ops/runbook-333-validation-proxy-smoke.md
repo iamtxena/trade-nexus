@@ -29,7 +29,11 @@ Set these in GitHub repository settings:
 |--------|----------|---------|---------|
 | `VALIDATION_PROXY_SMOKE_BASE_URL` | Yes | `https://trade-nexus.lona.agency` | Frontend base URL for proxy route calls |
 | `VALIDATION_PROXY_SMOKE_SHARED_KEY` | Yes | `smoke-shared-...` | Shared key accepted only by proxy smoke auth path |
-| `VALIDATION_PROXY_SMOKE_API_KEY` | No | `tnx.bot.validation-proxy-smoke` | Runtime bot API key forwarded to backend (`tnx.bot.*`) |
+| `VALIDATION_PROXY_SMOKE_PARTNER_KEY` | Yes | `partner-bootstrap` | Partner bootstrap key used to mint runtime bot key each run |
+| `VALIDATION_PROXY_SMOKE_PARTNER_SECRET` | Yes | `<redacted>` | Partner bootstrap secret used to mint runtime bot key each run |
+| `VALIDATION_PROXY_SMOKE_OWNER_EMAIL` | Yes | `smoke.validation+proxy@lona.agency` | Registration owner identity for runtime bot bootstrap |
+| `VALIDATION_PROXY_SMOKE_BOT_NAME` | No | `validation-proxy-smoke` | Registration bot name for runtime bot bootstrap |
+| `VALIDATION_PROXY_SMOKE_API_KEY` | No | `tnx.bot.<botId>.<keyId>.<secret>` | Fallback static runtime key only when bootstrap credentials are unavailable |
 
 Optional environment overrides are supported by the script, but are not required for standard runs.
 
@@ -37,11 +41,13 @@ Optional environment overrides are supported by the script, but are not required
 
 1. Workflow sends `VALIDATION_PROXY_SMOKE_SHARED_KEY` in `X-Validation-Smoke-Key`.
 2. Proxy accepts smoke auth only for:
+   - `POST /api/validation/bots/registrations/partner-bootstrap`
    - `POST /api/validation/runs`
    - `GET /api/validation/runs/{runId}`
    - `GET /api/validation/runs/{runId}/artifact`
-3. Proxy forwards runtime bot API key (`VALIDATION_PROXY_SMOKE_API_KEY` or default `tnx.bot.validation-proxy-smoke`) to backend via `X-API-Key`.
-4. Script never writes shared key or full API key into artifacts.
+3. Smoke script first bootstraps a runtime bot key through the web proxy partner-bootstrap route and reads `issuedKey.rawKey` in-memory only.
+4. Script calls the three target routes using that runtime bot key via `X-API-Key`.
+5. Script never writes shared key, partner secret, or full runtime bot key into artifacts.
 
 ## Rotation & Ownership
 
@@ -53,9 +59,11 @@ Rotation procedure:
 1. Generate a new smoke shared key.
 2. Update frontend server env `VALIDATION_PROXY_SMOKE_SHARED_KEY` (Vercel project `trade-nexus`) and redeploy.
 3. Update GitHub Actions secret `VALIDATION_PROXY_SMOKE_SHARED_KEY`.
-4. If rotating runtime bot identity, update `VALIDATION_PROXY_SMOKE_API_KEY`.
+4. Rotate partner bootstrap credential pair:
+   - Backend env (`PLATFORM_BOT_PARTNER_CREDENTIALS_JSON`) in Container App.
+   - GitHub Actions secrets `VALIDATION_PROXY_SMOKE_PARTNER_KEY` + `VALIDATION_PROXY_SMOKE_PARTNER_SECRET`.
 5. Trigger `validation-proxy-smoke` workflow manually.
-6. Verify artifact result is `PASS` and all three routes are non-401.
+6. Verify artifact result is `PASS` and all three target routes are non-401.
 
 ## Logging / Secret Hygiene
 

@@ -118,7 +118,11 @@
 | NPM_TOKEN | npm publishing (SDK) | Annual |
 | VALIDATION_PROXY_SMOKE_BASE_URL | Frontend smoke target URL | On endpoint change |
 | VALIDATION_PROXY_SMOKE_SHARED_KEY | Proxy smoke shared credential | On compromise |
-| VALIDATION_PROXY_SMOKE_API_KEY | Runtime bot key forwarded by smoke | On compromise |
+| VALIDATION_PROXY_SMOKE_PARTNER_KEY | Partner bootstrap key for smoke runtime-key minting | On partner credential rotation |
+| VALIDATION_PROXY_SMOKE_PARTNER_SECRET | Partner bootstrap secret for smoke runtime-key minting | On partner credential rotation |
+| VALIDATION_PROXY_SMOKE_OWNER_EMAIL | Partner bootstrap owner identity for smoke | On ownership handoff |
+| VALIDATION_PROXY_SMOKE_BOT_NAME | Optional bot name for smoke bootstrap registration | Rarely |
+| VALIDATION_PROXY_SMOKE_API_KEY | Optional fallback runtime bot key | On compromise |
 
 ## CI/CD Workflows
 

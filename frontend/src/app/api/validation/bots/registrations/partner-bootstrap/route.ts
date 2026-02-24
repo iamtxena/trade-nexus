@@ -4,7 +4,11 @@ import type { CreateValidationBotPartnerBootstrapPayload } from '@/lib/validatio
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
-  const accessResult = await resolveValidationAccess();
+  const accessResult = await resolveValidationAccess({
+    requestHeaders: request.headers,
+    allowSmokeKey: true,
+    allowSmokeKeyWithoutApiKey: true,
+  });
   if (!accessResult.ok) {
     return accessResult.response;
   }

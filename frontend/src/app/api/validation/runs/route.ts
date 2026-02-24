@@ -8,7 +8,10 @@ import {
 import type { CreateValidationRunRequestPayload } from '@/lib/validation/types';
 
 export async function GET(request: NextRequest) {
-  const accessResult = await resolveValidationAccess();
+  const accessResult = await resolveValidationAccess({
+    requestHeaders: request.headers,
+    allowSmokeKey: true,
+  });
   if (!accessResult.ok) {
     return accessResult.response;
   }
@@ -32,7 +35,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const accessResult = await resolveValidationAccess();
+  const accessResult = await resolveValidationAccess({
+    requestHeaders: request.headers,
+    allowSmokeKey: true,
+  });
   if (!accessResult.ok) {
     return accessResult.response;
   }

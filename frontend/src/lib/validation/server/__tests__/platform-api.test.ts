@@ -49,6 +49,8 @@ describe('callValidationPlatform', () => {
         tenantId: 'tenant-001',
         requestId: 'req-web-validation-001',
         authorization: 'Bearer token-001',
+        apiKey: 'tnx.bot.smoke.key-001',
+        authMode: 'clerk_session',
       },
       fetchImpl: fetchMock as unknown as typeof fetch,
     });
@@ -62,6 +64,7 @@ describe('callValidationPlatform', () => {
     expect(getHeader(requestInit.headers, 'X-Tenant-Id')).toBe('tenant-001');
     expect(getHeader(requestInit.headers, 'X-User-Id')).toBe('user-001');
     expect(getHeader(requestInit.headers, 'Authorization')).toBe('Bearer token-001');
+    expect(getHeader(requestInit.headers, 'X-API-Key')).toBe('tnx.bot.smoke.key-001');
     expect(getHeader(requestInit.headers, 'Idempotency-Key')).toBe('idem-web-review-001');
     expect(getHeader(requestInit.headers, 'Content-Type')).toBe('application/json');
     expect(requestInit.body).toBe(
@@ -91,6 +94,7 @@ describe('callValidationPlatform', () => {
         userId: 'user-004',
         tenantId: 'tenant-004',
         requestId: 'req-web-validation-004',
+        authMode: 'clerk_session',
       },
       fetchImpl: fetchMock as unknown as typeof fetch,
     });
@@ -103,8 +107,40 @@ describe('callValidationPlatform', () => {
     expect(getHeader(requestInit.headers, 'X-Request-Id')).toBe('req-web-validation-004');
     expect(getHeader(requestInit.headers, 'X-Tenant-Id')).toBe('tenant-004');
     expect(getHeader(requestInit.headers, 'X-User-Id')).toBe('user-004');
+    expect(getHeader(requestInit.headers, 'X-API-Key')).toBeNull();
     expect(getHeader(requestInit.headers, 'Content-Type')).toBeNull();
     expect(requestInit.body).toBeUndefined();
+  });
+
+  test('supports runtime bot API key calls without tenant/user identity headers', async () => {
+    const fetchMock = mock(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ requestId: 'req-v2-bot-001' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
+
+    await callValidationPlatform({
+      method: 'GET',
+      path: '/v2/validation-runs?limit=1',
+      backendBaseUrl: 'https://api.trade-nexus.local/',
+      access: {
+        requestId: 'req-web-validation-bot-001',
+        apiKey: 'tnx.bot.validation-proxy-smoke',
+        authMode: 'smoke_shared_key',
+      },
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    const firstCall = fetchMock.mock.calls[0] as unknown;
+    const [_url, requestInit] = firstCall as [string, RequestInit];
+    expect(getHeader(requestInit.headers, 'X-Request-Id')).toBe('req-web-validation-bot-001');
+    expect(getHeader(requestInit.headers, 'X-API-Key')).toBe('tnx.bot.validation-proxy-smoke');
+    expect(getHeader(requestInit.headers, 'X-Tenant-Id')).toBeNull();
+    expect(getHeader(requestInit.headers, 'X-User-Id')).toBeNull();
+    expect(getHeader(requestInit.headers, 'Authorization')).toBeNull();
   });
 });
 
@@ -141,6 +177,7 @@ describe('proxyValidationPlatformCall', () => {
         userId: 'user-002',
         tenantId: 'tenant-002',
         requestId: 'req-web-validation-002',
+        authMode: 'clerk_session',
       },
       fetchImpl: fetchMock as unknown as typeof fetch,
     });
@@ -166,6 +203,7 @@ describe('proxyValidationPlatformCall', () => {
         userId: 'user-003',
         tenantId: 'tenant-003',
         requestId: 'req-web-validation-003',
+        authMode: 'clerk_session',
       },
       fetchImpl: fetchMock as unknown as typeof fetch,
     });
@@ -203,6 +241,7 @@ describe('proxyValidationPlatformCallWithFallback', () => {
         userId: 'user-101',
         tenantId: 'tenant-101',
         requestId: 'req-web-shared-101',
+        authMode: 'clerk_session',
       },
       fetchImpl: fetchMock as unknown as typeof fetch,
     });

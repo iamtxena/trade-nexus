@@ -37,13 +37,9 @@ function resolvePlatformBaseUrl(): string {
     return 'http://localhost:8000';
   }
 
-  if (
-    isDeployedEnvironment() &&
-    (url.includes('localhost') || url.includes('127.0.0.1'))
-  ) {
+  if (isDeployedEnvironment() && (url.includes('localhost') || url.includes('127.0.0.1'))) {
     throw new Error(
-      `ML_BACKEND_URL points to a local address (${url}) in a production environment. ` +
-        'Set it to the ML backend origin (e.g. https://api-nexus.lona.agency).',
+      `ML_BACKEND_URL points to a local address (${url}) in a production environment. Set it to the ML backend origin (e.g. https://api-nexus.lona.agency).`,
     );
   }
 
@@ -82,10 +78,17 @@ export async function callValidationPlatform(
 
   headers.set('Accept', 'application/json');
   headers.set('X-Request-Id', options.access.requestId);
-  headers.set('X-Tenant-Id', options.access.tenantId);
-  headers.set('X-User-Id', options.access.userId);
+  if (options.access.tenantId) {
+    headers.set('X-Tenant-Id', options.access.tenantId);
+  }
+  if (options.access.userId) {
+    headers.set('X-User-Id', options.access.userId);
+  }
   if (options.access.authorization) {
     headers.set('Authorization', options.access.authorization);
+  }
+  if (options.access.apiKey) {
+    headers.set('X-API-Key', options.access.apiKey);
   }
   if (options.idempotencyKey) {
     headers.set('Idempotency-Key', options.idempotencyKey);

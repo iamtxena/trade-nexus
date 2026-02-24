@@ -7,10 +7,13 @@ import {
 } from '@/lib/validation/server/platform-api';
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ runId: string }> },
 ) {
-  const accessResult = await resolveValidationAccess();
+  const accessResult = await resolveValidationAccess({
+    requestHeaders: request.headers,
+    allowSmokeKey: true,
+  });
   if (!accessResult.ok) {
     return accessResult.response;
   }

@@ -62,7 +62,11 @@
 | NPM_TOKEN | GitHub Actions secret | VOps | Annual | SDK publishing |
 | VALIDATION_PROXY_SMOKE_BASE_URL | GitHub Actions secret | VOps | On endpoint change | Smoke routing target |
 | VALIDATION_PROXY_SMOKE_SHARED_KEY | GitHub Actions secret + Vercel server env | VOps | On compromise | Proxy smoke shared credential |
-| VALIDATION_PROXY_SMOKE_API_KEY | GitHub Actions secret | VOps | On compromise | Runtime bot key forwarded by smoke |
+| VALIDATION_PROXY_SMOKE_PARTNER_KEY | GitHub Actions secret | VOps | On partner credential rotation | Partner bootstrap key for smoke runtime-key minting |
+| VALIDATION_PROXY_SMOKE_PARTNER_SECRET | GitHub Actions secret | VOps | On partner credential rotation | Partner bootstrap secret for smoke runtime-key minting |
+| VALIDATION_PROXY_SMOKE_OWNER_EMAIL | GitHub Actions secret | VOps | On ownership handoff | Partner bootstrap owner identity for smoke |
+| VALIDATION_PROXY_SMOKE_BOT_NAME | GitHub Actions secret | VOps | Rarely | Optional smoke bot registration name |
+| VALIDATION_PROXY_SMOKE_API_KEY | GitHub Actions secret | VOps | On compromise | Optional fallback runtime bot key |
 | CLERK_SECRET_KEY | Vercel env var | VOps | On compromise | Auth |
 | NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY | Vercel env var | VOps | Static | Auth (public) |
 | SUPABASE_SERVICE_ROLE_KEY | Vercel env var | VOps | On compromise | DB admin |
@@ -92,7 +96,8 @@
 | lona-agent-token | Auto (TTL) | 30-day cycle | Self-rotating via TTL |
 | live-engine-service-api-key | 2026-02-21 | On compromise | Just provisioned |
 | VALIDATION_PROXY_SMOKE_SHARED_KEY | 2026-02-24 | On compromise | CloudOps-owned smoke shared key |
-| VALIDATION_PROXY_SMOKE_API_KEY | 2026-02-24 | On compromise | CloudOps-owned smoke runtime key |
+| VALIDATION_PROXY_SMOKE_PARTNER_SECRET | 2026-02-24 | On partner credential rotation | CloudOps-owned smoke partner bootstrap secret |
+| VALIDATION_PROXY_SMOKE_API_KEY | 2026-02-24 | On compromise | Optional fallback runtime key |
 
 ## Break-Glass Procedures
 

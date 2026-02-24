@@ -6,6 +6,9 @@ import { PROTECTED_ROUTE_PATTERNS } from '@/lib/auth/protected-routes';
 const isProtectedRoute = createRouteMatcher(PROTECTED_ROUTE_PATTERNS);
 
 function isValidationProxySmokeRoute(pathname: string): boolean {
+  if (pathname === '/api/validation/bots/registrations/partner-bootstrap') {
+    return true;
+  }
   if (pathname === '/api/validation/runs') {
     return true;
   }

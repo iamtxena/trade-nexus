@@ -75,7 +75,11 @@
 | `NPM_TOKEN` | `publish-sdk.yml` | npm publishing |
 | `VALIDATION_PROXY_SMOKE_BASE_URL` | `validation-proxy-smoke.yml` | Frontend proxy base URL (for example `https://trade-nexus.lona.agency`) |
 | `VALIDATION_PROXY_SMOKE_SHARED_KEY` | `validation-proxy-smoke.yml` | Shared key for proxy smoke authentication |
-| `VALIDATION_PROXY_SMOKE_API_KEY` | `validation-proxy-smoke.yml` | Runtime bot API key forwarded to backend (`tnx.bot.*`) |
+| `VALIDATION_PROXY_SMOKE_PARTNER_KEY` | `validation-proxy-smoke.yml` | Partner bootstrap key used to mint runtime bot key through web proxy |
+| `VALIDATION_PROXY_SMOKE_PARTNER_SECRET` | `validation-proxy-smoke.yml` | Partner bootstrap secret used to mint runtime bot key through web proxy |
+| `VALIDATION_PROXY_SMOKE_OWNER_EMAIL` | `validation-proxy-smoke.yml` | Owner email used for partner bootstrap registration |
+| `VALIDATION_PROXY_SMOKE_BOT_NAME` | `validation-proxy-smoke.yml` | Optional bot name used for partner bootstrap registration |
+| `VALIDATION_PROXY_SMOKE_API_KEY` | `validation-proxy-smoke.yml` | Optional fallback runtime bot key (`tnx.bot.<botId>.<keyId>.<secret>`) |
 
 ## Domain References — Canonical Values
 
@@ -101,4 +105,4 @@
 | #229 | Baseline replay + gates | No new env vars | **N/A** |
 | #230 | Web review lane | Frontend Supabase vars | **Available** |
 | #231 | CLI validation commands | Backend env vars | **Available** |
-| #333 | Credentialed validation proxy smoke | `VALIDATION_PROXY_SMOKE_BASE_URL`, `VALIDATION_PROXY_SMOKE_SHARED_KEY`, `VALIDATION_PROXY_SMOKE_API_KEY` | **Available** |
+| #333 | Credentialed validation proxy smoke | `VALIDATION_PROXY_SMOKE_BASE_URL`, `VALIDATION_PROXY_SMOKE_SHARED_KEY`, `VALIDATION_PROXY_SMOKE_PARTNER_KEY`, `VALIDATION_PROXY_SMOKE_PARTNER_SECRET`, `VALIDATION_PROXY_SMOKE_OWNER_EMAIL`, `VALIDATION_PROXY_SMOKE_BOT_NAME` (optional), `VALIDATION_PROXY_SMOKE_API_KEY` (optional fallback) | **Available** |

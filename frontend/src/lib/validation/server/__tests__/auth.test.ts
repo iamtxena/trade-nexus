@@ -79,4 +79,50 @@ describe('resolveValidationAccess', () => {
       process.env.VALIDATION_PROXY_SMOKE_SHARED_KEY = previous;
     }
   });
+
+  test('allows smoke shared-key access without runtime bot key when explicitly enabled', async () => {
+    const previous = process.env.VALIDATION_PROXY_SMOKE_SHARED_KEY;
+    process.env.VALIDATION_PROXY_SMOKE_SHARED_KEY = 'smoke-shared-key';
+    try {
+      const result = await resolveValidationAccess({
+        allowSmokeKey: true,
+        allowSmokeKeyWithoutApiKey: true,
+        requestHeaders: new Headers({
+          'x-validation-smoke-key': 'smoke-shared-key',
+        }),
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        throw new Error('Expected access grant.');
+      }
+      expect(result.access.authMode).toBe('smoke_shared_key');
+      expect(result.access.apiKey).toBeUndefined();
+    } finally {
+      process.env.VALIDATION_PROXY_SMOKE_SHARED_KEY = previous;
+    }
+  });
+
+  test('rejects smoke shared-key access without runtime bot key when not enabled', async () => {
+    const previous = process.env.VALIDATION_PROXY_SMOKE_SHARED_KEY;
+    process.env.VALIDATION_PROXY_SMOKE_SHARED_KEY = 'smoke-shared-key';
+    try {
+      const result = await resolveValidationAccess({
+        allowSmokeKey: true,
+        requestHeaders: new Headers({
+          'x-validation-smoke-key': 'smoke-shared-key',
+        }),
+        readAuth: async () => ({
+          userId: null,
+          orgId: null,
+        }),
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) {
+        throw new Error('Expected access denial.');
+      }
+      expect(result.response.status).toBe(401);
+    } finally {
+      process.env.VALIDATION_PROXY_SMOKE_SHARED_KEY = previous;
+    }
+  });
 });

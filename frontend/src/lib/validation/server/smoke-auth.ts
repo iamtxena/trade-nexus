@@ -1,5 +1,5 @@
-const DEFAULT_VALIDATION_SMOKE_API_KEY = 'tnx.bot.validation-proxy-smoke';
 const VALIDATION_SMOKE_SHARED_KEY_ENV = 'VALIDATION_PROXY_SMOKE_SHARED_KEY';
+const VALIDATION_RUNTIME_BOT_API_KEY_PREFIX = 'tnx.bot.';
 
 function nonEmpty(value: string | null | undefined): string | null {
   if (typeof value !== 'string') {
@@ -13,11 +13,11 @@ function readConfiguredSmokeSharedKey(): string | null {
   return nonEmpty(process.env[VALIDATION_SMOKE_SHARED_KEY_ENV]);
 }
 
-function normalizeRuntimeBotApiKey(candidate: string | null): string {
-  if (candidate?.startsWith('tnx.bot.')) {
+function normalizeRuntimeBotApiKey(candidate: string | null): string | null {
+  if (candidate?.startsWith(VALIDATION_RUNTIME_BOT_API_KEY_PREFIX)) {
     return candidate;
   }
-  return DEFAULT_VALIDATION_SMOKE_API_KEY;
+  return null;
 }
 
 export function hasValidValidationSmokeSharedKey(headers: Pick<Headers, 'get'>): boolean {

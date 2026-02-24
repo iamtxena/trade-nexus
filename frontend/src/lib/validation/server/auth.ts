@@ -1,7 +1,10 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
-import { resolveValidationSmokeApiKey } from '@/lib/validation/server/smoke-auth';
+import {
+  hasValidValidationSmokeSharedKey,
+  resolveValidationSmokeApiKey,
+} from '@/lib/validation/server/smoke-auth';
 
 export interface ValidationAuthSnapshot {
   userId: string | null;
@@ -24,6 +27,7 @@ export interface ResolveValidationAccessOptions {
   readAuth?: ValidationAuthReader;
   requestHeaders?: Pick<Headers, 'get'>;
   allowSmokeKey?: boolean;
+  allowSmokeKeyWithoutApiKey?: boolean;
 }
 
 export type ValidationAccessResolution =
@@ -48,6 +52,16 @@ export async function resolveValidationAccess(
   const requestId = buildValidationRequestId();
 
   if (options.allowSmokeKey && options.requestHeaders) {
+    const hasValidSmokeKey = hasValidValidationSmokeSharedKey(options.requestHeaders);
+    if (hasValidSmokeKey && options.allowSmokeKeyWithoutApiKey) {
+      return {
+        ok: true,
+        access: {
+          requestId,
+          authMode: 'smoke_shared_key',
+        },
+      };
+    }
     const smokeApiKey = resolveValidationSmokeApiKey(options.requestHeaders);
     if (smokeApiKey) {
       return {

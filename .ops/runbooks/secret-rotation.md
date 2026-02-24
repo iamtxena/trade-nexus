@@ -16,7 +16,11 @@
 | `live-engine-service-api-key` | Azure + Vercel | 90 days | CloudOps | Execution bridge |
 | `VALIDATION_PROXY_SMOKE_BASE_URL` | GitHub Actions | On endpoint change | CloudOps | Validation proxy smoke target URL |
 | `VALIDATION_PROXY_SMOKE_SHARED_KEY` | GitHub Actions + Vercel | On compromise | CloudOps | Proxy smoke shared auth key |
-| `VALIDATION_PROXY_SMOKE_API_KEY` | GitHub Actions | On compromise | CloudOps | Runtime bot key forwarded by smoke |
+| `VALIDATION_PROXY_SMOKE_PARTNER_KEY` | GitHub Actions | On partner credential rotation | CloudOps | Partner bootstrap key for smoke runtime-key minting |
+| `VALIDATION_PROXY_SMOKE_PARTNER_SECRET` | GitHub Actions | On partner credential rotation | CloudOps | Partner bootstrap secret for smoke runtime-key minting |
+| `VALIDATION_PROXY_SMOKE_OWNER_EMAIL` | GitHub Actions | On ownership handoff | CloudOps | Owner identity for smoke bootstrap registration |
+| `VALIDATION_PROXY_SMOKE_BOT_NAME` | GitHub Actions | Rarely | CloudOps | Optional bot name for smoke bootstrap registration |
+| `VALIDATION_PROXY_SMOKE_API_KEY` | GitHub Actions | On compromise | CloudOps | Optional fallback runtime key when partner bootstrap is unavailable |
 | `CLERK_SECRET_KEY` | Vercel only | On compromise | Dev Team | Auth provider |
 | `UPSTASH_REDIS_REST_TOKEN` | Vercel only | On compromise | Dev Team | Cache |
 | `SUPABASE_SERVICE_ROLE_KEY` | Vercel only | On compromise | CloudOps | DB admin access |

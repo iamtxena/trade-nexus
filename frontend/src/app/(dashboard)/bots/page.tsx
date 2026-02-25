@@ -4,12 +4,14 @@ import {
   AlertTriangle,
   Clock3,
   Copy,
+  Filter,
   Fingerprint,
   KeyRound,
   Loader2,
   RefreshCw,
   RotateCw,
   ShieldAlert,
+  UserRound,
 } from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -19,6 +21,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  type ValidationBotListFilter,
+  applyValidationBotKeyRevocation,
+  applyValidationBotKeyRotation,
+  filterValidationBots,
+  formatValidationBotTimestamp,
+  mapValidationBotListResponse,
+  mergeValidationBotSummary,
+  resolveValidationBotKeyStateCounts,
+  resolveValidationBotOwnershipLabel,
+  resolveValidationBotRegistrationPathLabel,
+  toValidationBotUsageLabel,
+} from '@/lib/validation/bot-ux-state';
 import type {
   CreateValidationBotInviteCodeRegistrationPayload,
   CreateValidationBotPartnerBootstrapPayload,
@@ -26,7 +41,6 @@ import type {
   ValidationBotKeyRotationResponse,
   ValidationBotRegistrationResponse,
   ValidationBotSummary,
-  ValidationBotUsageMetadata,
 } from '@/lib/validation/types';
 
 interface InviteCodeFormState {
@@ -60,6 +74,13 @@ const DEFAULT_PARTNER_FORM: PartnerBootstrapFormState = {
   partnerSecret: '',
 };
 
+const BOT_FILTER_OPTIONS: Array<{ value: ValidationBotListFilter; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'active', label: 'Active' },
+  { value: 'suspended', label: 'Suspended' },
+  { value: 'revoked', label: 'Revoked' },
+];
+
 function extractErrorMessage(payload: unknown, fallback: string): string {
   if (!payload || typeof payload !== 'object') {
     return fallback;
@@ -77,20 +98,6 @@ function extractErrorMessage(payload: unknown, fallback: string): string {
   return fallback;
 }
 
-function toUsageLabel(usage: ValidationBotUsageMetadata | undefined): string {
-  if (!usage) {
-    return 'No usage telemetry yet';
-  }
-  const requests =
-    usage.totalRequests !== undefined
-      ? `${usage.totalRequests.toLocaleString()} total requests`
-      : '';
-  const lastSeen = usage.lastSeenAt
-    ? `last seen ${new Date(usage.lastSeenAt).toLocaleString()}`
-    : 'never used';
-  return requests ? `${requests}, ${lastSeen}` : lastSeen;
-}
-
 function resolveKeyStatusTone(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
   if (status === 'active') {
     return 'default';
@@ -99,39 +106,6 @@ function resolveKeyStatusTone(status: string): 'default' | 'secondary' | 'destru
     return 'destructive';
   }
   return 'secondary';
-}
-
-function mergeBotSummary(
-  current: ValidationBotSummary[],
-  registration: ValidationBotRegistrationResponse,
-): ValidationBotSummary[] {
-  const incoming: ValidationBotSummary = {
-    ...registration.bot,
-    keys: [registration.issuedKey.key],
-  };
-  const filtered = current.filter((bot) => bot.id !== incoming.id);
-  return [incoming, ...filtered];
-}
-
-function mapBotListResponse(payload: unknown): ValidationBotSummary[] {
-  if (!payload || typeof payload !== 'object') {
-    return [];
-  }
-
-  const value = payload as { bots?: ValidationBotSummary[]; items?: ValidationBotSummary[] };
-  if (Array.isArray(value.bots)) {
-    return value.bots.map((bot) => ({
-      ...bot,
-      keys: bot.keys ?? [],
-    }));
-  }
-  if (Array.isArray(value.items)) {
-    return value.items.map((bot) => ({
-      ...bot,
-      keys: bot.keys ?? [],
-    }));
-  }
-  return [];
 }
 
 export default function BotsPage() {
@@ -147,8 +121,37 @@ export default function BotsPage() {
   const [isCopyingKey, setIsCopyingKey] = useState(false);
   const [rotatingBotId, setRotatingBotId] = useState<string | null>(null);
   const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
+  const [botFilter, setBotFilter] = useState<ValidationBotListFilter>('all');
+  const [botSearchQuery, setBotSearchQuery] = useState('');
 
   const activeBots = useMemo(() => bots.filter((bot) => bot.status === 'active'), [bots]);
+  const visibleBots = useMemo(
+    () => filterValidationBots(bots, botFilter, botSearchQuery),
+    [bots, botFilter, botSearchQuery],
+  );
+
+  const visibleBotKeyTotals = useMemo(
+    () =>
+      visibleBots.reduce(
+        (totals, bot) => {
+          const counts = resolveValidationBotKeyStateCounts(bot);
+          return {
+            active: totals.active + counts.active,
+            rotated: totals.rotated + counts.rotated,
+            revoked: totals.revoked + counts.revoked,
+          };
+        },
+        { active: 0, rotated: 0, revoked: 0 },
+      ),
+    [visibleBots],
+  );
+
+  const applyFailClosedOnAccessError = useCallback((status: number) => {
+    if (status === 401 || status === 403) {
+      setBots([]);
+      setLatestIssuedKey(null);
+    }
+  }, []);
 
   const loadBots = useCallback(async () => {
     setIsLoadingBots(true);
@@ -157,16 +160,17 @@ export default function BotsPage() {
       const response = await fetch('/api/validation/bots');
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
+        applyFailClosedOnAccessError(response.status);
         setErrorMessage(extractErrorMessage(payload, `Failed to load bots (${response.status})`));
         return;
       }
-      setBots(mapBotListResponse(payload));
+      setBots(mapValidationBotListResponse(payload));
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to load bots.');
     } finally {
       setIsLoadingBots(false);
     }
-  }, []);
+  }, [applyFailClosedOnAccessError]);
 
   useEffect(() => {
     void loadBots();
@@ -200,6 +204,7 @@ export default function BotsPage() {
       });
       const responsePayload = await response.json().catch(() => null);
       if (!response.ok) {
+        applyFailClosedOnAccessError(response.status);
         setErrorMessage(
           extractErrorMessage(
             responsePayload,
@@ -216,7 +221,7 @@ export default function BotsPage() {
         rawKey: registration.issuedKey.rawKey,
         issuedAt: new Date().toISOString(),
       });
-      setBots((previous) => mergeBotSummary(previous, registration));
+      setBots((previous) => mergeValidationBotSummary(previous, registration));
       setInviteForm(DEFAULT_INVITE_FORM);
       setNoticeMessage(`Bot ${registration.bot.name} registered with invite-code path.`);
     } catch (error) {
@@ -256,6 +261,7 @@ export default function BotsPage() {
       });
       const responsePayload = await response.json().catch(() => null);
       if (!response.ok) {
+        applyFailClosedOnAccessError(response.status);
         setErrorMessage(
           extractErrorMessage(responsePayload, `Partner bootstrap failed (${response.status})`),
         );
@@ -269,7 +275,7 @@ export default function BotsPage() {
         rawKey: registration.issuedKey.rawKey,
         issuedAt: new Date().toISOString(),
       });
-      setBots((previous) => mergeBotSummary(previous, registration));
+      setBots((previous) => mergeValidationBotSummary(previous, registration));
       setPartnerForm(DEFAULT_PARTNER_FORM);
       setNoticeMessage(`Bot ${registration.bot.name} registered with partner bootstrap path.`);
     } catch (error) {
@@ -291,31 +297,19 @@ export default function BotsPage() {
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
+        applyFailClosedOnAccessError(response.status);
         setErrorMessage(extractErrorMessage(payload, `Key rotation failed (${response.status})`));
         return;
       }
 
       const rotation = payload as ValidationBotKeyRotationResponse;
-      setLatestIssuedKey((current) => ({
+      setLatestIssuedKey({
         botName: bots.find((bot) => bot.id === botId)?.name ?? 'Runtime bot',
         keyPrefix: rotation.issuedKey.key.keyPrefix,
         rawKey: rotation.issuedKey.rawKey,
         issuedAt: new Date().toISOString(),
-      }));
-      setBots((previous) =>
-        previous.map((bot) => {
-          if (bot.id !== botId) {
-            return bot;
-          }
-          const normalizedExisting = bot.keys.map((key) =>
-            key.status === 'active' ? { ...key, status: 'rotated' as const } : key,
-          );
-          return {
-            ...bot,
-            keys: [rotation.issuedKey.key, ...normalizedExisting],
-          };
-        }),
-      );
+      });
+      setBots((previous) => applyValidationBotKeyRotation(previous, botId, rotation.issuedKey.key));
       setNoticeMessage('Key rotated. Copy the raw key now; it will not be shown again.');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to rotate key.');
@@ -334,22 +328,13 @@ export default function BotsPage() {
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
+        applyFailClosedOnAccessError(response.status);
         setErrorMessage(extractErrorMessage(payload, `Key revoke failed (${response.status})`));
         return;
       }
 
       const revoked = payload as ValidationBotKeyMetadataResponse;
-      setBots((previous) =>
-        previous.map((bot) => {
-          if (bot.id !== botId) {
-            return bot;
-          }
-          return {
-            ...bot,
-            keys: bot.keys.map((key) => (key.id === keyId ? revoked.key : key)),
-          };
-        }),
-      );
+      setBots((previous) => applyValidationBotKeyRevocation(previous, botId, revoked.key));
       setNoticeMessage(`Key ${revoked.key.keyPrefix} revoked.`);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to revoke key.');
@@ -383,11 +368,22 @@ export default function BotsPage() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Bots</h1>
             <p className="text-sm text-muted-foreground">
-              User-owned runtime identities with one-time key reveal and strict revocation controls.
+              User-owned runtime identities with deterministic key lifecycle controls and explicit
+              ownership visibility.
             </p>
           </div>
         </div>
       </div>
+
+      <Card className="py-4">
+        <CardHeader>
+          <CardTitle className="text-base">Ownership Scope</CardTitle>
+          <CardDescription>
+            Current contract uses a single owner per bot (`ownerUserId`). This view keeps owner and
+            lifecycle state explicit so future multi-user delegation can layer without ambiguity.
+          </CardDescription>
+        </CardHeader>
+      </Card>
 
       {errorMessage ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -416,6 +412,10 @@ export default function BotsPage() {
             <div className="rounded-md border border-amber-500/30 bg-background p-3">
               <p className="text-xs text-muted-foreground">Bot</p>
               <p className="text-sm font-medium">{latestIssuedKey.botName}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Prefix {latestIssuedKey.keyPrefix} • Issued{' '}
+                {formatValidationBotTimestamp(latestIssuedKey.issuedAt)}
+              </p>
               <p className="mt-2 font-mono text-xs break-all">{latestIssuedKey.rawKey}</p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -581,7 +581,8 @@ export default function BotsPage() {
             <div>
               <CardTitle>Registered Bots</CardTitle>
               <CardDescription>
-                Active bots: {activeBots.length} / Total: {bots.length}
+                Active bots: {activeBots.length} / Total: {bots.length} • Showing{' '}
+                {visibleBots.length}
               </CardDescription>
             </div>
             <Button type="button" variant="outline" disabled={isLoadingBots} onClick={loadBots}>
@@ -608,102 +609,177 @@ export default function BotsPage() {
                 No bots registered yet.
               </div>
             ) : (
-              <div className="space-y-3">
-                {bots.map((bot) => (
-                  <div key={bot.id} className="rounded-md border border-border p-3">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <p className="font-medium">{bot.name}</p>
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <span className="font-mono">{bot.id}</span>
-                          <Badge variant="outline">{bot.registrationPath}</Badge>
-                          <Badge variant={resolveKeyStatusTone(bot.status)}>{bot.status}</Badge>
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        disabled={rotatingBotId === bot.id}
-                        onClick={() => {
-                          void handleRotateKey(bot.id);
+              <div className="space-y-4">
+                <div className="rounded-md border border-border/70 bg-muted/20 p-3">
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                    <div className="relative">
+                      <Input
+                        value={botSearchQuery}
+                        onChange={(event) => {
+                          setBotSearchQuery(event.target.value);
                         }}
-                      >
-                        {rotatingBotId === bot.id ? (
-                          <>
-                            <Loader2 className="size-4 animate-spin" />
-                            Rotating…
-                          </>
-                        ) : (
-                          <>
-                            <RotateCw className="size-4" />
-                            Rotate Key
-                          </>
-                        )}
-                      </Button>
+                        placeholder="Search by bot name, id, owner, or key prefix"
+                      />
                     </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                      <span className="inline-flex items-center gap-1">
-                        <Clock3 className="size-3.5" />
-                        {toUsageLabel(bot.usage)}
-                      </span>
-                    </div>
-
-                    <div className="mt-3 space-y-2">
-                      {bot.keys.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">No key metadata available.</p>
-                      ) : (
-                        bot.keys.map((key) => (
-                          <div
-                            key={key.id}
-                            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2"
-                          >
-                            <div className="space-y-1 text-xs">
-                              <div className="flex items-center gap-2">
-                                <KeyRound className="size-3.5 text-muted-foreground" />
-                                <span className="font-mono">{key.keyPrefix}</span>
-                                <Badge variant={resolveKeyStatusTone(key.status)}>
-                                  {key.status}
-                                </Badge>
-                              </div>
-                              <p className="text-muted-foreground">
-                                Created {new Date(key.createdAt).toLocaleString()}
-                                {key.lastUsedAt
-                                  ? ` • Last used ${new Date(key.lastUsedAt).toLocaleString()}`
-                                  : ''}
-                              </p>
-                            </div>
-
-                            {key.status === 'active' ? (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={revokingKeyId === key.id}
-                                onClick={() => {
-                                  void handleRevokeKey(bot.id, key.id);
-                                }}
-                              >
-                                {revokingKeyId === key.id ? (
-                                  <>
-                                    <Loader2 className="size-4 animate-spin" />
-                                    Revoking…
-                                  </>
-                                ) : (
-                                  <>
-                                    <ShieldAlert className="size-4" />
-                                    Revoke
-                                  </>
-                                )}
-                              </Button>
-                            ) : null}
-                          </div>
-                        ))
-                      )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Filter className="size-4 text-muted-foreground" />
+                      {BOT_FILTER_OPTIONS.map((option) => (
+                        <Button
+                          key={option.value}
+                          type="button"
+                          size="sm"
+                          variant={botFilter === option.value ? 'secondary' : 'outline'}
+                          onClick={() => {
+                            setBotFilter(option.value);
+                          }}
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
                     </div>
                   </div>
-                ))}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">Active keys: {visibleBotKeyTotals.active}</Badge>
+                    <Badge variant="outline">Rotated keys: {visibleBotKeyTotals.rotated}</Badge>
+                    <Badge variant="outline">Revoked keys: {visibleBotKeyTotals.revoked}</Badge>
+                  </div>
+                </div>
+
+                {visibleBots.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                    No bots match the current filters.
+                  </div>
+                ) : (
+                  visibleBots.map((bot) => {
+                    const keyCounts = resolveValidationBotKeyStateCounts(bot);
+                    const canRotateKey = bot.status === 'active';
+
+                    return (
+                      <div key={bot.id} className="rounded-md border border-border p-3">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <p className="font-medium">{bot.name}</p>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              <span className="font-mono">{bot.id}</span>
+                              <Badge variant="outline">
+                                {resolveValidationBotRegistrationPathLabel(bot.registrationPath)}
+                              </Badge>
+                              <Badge variant={resolveKeyStatusTone(bot.status)}>{bot.status}</Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              <span className="inline-flex items-center gap-1">
+                                <UserRound className="size-3.5" />
+                                Owner:{' '}
+                                <span className="font-mono">
+                                  {resolveValidationBotOwnershipLabel(bot)}
+                                </span>
+                              </span>
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            disabled={!canRotateKey || rotatingBotId === bot.id}
+                            onClick={() => {
+                              void handleRotateKey(bot.id);
+                            }}
+                          >
+                            {rotatingBotId === bot.id ? (
+                              <>
+                                <Loader2 className="size-4 animate-spin" />
+                                Rotating…
+                              </>
+                            ) : canRotateKey ? (
+                              <>
+                                <RotateCw className="size-4" />
+                                Rotate Key
+                              </>
+                            ) : (
+                              <>
+                                <ShieldAlert className="size-4" />
+                                Bot Inactive
+                              </>
+                            )}
+                          </Button>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <span className="inline-flex items-center gap-1">
+                            <Clock3 className="size-3.5" />
+                            {toValidationBotUsageLabel(bot.usage)}
+                          </span>
+                          <Badge variant="outline">Active: {keyCounts.active}</Badge>
+                          <Badge variant="outline">Rotated: {keyCounts.rotated}</Badge>
+                          <Badge variant="outline">Revoked: {keyCounts.revoked}</Badge>
+                        </div>
+
+                        <div className="mt-3 space-y-2">
+                          {bot.keys.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              No key metadata available.
+                            </p>
+                          ) : (
+                            bot.keys.map((key) => (
+                              <div
+                                key={key.id}
+                                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2"
+                              >
+                                <div className="space-y-1 text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <KeyRound className="size-3.5 text-muted-foreground" />
+                                    <span className="font-mono">{key.keyPrefix}</span>
+                                    <Badge variant={resolveKeyStatusTone(key.status)}>
+                                      {key.status}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-muted-foreground">
+                                    Created {formatValidationBotTimestamp(key.createdAt)}
+                                    {key.lastUsedAt
+                                      ? ` • Last used ${formatValidationBotTimestamp(key.lastUsedAt)}`
+                                      : ''}
+                                    {key.revokedAt
+                                      ? ` • Revoked ${formatValidationBotTimestamp(key.revokedAt)}`
+                                      : ''}
+                                  </p>
+                                </div>
+
+                                {key.status === 'active' ? (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={revokingKeyId === key.id || !canRotateKey}
+                                    onClick={() => {
+                                      void handleRevokeKey(bot.id, key.id);
+                                    }}
+                                  >
+                                    {revokingKeyId === key.id ? (
+                                      <>
+                                        <Loader2 className="size-4 animate-spin" />
+                                        Revoking…
+                                      </>
+                                    ) : canRotateKey ? (
+                                      <>
+                                        <ShieldAlert className="size-4" />
+                                        Revoke
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ShieldAlert className="size-4" />
+                                        Bot Inactive
+                                      </>
+                                    )}
+                                  </Button>
+                                ) : null}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             )}
           </CardContent>

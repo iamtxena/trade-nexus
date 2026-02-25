@@ -430,7 +430,7 @@ class ValidationV2Service:
                 BotKeyMetadata(
                     id=key_record.key_id,
                     botId=item.bot_id,
-                    keyPrefix=f"tnx.bot.{item.bot_id}.{key_record.key_id}"[:16],
+                    keyPrefix=f"tnx.bot.{item.bot_id}.{key_record.key_id}",
                     status=self._resolve_bot_key_status(key_record=key_record, latest_key_id=latest_key_id),
                     createdAt=key_record.created_at,
                     lastUsedAt=key_record.last_used_at,
@@ -544,7 +544,7 @@ class ValidationV2Service:
         context: RequestContext,
         status_filter: str | None = None,
         final_decision_filter: str | None = None,
-        permission_filter: str | None = None,
+        permission_filter: SharePermission | None = None,
         cursor: str | None = None,
         limit: int = 25,
     ) -> ValidationSharedRunListResponse:

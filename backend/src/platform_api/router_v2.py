@@ -1204,3 +1204,45 @@ async def submit_shared_validation_review_v2(
         context=context,
         idempotency_key=idempotency_key,
     )
+
+
+@router.post(
+    "/validation-sharing/runs/{runId}/comments",
+    response_model=ValidationReviewCommentResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Shared Validation"],
+    operation_id="createSharedValidationReviewCommentV2",
+)
+async def create_shared_validation_review_comment_v2(
+    runId: str,
+    request: CreateValidationReviewCommentRequest,
+    context: ContextDep,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> ValidationReviewCommentResponse:
+    return await _validation_service.create_shared_validation_review_comment(
+        run_id=runId,
+        request=request,
+        context=context,
+        idempotency_key=idempotency_key,
+    )
+
+
+@router.post(
+    "/validation-sharing/runs/{runId}/decisions",
+    response_model=ValidationReviewDecisionResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Shared Validation"],
+    operation_id="createSharedValidationReviewDecisionV2",
+)
+async def create_shared_validation_review_decision_v2(
+    runId: str,
+    request: CreateValidationReviewDecisionRequest,
+    context: ContextDep,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> ValidationReviewDecisionResponse:
+    return await _validation_service.create_shared_validation_review_decision(
+        run_id=runId,
+        request=request,
+        context=context,
+        idempotency_key=idempotency_key,
+    )

@@ -27,10 +27,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
 
   return proxyValidationPlatformCallWithFallback({
     method: 'POST',
-    paths: [
-      `/v2/shared-validation/runs/${runId}/comments`,
-      `/v2/validation-review/runs/${runId}/comments`,
-    ],
+    paths: [`/v2/validation-sharing/runs/${runId}/comments`],
     access: accessResult.access,
     body: payload,
     idempotencyKey:

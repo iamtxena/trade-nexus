@@ -2304,6 +2304,109 @@ paths:
         '401':
           $ref: '#/components/responses/Error401'
 
+  /v2/validation-sharing/runs/{runId}/comments:
+    post:
+      tags: [Shared Validation]
+      summary: Append shared reviewer comment to a validation run
+      operationId: createSharedValidationReviewCommentV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/ValidationRunId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValidationReviewCommentRequest'
+            example:
+              body: Shared reviewer note for owner follow-up.
+              evidenceRefs:
+                - blob://validation/shared/comment-001.json
+      responses:
+        '202':
+          description: Shared review comment accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationReviewCommentResponse'
+              example:
+                requestId: req-shared-review-comment-001
+                runId: valrun-20260217-0001
+                commentAccepted: true
+                comment:
+                  id: valcomment-001
+                  runId: valrun-20260217-0001
+                  tenantId: tenant-001
+                  userId: user-009
+                  body: Shared reviewer note for owner follow-up.
+                  evidenceRefs:
+                    - blob://validation/shared/comment-001.json
+                  createdAt: '2026-02-20T12:35:00Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+
+  /v2/validation-sharing/runs/{runId}/decisions:
+    post:
+      tags: [Shared Validation]
+      summary: Submit shared reviewer decision for a validation run
+      operationId: createSharedValidationReviewDecisionV2
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/ValidationRunId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValidationReviewDecisionRequest'
+            example:
+              action: approve
+              decision: conditional_pass
+              reason: Shared reviewer accepted with caution.
+              evidenceRefs:
+                - blob://validation/shared/decision-001.json
+      responses:
+        '202':
+          description: Shared review decision accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationReviewDecisionResponse'
+              example:
+                requestId: req-shared-review-decision-001
+                runId: valrun-20260217-0001
+                decisionAccepted: true
+                decision:
+                  runId: valrun-20260217-0001
+                  action: approve
+                  decision: conditional_pass
+                  reason: Shared reviewer accepted with caution.
+                  evidenceRefs:
+                    - blob://validation/shared/decision-001.json
+                  decidedByTenantId: tenant-001
+                  decidedByUserId: user-009
+                  createdAt: '2026-02-20T12:36:00Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+
   /v2/validation-sharing/runs/{runId}/invites:
     get:
       tags: [Validation]

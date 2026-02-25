@@ -47,7 +47,10 @@ import {
   type ValidationTimelineEvent,
   resolveValidationRunTimeline,
 } from '@/lib/validation/review-run-timeline';
-import { describeSharedValidationPermission } from '@/lib/validation/shared-permissions';
+import {
+  describeSharedValidationPermission,
+  normalizeSharedValidationPermission,
+} from '@/lib/validation/shared-permissions';
 import {
   type CreateValidationRunRequestPayload,
   type CreateValidationShareInvitePayload,
@@ -206,11 +209,8 @@ function resolveTimelineIcon(tone: ValidationTimelineEvent['tone']) {
 }
 
 function sharePermissionToBadgeVariant(permission: ValidationSharePermission) {
-  if (permission === 'decide') {
+  if (permission === 'review') {
     return 'default';
-  }
-  if (permission === 'comment') {
-    return 'secondary';
   }
   return 'outline';
 }
@@ -236,7 +236,7 @@ function normalizeInvite(
 ): ValidationShareInvite {
   return {
     ...invite,
-    permission: invite.permission ?? fallbackPermission,
+    permission: normalizeSharedValidationPermission(invite.permission, fallbackPermission),
   };
 }
 
@@ -1145,8 +1145,7 @@ export default function ValidationPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="view">view</SelectItem>
-                      <SelectItem value="comment">comment</SelectItem>
-                      <SelectItem value="decide">decide</SelectItem>
+                      <SelectItem value="review">review</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
@@ -1242,8 +1241,7 @@ export default function ValidationPage() {
                     <SelectContent>
                       <SelectItem value="all">all permissions</SelectItem>
                       <SelectItem value="view">view</SelectItem>
-                      <SelectItem value="comment">comment</SelectItem>
-                      <SelectItem value="decide">decide</SelectItem>
+                      <SelectItem value="review">review</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

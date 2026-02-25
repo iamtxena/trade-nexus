@@ -4,6 +4,7 @@ import {
   isValidValidationRunId,
   proxyValidationPlatformCallWithFallback,
 } from '@/lib/validation/server/platform-api';
+import { normalizeSharedValidationPermission } from '@/lib/validation/shared-permissions';
 import type { CreateValidationShareInvitePayload } from '@/lib/validation/types';
 import { NextResponse } from 'next/server';
 
@@ -48,6 +49,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
+  const normalizedPayload: CreateValidationShareInvitePayload = {
+    ...payload,
+    permission: normalizeSharedValidationPermission(
+      (payload as { permission?: string }).permission,
+      'review',
+    ),
+  };
+
   return proxyValidationPlatformCallWithFallback({
     method: 'POST',
     paths: [
@@ -55,7 +64,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
       `/v2/shared-validation/runs/${runId}/invites`,
     ],
     access: accessResult.access,
-    body: payload,
+    body: normalizedPayload,
     idempotencyKey:
       request.headers.get('Idempotency-Key') ?? buildValidationIdempotencyKey('share-invite'),
   });

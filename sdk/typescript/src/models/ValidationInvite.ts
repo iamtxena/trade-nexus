@@ -20,6 +20,13 @@ import {
     ValidationActorTypeToJSON,
     ValidationActorTypeToJSONTyped,
 } from './ValidationActorType';
+import type { ValidationSharePermission } from './ValidationSharePermission';
+import {
+    ValidationSharePermissionFromJSON,
+    ValidationSharePermissionFromJSONTyped,
+    ValidationSharePermissionToJSON,
+    ValidationSharePermissionToJSONTyped,
+} from './ValidationSharePermission';
 import type { ValidationInviteStatus } from './ValidationInviteStatus';
 import {
     ValidationInviteStatusFromJSON,
@@ -52,6 +59,12 @@ export interface ValidationInvite {
      * @memberof ValidationInvite
      */
     email: string;
+    /**
+     * 
+     * @type {ValidationSharePermission}
+     * @memberof ValidationInvite
+     */
+    permission: ValidationSharePermission;
     /**
      * 
      * @type {ValidationInviteStatus}
@@ -105,6 +118,7 @@ export function instanceOfValidationInvite(value: object): value is ValidationIn
     if (!('id' in value) || value['id'] === undefined) return false;
     if (!('runId' in value) || value['runId'] === undefined) return false;
     if (!('email' in value) || value['email'] === undefined) return false;
+    if (!('permission' in value) || value['permission'] === undefined) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
     if (!('invitedByUserId' in value) || value['invitedByUserId'] === undefined) return false;
     if (!('invitedByActorType' in value) || value['invitedByActorType'] === undefined) return false;
@@ -125,6 +139,7 @@ export function ValidationInviteFromJSONTyped(json: any, ignoreDiscriminator: bo
         'id': json['id'],
         'runId': json['runId'],
         'email': json['email'],
+        'permission': ValidationSharePermissionFromJSON(json['permission']),
         'status': ValidationInviteStatusFromJSON(json['status']),
         'invitedByUserId': json['invitedByUserId'],
         'invitedByActorType': ValidationActorTypeFromJSON(json['invitedByActorType']),
@@ -149,6 +164,7 @@ export function ValidationInviteToJSONTyped(value?: ValidationInvite | null, ign
         'id': value['id'],
         'runId': value['runId'],
         'email': value['email'],
+        'permission': ValidationSharePermissionToJSON(value['permission']),
         'status': ValidationInviteStatusToJSON(value['status']),
         'invitedByUserId': value['invitedByUserId'],
         'invitedByActorType': ValidationActorTypeToJSON(value['invitedByActorType']),

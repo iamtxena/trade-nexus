@@ -23,10 +23,12 @@ EXPECTED_VALIDATION_V2_PATHS = {
     "/v2/validation-review/runs/{runId}/renders/{format}",
     "/v2/validation-baselines",
     "/v2/validation-regressions/replay",
+    "/v2/validation-bots",
     "/v2/validation-bots/registrations/invite-code",
     "/v2/validation-bots/registrations/partner-bootstrap",
     "/v2/validation-bots/{botId}/keys/rotate",
     "/v2/validation-bots/{botId}/keys/{keyId}/revoke",
+    "/v2/validation-sharing/runs/shared-with-me",
     "/v2/validation-sharing/runs/{runId}/invites",
     "/v2/validation-sharing/invites/{inviteId}/revoke",
     "/v2/validation-sharing/invites/{inviteId}/accept",
@@ -47,10 +49,12 @@ EXPECTED_VALIDATION_V2_OPERATION_IDS = {
     "getValidationReviewRenderV2",
     "createValidationBaselineV2",
     "replayValidationRegressionV2",
+    "listValidationBotsV2",
     "registerValidationBotInviteCodeV2",
     "registerValidationBotPartnerBootstrapV2",
     "rotateValidationBotKeyV2",
     "revokeValidationBotKeyV2",
+    "listValidationRunsSharedWithMeV2",
     "listValidationRunInvitesV2",
     "createValidationRunInviteV2",
     "revokeValidationInviteV2",
@@ -122,6 +126,7 @@ def test_validation_sharing_paths_stay_under_dedicated_surface() -> None:
     spec = _spec_text()
     sharing_paths = set(re.findall(r"^  (/v2/validation-sharing/.+):$", spec, flags=re.MULTILINE))
     assert sharing_paths == {
+        "/v2/validation-sharing/runs/shared-with-me",
         "/v2/validation-sharing/runs/{runId}/invites",
         "/v2/validation-sharing/invites/{inviteId}/revoke",
         "/v2/validation-sharing/invites/{inviteId}/accept",

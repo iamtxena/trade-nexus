@@ -36,10 +36,12 @@ def test_v2_paths_are_declared() -> None:
         "/v2/validation-review/runs/{runId}/renders/{format}:",
         "/v2/validation-baselines:",
         "/v2/validation-regressions/replay:",
+        "/v2/validation-bots:",
         "/v2/validation-bots/registrations/invite-code:",
         "/v2/validation-bots/registrations/partner-bootstrap:",
         "/v2/validation-bots/{botId}/keys/rotate:",
         "/v2/validation-bots/{botId}/keys/{keyId}/revoke:",
+        "/v2/validation-sharing/runs/shared-with-me:",
         "/v2/validation-sharing/runs/{runId}/invites:",
         "/v2/validation-sharing/invites/{inviteId}/revoke:",
         "/v2/validation-sharing/invites/{inviteId}/accept:",
@@ -73,10 +75,12 @@ def test_v2_operation_ids_are_declared() -> None:
         "getValidationReviewRenderV2",
         "createValidationBaselineV2",
         "replayValidationRegressionV2",
+        "listValidationBotsV2",
         "registerValidationBotInviteCodeV2",
         "registerValidationBotPartnerBootstrapV2",
         "rotateValidationBotKeyV2",
         "revokeValidationBotKeyV2",
+        "listValidationRunsSharedWithMeV2",
         "listValidationRunInvitesV2",
         "createValidationRunInviteV2",
         "revokeValidationInviteV2",
@@ -131,8 +135,12 @@ def test_v2_schema_components_are_present() -> None:
         "ValidationRegressionReplayResponse:",
         "ValidationRunActorMetadata:",
         "Bot:",
+        "BotSummary:",
+        "BotUsageMetadata:",
+        "BotListResponse:",
         "BotRegistration:",
         "BotKeyMetadata:",
+        "ValidationSharePermission:",
         "ValidationRunShare:",
         "ValidationInvite:",
         "CreateBotInviteRegistrationRequest:",
@@ -143,6 +151,8 @@ def test_v2_schema_components_are_present() -> None:
         "ValidationInviteResponse:",
         "ValidationInviteListResponse:",
         "ValidationInviteAcceptanceResponse:",
+        "ValidationSharedRunSummary:",
+        "ValidationSharedRunListResponse:",
     ):
         assert component in spec
 
@@ -181,6 +191,7 @@ def test_validation_identity_and_sharing_non_negotiables_are_declared() -> None:
         maxsplit=1,
     )[0]
     assert "email:" in invite_create_component
+    assert "permission:" in invite_create_component
     assert "userId" not in invite_create_component
 
     invite_registration_path_block = spec.split(

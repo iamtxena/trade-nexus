@@ -18,6 +18,7 @@ import type {
   AcceptValidationInviteRequest,
   BotKeyMetadataResponse,
   BotKeyRotationResponse,
+  BotListResponse,
   BotRegistrationResponse,
   CreateBotInviteRegistrationRequest,
   CreateBotKeyRevocationRequest,
@@ -59,6 +60,8 @@ import {
     BotKeyMetadataResponseToJSON,
     BotKeyRotationResponseFromJSON,
     BotKeyRotationResponseToJSON,
+    BotListResponseFromJSON,
+    BotListResponseToJSON,
     BotRegistrationResponseFromJSON,
     BotRegistrationResponseToJSON,
     CreateBotInviteRegistrationRequestFromJSON,
@@ -199,6 +202,10 @@ export interface GetValidationRunArtifactV2Request {
 
 export interface GetValidationRunV2Request {
     runId: string;
+    xRequestId?: string;
+}
+
+export interface ListValidationBotsV2Request {
     xRequestId?: string;
 }
 
@@ -480,6 +487,21 @@ export interface ValidationApiInterface {
      * Get validation run status
      */
     getValidationRunV2(requestParameters: GetValidationRunV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationRunResponse>;
+
+    /**
+     * 
+     * @summary List runtime bot registry and key lifecycle metadata for authenticated owner
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    listValidationBotsV2Raw(requestParameters: ListValidationBotsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<BotListResponse>>;
+
+    /**
+     * List runtime bot registry and key lifecycle metadata for authenticated owner
+     */
+    listValidationBotsV2(requestParameters: ListValidationBotsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BotListResponse>;
 
     /**
      * 
@@ -1456,6 +1478,51 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
      */
     async getValidationRunV2(requestParameters: GetValidationRunV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationRunResponse> {
         const response = await this.getValidationRunV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * List runtime bot registry and key lifecycle metadata for authenticated owner
+     */
+    async listValidationBotsV2Raw(requestParameters: ListValidationBotsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<BotListResponse>> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-bots`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => BotListResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * List runtime bot registry and key lifecycle metadata for authenticated owner
+     */
+    async listValidationBotsV2(requestParameters: ListValidationBotsV2Request = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BotListResponse> {
+        const response = await this.listValidationBotsV2Raw(requestParameters, initOverrides);
         return await response.value();
     }
 

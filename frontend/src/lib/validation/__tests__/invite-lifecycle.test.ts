@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
-import { inviteActionLabel, markInviteRevoked, mergeInviteIntoList } from '../invite-lifecycle';
+import {
+  DEFAULT_INVITE_LIST_FILTERS,
+  filterInvites,
+  inviteActionLabel,
+  markInviteRevoked,
+  mergeInviteIntoList,
+  summarizeInvitesByStatus,
+} from '../invite-lifecycle';
 import type { ValidationShareInvite } from '../types';
 
 function invite(
@@ -50,5 +57,39 @@ describe('invite lifecycle helpers', () => {
     expect(inviteActionLabel(invite('inv-002', 'accepted', '2026-02-20T10:00:00Z'))).toBe(
       'Revoke Access',
     );
+  });
+
+  test('filterInvites supports status, permission, and query filters', () => {
+    const base = [
+      invite('inv-001', 'pending', '2026-02-20T10:00:00Z'),
+      { ...invite('inv-002', 'accepted', '2026-02-20T11:00:00Z'), permission: 'view' as const },
+      { ...invite('inv-003', 'revoked', '2026-02-20T12:00:00Z'), permission: 'decide' as const },
+    ];
+
+    const filtered = filterInvites(base, {
+      ...DEFAULT_INVITE_LIST_FILTERS,
+      status: 'accepted',
+      permission: 'view',
+      query: 'inv-002',
+    });
+
+    expect(filtered.map((item) => item.id)).toEqual(['inv-002']);
+  });
+
+  test('summarizeInvitesByStatus returns full status counts', () => {
+    const base = [
+      invite('inv-001', 'pending', '2026-02-20T10:00:00Z'),
+      invite('inv-002', 'pending', '2026-02-20T11:00:00Z'),
+      invite('inv-003', 'accepted', '2026-02-20T12:00:00Z'),
+      invite('inv-004', 'expired', '2026-02-20T13:00:00Z'),
+      invite('inv-005', 'revoked', '2026-02-20T14:00:00Z'),
+    ];
+
+    expect(summarizeInvitesByStatus(base)).toEqual({
+      pending: 2,
+      accepted: 1,
+      revoked: 1,
+      expired: 1,
+    });
   });
 });

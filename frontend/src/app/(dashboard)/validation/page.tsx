@@ -29,9 +29,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  DEFAULT_INVITE_LIST_FILTERS,
+  type InviteListFilters,
+  filterInvites,
   inviteActionLabel,
   markInviteRevoked,
   mergeInviteIntoList,
+  summarizeInvitesByStatus,
 } from '@/lib/validation/invite-lifecycle';
 import {
   type TraderReviewTone,
@@ -43,12 +47,14 @@ import {
   type ValidationTimelineEvent,
   resolveValidationRunTimeline,
 } from '@/lib/validation/review-run-timeline';
+import { describeSharedValidationPermission } from '@/lib/validation/shared-permissions';
 import {
   type CreateValidationRunRequestPayload,
   type CreateValidationShareInvitePayload,
   type ErrorPayload,
   type ValidationArtifactResponse,
   type ValidationDecision,
+  type ValidationInviteStatus,
   type ValidationProfile,
   type ValidationRenderFormat,
   type ValidationRenderResponse,
@@ -116,6 +122,10 @@ function parseListInput(value: string): string[] {
     .split(/[\n,]/)
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
+}
+
+function isLikelyEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 function toPrettyJson(value: unknown): string {
@@ -205,6 +215,21 @@ function sharePermissionToBadgeVariant(permission: ValidationSharePermission) {
   return 'outline';
 }
 
+function inviteStatusToBadgeVariant(
+  status: ValidationInviteStatus,
+): 'default' | 'secondary' | 'destructive' | 'outline' {
+  if (status === 'accepted') {
+    return 'default';
+  }
+  if (status === 'pending') {
+    return 'secondary';
+  }
+  if (status === 'expired') {
+    return 'destructive';
+  }
+  return 'outline';
+}
+
 function normalizeInvite(
   invite: ValidationShareInvite,
   fallbackPermission: ValidationSharePermission = 'view',
@@ -232,6 +257,9 @@ export default function ValidationPage() {
   const [shareInviteForm, setShareInviteForm] = useState<ValidationShareInviteFormState>(
     DEFAULT_SHARE_INVITE_FORM_STATE,
   );
+  const [inviteFilters, setInviteFilters] = useState<InviteListFilters>({
+    ...DEFAULT_INVITE_LIST_FILTERS,
+  });
   const [runInvites, setRunInvites] = useState<ValidationShareInvite[]>([]);
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [isLoadingRun, setIsLoadingRun] = useState(false);
@@ -284,6 +312,19 @@ export default function ValidationPage() {
       };
     });
   }, [runArtifact]);
+
+  const inviteStatusSummary = useMemo(() => summarizeInvitesByStatus(runInvites), [runInvites]);
+  const filteredInvites = useMemo(
+    () => filterInvites(runInvites, inviteFilters),
+    [inviteFilters, runInvites],
+  );
+  const selectedInvitePermission = useMemo(
+    () => describeSharedValidationPermission(shareInviteForm.permission),
+    [shareInviteForm.permission],
+  );
+  const normalizedInviteEmail = shareInviteForm.email.trim().toLowerCase();
+  const canSubmitShareInvite =
+    Boolean(activeRunId) && isLikelyEmail(normalizedInviteEmail) && !isSubmittingInvite;
 
   const loadRunListFromHistory = useCallback((options?: { clearNotice?: boolean }): void => {
     const clearNotice = options?.clearNotice ?? true;
@@ -564,6 +605,10 @@ export default function ValidationPage() {
     const email = shareInviteForm.email.trim().toLowerCase();
     if (!email) {
       setErrorMessage('Invite email is required.');
+      return;
+    }
+    if (!isLikelyEmail(email)) {
+      setErrorMessage('Invite email format is invalid.');
       return;
     }
 
@@ -1104,6 +1149,9 @@ export default function ValidationPage() {
                       <SelectItem value="decide">decide</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedInvitePermission.summary}
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="share-message">Message (optional)</Label>
@@ -1119,11 +1167,7 @@ export default function ValidationPage() {
                     }
                   />
                 </div>
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isSubmittingInvite || !activeRunId}
-                >
+                <Button type="submit" className="w-full" disabled={!canSubmitShareInvite}>
                   {isSubmittingInvite ? (
                     <>
                       <Loader2 className="size-4 animate-spin" />
@@ -1136,10 +1180,73 @@ export default function ValidationPage() {
                     </>
                   )}
                 </Button>
+                {!activeRunId ? (
+                  <p className="text-xs text-muted-foreground">
+                    Load a run before sending run-level invitations.
+                  </p>
+                ) : !isLikelyEmail(normalizedInviteEmail) && normalizedInviteEmail.length > 0 ? (
+                  <p className="text-xs text-destructive">Enter a valid collaborator email.</p>
+                ) : null}
               </form>
 
               <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">Active Invite Lifecycle</p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Active Invite Lifecycle
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                    <Badge variant="secondary">pending {inviteStatusSummary.pending}</Badge>
+                    <Badge variant="default">accepted {inviteStatusSummary.accepted}</Badge>
+                    <Badge variant="destructive">expired {inviteStatusSummary.expired}</Badge>
+                    <Badge variant="outline">revoked {inviteStatusSummary.revoked}</Badge>
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_160px_160px]">
+                  <Input
+                    aria-label="Filter invites by email or invite ID"
+                    placeholder="Filter by email or invite ID"
+                    value={inviteFilters.query}
+                    onChange={(event) =>
+                      setInviteFilters((previous) => ({
+                        ...previous,
+                        query: event.target.value,
+                      }))
+                    }
+                  />
+                  <Select
+                    value={inviteFilters.status}
+                    onValueChange={(value: ValidationInviteStatus | 'all') =>
+                      setInviteFilters((previous) => ({ ...previous, status: value }))
+                    }
+                  >
+                    <SelectTrigger aria-label="Filter invites by status" className="w-full">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">all status</SelectItem>
+                      <SelectItem value="pending">pending</SelectItem>
+                      <SelectItem value="accepted">accepted</SelectItem>
+                      <SelectItem value="expired">expired</SelectItem>
+                      <SelectItem value="revoked">revoked</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={inviteFilters.permission}
+                    onValueChange={(value: ValidationSharePermission | 'all') =>
+                      setInviteFilters((previous) => ({ ...previous, permission: value }))
+                    }
+                  >
+                    <SelectTrigger aria-label="Filter invites by permission" className="w-full">
+                      <SelectValue placeholder="Permission" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">all permissions</SelectItem>
+                      <SelectItem value="view">view</SelectItem>
+                      <SelectItem value="comment">comment</SelectItem>
+                      <SelectItem value="decide">decide</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 {isLoadingInvites ? (
                   <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
                     Loading invites…
@@ -1148,9 +1255,16 @@ export default function ValidationPage() {
                   <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
                     No invites for this run yet.
                   </div>
+                ) : filteredInvites.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                    No invites match the current filters.
+                  </div>
                 ) : (
                   <div className="space-y-2">
-                    {runInvites.map((invite) => (
+                    <p className="text-[11px] text-muted-foreground">
+                      Showing {filteredInvites.length} of {runInvites.length} invites.
+                    </p>
+                    {filteredInvites.map((invite) => (
                       <div
                         key={invite.id}
                         className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs"
@@ -1161,9 +1275,14 @@ export default function ValidationPage() {
                             <Badge variant={sharePermissionToBadgeVariant(invite.permission)}>
                               {invite.permission}
                             </Badge>
-                            <Badge variant="outline">{invite.status}</Badge>
+                            <Badge variant={inviteStatusToBadgeVariant(invite.status)}>
+                              {invite.status}
+                            </Badge>
                           </div>
                         </div>
+                        <p className="mt-1 text-muted-foreground">
+                          {describeSharedValidationPermission(invite.permission).summary}
+                        </p>
                         <p className="mt-1 text-muted-foreground">
                           Created {new Date(invite.createdAt).toLocaleString()}
                           {invite.acceptedAt

@@ -24,8 +24,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { resolveSharedValidationCapabilities } from '@/lib/validation/shared-permissions';
-import { filterRunsSharedWithMe } from '@/lib/validation/shared-run-visibility';
+import {
+  describeSharedValidationPermission,
+  resolveSharedValidationCapabilities,
+} from '@/lib/validation/shared-permissions';
+import {
+  DEFAULT_SHARED_RUN_LIST_FILTERS,
+  type SharedRunListFilters,
+  filterRunsSharedWithMe,
+  filterSharedRunsForDisplay,
+} from '@/lib/validation/shared-run-visibility';
 import type {
   CreateSharedValidationCommentPayload,
   CreateSharedValidationDecisionPayload,
@@ -193,6 +201,9 @@ function permissionBadgeVariant(
 export default function SharedValidationPage() {
   const { userId } = useAuth();
   const [runs, setRuns] = useState<ValidationSharedRunSummary[]>([]);
+  const [runFilters, setRunFilters] = useState<SharedRunListFilters>({
+    ...DEFAULT_SHARED_RUN_LIST_FILTERS,
+  });
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [activeDetail, setActiveDetail] = useState<SharedRunDetailState | null>(null);
   const [commentInput, setCommentInput] = useState('');
@@ -260,10 +271,24 @@ export default function SharedValidationPage() {
     void loadRuns();
   }, [loadRuns]);
 
-  const visibleRuns = useMemo(() => filterRunsSharedWithMe(runs, userId ?? ''), [runs, userId]);
+  const runsSharedWithMe = useMemo(
+    () => filterRunsSharedWithMe(runs, userId ?? ''),
+    [runs, userId],
+  );
+  const visibleRuns = useMemo(
+    () => filterSharedRunsForDisplay(runsSharedWithMe, runFilters),
+    [runFilters, runsSharedWithMe],
+  );
   const activeCapabilities = useMemo(
     () =>
       resolveSharedValidationCapabilities(
+        activeDetail?.permission ?? ('view' satisfies ValidationSharePermission),
+      ),
+    [activeDetail?.permission],
+  );
+  const activePermissionDescriptor = useMemo(
+    () =>
+      describeSharedValidationPermission(
         activeDetail?.permission ?? ('view' satisfies ValidationSharePermission),
       ),
     [activeDetail?.permission],
@@ -424,16 +449,82 @@ export default function SharedValidationPage() {
             </Button>
           </CardHeader>
           <CardContent>
-            {isLoadingRuns && visibleRuns.length === 0 ? (
+            <div className="mb-3 grid gap-2 sm:grid-cols-2">
+              <Input
+                aria-label="Filter shared runs by run ID"
+                placeholder="Filter by run ID"
+                value={runFilters.query}
+                onChange={(event) =>
+                  setRunFilters((previous) => ({ ...previous, query: event.target.value }))
+                }
+              />
+              <Select
+                value={runFilters.permission}
+                onValueChange={(value: ValidationSharePermission | 'all') =>
+                  setRunFilters((previous) => ({ ...previous, permission: value }))
+                }
+              >
+                <SelectTrigger aria-label="Filter shared runs by permission" className="w-full">
+                  <SelectValue placeholder="Permission" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">all permissions</SelectItem>
+                  <SelectItem value="view">view</SelectItem>
+                  <SelectItem value="comment">comment</SelectItem>
+                  <SelectItem value="decide">decide</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={runFilters.status}
+                onValueChange={(value: ValidationSharedRunSummary['status'] | 'all') =>
+                  setRunFilters((previous) => ({ ...previous, status: value }))
+                }
+              >
+                <SelectTrigger aria-label="Filter shared runs by status" className="w-full">
+                  <SelectValue placeholder="Run status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">all status</SelectItem>
+                  <SelectItem value="queued">queued</SelectItem>
+                  <SelectItem value="running">running</SelectItem>
+                  <SelectItem value="completed">completed</SelectItem>
+                  <SelectItem value="failed">failed</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={runFilters.decision}
+                onValueChange={(value: ValidationDecision | 'all') =>
+                  setRunFilters((previous) => ({ ...previous, decision: value }))
+                }
+              >
+                <SelectTrigger aria-label="Filter shared runs by final decision" className="w-full">
+                  <SelectValue placeholder="Final decision" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">all decisions</SelectItem>
+                  <SelectItem value="pass">pass</SelectItem>
+                  <SelectItem value="conditional_pass">conditional_pass</SelectItem>
+                  <SelectItem value="fail">fail</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {isLoadingRuns && runsSharedWithMe.length === 0 ? (
               <div className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
                 Loading shared runs…
               </div>
-            ) : visibleRuns.length === 0 ? (
+            ) : runsSharedWithMe.length === 0 ? (
               <div className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
                 No runs are shared with this account yet.
               </div>
+            ) : visibleRuns.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                No shared runs match the current filters.
+              </div>
             ) : (
               <div className="space-y-2">
+                <p className="text-[11px] text-muted-foreground">
+                  Showing {visibleRuns.length} of {runsSharedWithMe.length} runs.
+                </p>
                 {visibleRuns.map((run) => (
                   <button
                     key={run.runId}
@@ -459,6 +550,9 @@ export default function SharedValidationPage() {
                     </div>
                     <p className="mt-2 text-xs text-muted-foreground">
                       Updated {new Date(run.updatedAt).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {describeSharedValidationPermission(run.permission).summary}
                     </p>
                   </button>
                 ))}
@@ -502,6 +596,10 @@ export default function SharedValidationPage() {
                       Refreshing
                     </span>
                   ) : null}
+                </div>
+                <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground">{activePermissionDescriptor.label}</p>
+                  <p>{activePermissionDescriptor.summary}</p>
                 </div>
                 <pre className="max-h-[620px] overflow-auto rounded-md border border-border bg-muted/40 p-3 text-xs leading-relaxed">
                   {toPrettyJson(activeDetail.artifact)}

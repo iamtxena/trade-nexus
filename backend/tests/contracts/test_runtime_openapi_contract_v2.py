@@ -109,6 +109,8 @@ def test_openapi_v2_routes_are_registered() -> None:
         ("POST", "/v2/validation-bots/{botId}/keys/rotate"),
         ("POST", "/v2/validation-bots/{botId}/keys/{keyId}/revoke"),
         ("GET", "/v2/validation-sharing/runs/shared-with-me"),
+        ("POST", "/v2/validation-sharing/runs/{runId}/comments"),
+        ("POST", "/v2/validation-sharing/runs/{runId}/decisions"),
         ("GET", "/v2/validation-sharing/runs/{runId}/invites"),
         ("POST", "/v2/validation-sharing/runs/{runId}/invites"),
         ("POST", "/v2/validation-sharing/invites/{inviteId}/revoke"),
@@ -391,6 +393,30 @@ def test_openapi_v2_runtime_status_codes() -> None:
     assert shared_with_me.status_code == 200
     shared_items = shared_with_me.json().get("items", [])
     assert any(item["runId"] == run_id and item["permission"] == "review" for item in shared_items)
+
+    shared_comment = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/comments",
+        headers={**invitee_headers, "Idempotency-Key": "idem-runtime-v2-shared-comment-001"},
+        json={
+            "body": "Invitee shared comment from runtime OpenAPI contract check.",
+            "evidenceRefs": ["blob://validation/runtime/shared-comment.json"],
+        },
+    )
+    assert shared_comment.status_code == 202
+    assert shared_comment.json()["commentAccepted"] is True
+
+    shared_decision = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/decisions",
+        headers={**invitee_headers, "Idempotency-Key": "idem-runtime-v2-shared-decision-001"},
+        json={
+            "action": "approve",
+            "decision": "conditional_pass",
+            "reason": "Invitee shared decision from runtime OpenAPI contract check.",
+            "evidenceRefs": ["blob://validation/runtime/shared-decision.json"],
+        },
+    )
+    assert shared_decision.status_code == 202
+    assert shared_decision.json()["decisionAccepted"] is True
 
     owner_shared_with_me = client.get(
         "/v2/validation-sharing/runs/shared-with-me",

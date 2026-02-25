@@ -29,6 +29,8 @@ EXPECTED_VALIDATION_V2_PATHS = {
     "/v2/validation-bots/{botId}/keys/rotate",
     "/v2/validation-bots/{botId}/keys/{keyId}/revoke",
     "/v2/validation-sharing/runs/shared-with-me",
+    "/v2/validation-sharing/runs/{runId}/comments",
+    "/v2/validation-sharing/runs/{runId}/decisions",
     "/v2/validation-sharing/runs/{runId}/invites",
     "/v2/validation-sharing/invites/{inviteId}/revoke",
     "/v2/validation-sharing/invites/{inviteId}/accept",
@@ -55,6 +57,8 @@ EXPECTED_VALIDATION_V2_OPERATION_IDS = {
     "rotateValidationBotKeyV2",
     "revokeValidationBotKeyV2",
     "listValidationRunsSharedWithMeV2",
+    "createSharedValidationReviewCommentV2",
+    "createSharedValidationReviewDecisionV2",
     "listValidationRunInvitesV2",
     "createValidationRunInviteV2",
     "revokeValidationInviteV2",
@@ -115,6 +119,8 @@ def test_validation_v2_write_operations_reference_idempotency_parameter() -> Non
         "rotateValidationBotKeyV2",
         "revokeValidationBotKeyV2",
         "createValidationRunInviteV2",
+        "createSharedValidationReviewCommentV2",
+        "createSharedValidationReviewDecisionV2",
         "revokeValidationInviteV2",
         "acceptValidationInviteOnLoginV2",
     ):
@@ -127,6 +133,8 @@ def test_validation_sharing_paths_stay_under_dedicated_surface() -> None:
     sharing_paths = set(re.findall(r"^  (/v2/validation-sharing/.+):$", spec, flags=re.MULTILINE))
     assert sharing_paths == {
         "/v2/validation-sharing/runs/shared-with-me",
+        "/v2/validation-sharing/runs/{runId}/comments",
+        "/v2/validation-sharing/runs/{runId}/decisions",
         "/v2/validation-sharing/runs/{runId}/invites",
         "/v2/validation-sharing/invites/{inviteId}/revoke",
         "/v2/validation-sharing/invites/{inviteId}/accept",

@@ -1,17 +1,17 @@
 ---
 title: Validation Review Incident Runbook
-summary: Operator procedures for validation identity-sharing incidents, rate limits, invite acceptance failures, and replay gates.
+summary: Operator procedures for validation identity-sharing incidents, rate limits, invite acceptance failures, shared-review write failures, and replay gates.
 owners:
   - Validation Review Web Docs
   - Team F
-updated: 2026-02-21
+updated: 2026-02-25
 ---
 
 # Validation Review Incident Runbook
 
 ## Objective
 
-Provide deterministic incident handling for the validation review web program across bot identity, run-level sharing, and replay gate failure classes in scope for `#283`.
+Provide deterministic incident handling for the validation review web program across bot identity, run-level sharing, shared-review write paths, and replay gate failure classes in scope for `#283`.
 
 ## Incident Class A: Render Failures (`/render`)
 
@@ -195,6 +195,60 @@ curl -i -sS "$API_BASE/v2/validation-sharing/invites/$INVITE_ID/accept" \
 2. Confirm invite status using `GET /v2/validation-sharing/runs/{runId}/invites`.
 3. Reissue invite when state is `revoked`/`expired` and review must proceed.
 
+## Incident Class G: Shared Review Write Path Failures
+
+### Trigger
+
+Shared reviewers cannot submit review writes, or receive `403`/`404`/`409` from shared review submit path.
+
+### Expected Contract Behavior
+
+1. Shared review writes must use `POST /v2/validation-sharing/runs/{runId}/review`.
+2. Shared permission model is `view | review`:
+   - `view` does not allow writes.
+   - `review` allows shared write submission.
+3. Legacy aliases `comment` and `decide` normalize to `review` for backward compatibility.
+
+### Triage Commands
+
+```bash
+API_BASE="https://api-nexus.lona.agency"
+TOKEN="<bearer-token>"
+RUN_ID="<shared-run-id>"
+REQUEST_ID="req-shared-review-$(date +%s)"
+IDEM_KEY="idem-shared-review-$(uuidgen | tr '[:upper:]' '[:lower:]')"
+
+curl -sS "$API_BASE/v2/validation-sharing/runs/shared-with-me?permission=review" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Request-Id: req-shared-list-001"
+
+curl -i -sS "$API_BASE/v2/validation-sharing/runs/$RUN_ID/review" \
+  -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "X-Request-Id: $REQUEST_ID" \
+  -H "Idempotency-Key: $IDEM_KEY" \
+  -d '{
+    "reviewerType":"trader",
+    "decision":"pass",
+    "summary":"Shared reviewer incident probe"
+  }'
+```
+
+### Common Failure Cases
+
+1. `400`: malformed review payload (`reviewerType`/`decision` invalid).
+2. `401`: missing/expired auth session.
+3. `403`: share permission resolved to `view` or share access revoked.
+4. `404`: run not found in invitee scope or invalid `runId`.
+5. `409`: run/share state conflict prevents update.
+
+### Containment And Recovery
+
+1. Confirm invite/share permission resolves to `review` for the affected user.
+2. If share is missing or stale, reissue invite via `POST /v2/validation-sharing/runs/{runId}/invites` and re-accept.
+3. Ensure web proxy writes stay on `/v2/validation-sharing/...` routes only (no owner-scoped or removed alias routes).
+
 ## Secret Handling And Key Rotation Playbook
 
 ### Rules
@@ -232,7 +286,7 @@ Use this template in child issue `#313` and mirror summary in parent `#310`.
 Validation Review incident update:
 - Parent: #310
 - Child: #313
-- Incident class: render_failure | auth_failure | regression_failure | invite_rate_limit | invite_acceptance | key_compromise
+- Incident class: render_failure | auth_failure | regression_failure | invite_rate_limit | invite_acceptance | shared_review_write | key_compromise
 - Run ID / Replay ID: <id>
 - Request IDs: <list>
 - Impact: <scope + user effect>

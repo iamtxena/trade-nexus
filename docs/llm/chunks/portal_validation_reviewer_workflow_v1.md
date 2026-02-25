@@ -83,14 +83,19 @@ Define the production flow for validation decisions, bot onboarding, and run-lev
    - `POST /v2/validation-sharing/invites/{inviteId}/accept`
    - request includes `acceptedEmail`
 5. Permission boundary:
-   - owner-scoped invite management and run-share mutation
-   - accepted invite grants `ValidationRunShare` for that run only
+   - canonical shared permission enum is `view | review`.
+   - `view` grants shared read access only (`GET /v2/validation-sharing/runs/{runId}` and `/artifact`).
+   - `review` grants shared read access plus shared write via `POST /v2/validation-sharing/runs/{runId}/review`.
+   - owner-scoped invite management and run-share mutation stay owner-only.
+6. Backward-compatibility note:
+   - legacy alias permissions (`comment`, `decide`) normalize to `review`; newly authored docs and clients should only emit `view | review`.
 
 ## Dedicated Shared Validation UX Surface
 
 1. Shared users enter through the Shared Validation reviewer flow (current web lane route `/validation`).
 2. Shared run access is established only through invite acceptance path; no ambient cross-run access.
 3. Shared users review canonical JSON first and request HTML/PDF only as derived outputs.
+4. Shared review submissions must target `POST /v2/validation-sharing/runs/{runId}/review` (not owner-scoped `/v2/validation-runs/{runId}/review`).
 
 ## Deep-Link Flow (`#279`)
 
@@ -144,6 +149,20 @@ curl -sS "$API_BASE/v2/validation-runs" \
       "failClosedOnEvidenceUnavailable":true
     }
   }'
+
+export RUN_ID="<shared-run-id>"
+export SHARED_REVIEW_IDEM_KEY="idem-shared-review-$(uuidgen | tr '[:upper:]' '[:lower:]')"
+
+curl -sS "$API_BASE/v2/validation-sharing/runs/$RUN_ID/review" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "X-Request-Id: req-shared-review-$(date +%s)" \
+  -H "Idempotency-Key: $SHARED_REVIEW_IDEM_KEY" \
+  -d '{
+    "reviewerType":"trader",
+    "decision":"pass",
+    "summary":"Shared review completed with no blocking findings."
+  }'
 ```
 
 ## Reviewer Evidence Checklist
@@ -179,5 +198,6 @@ Validation Review Web status:
 - Prior validation-review parent: [#288](https://github.com/iamtxena/trade-nexus/issues/288)
 - Web lane page: `/frontend/src/app/(dashboard)/validation/page.tsx`
 - Web API proxy: `/frontend/src/app/api/validation/runs/route.ts`
+- Shared web API proxy: `/frontend/src/app/api/shared-validation/runs/`
 - Contract source: `/docs/architecture/specs/platform-api.openapi.yaml`
 - Governance: `/.github/workflows/contracts-governance.yml`, `/.github/workflows/docs-governance.yml`, `/.github/workflows/llm-package-governance.yml`

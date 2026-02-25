@@ -544,7 +544,7 @@
   },
   {
     "chunk": "docs/llm/chunks/portal_validation_review_api_semantics_v1.md",
-    "chunk_hash": "2a75b394eded8a32ff6a7669be58e6c090b906d447ce12b702cc709188753bc7",
+    "chunk_hash": "df5e69873b4b507eadd1a487942bdfacd14cca1ac6e577b42be0ff76c2fd28ed",
     "concepts": [
       "validation_api",
       "response_semantics",
@@ -557,6 +557,10 @@
       "/v2/validation-runs/{runId}/artifact",
       "/v2/validation-runs/{runId}/review",
       "/v2/validation-runs/{runId}/render",
+      "/v2/validation-sharing/runs/{runId}/invites",
+      "/v2/validation-sharing/invites/{inviteId}/revoke",
+      "/v2/validation-sharing/invites/{inviteId}/accept",
+      "/v2/validation-sharing/runs/{runId}/review",
       "/v2/validation-baselines",
       "/v2/validation-regressions/replay"
     ],
@@ -566,7 +570,7 @@
       "Validation Review Web Docs"
     ],
     "source": "docs/portal/api/validation-review-api-semantics.md",
-    "source_hash": "8947a765bc45642e93565f2a4a2e648a67498315b3bb4672ca05fbd0b6a5a6af",
+    "source_hash": "1066cf2048f278dd80e3c9448ab3edbf5dcac3b1f82be76f600793fc5f0c4a6d",
     "title": "Validation Review API Contracts And Response Semantics",
     "topic": "api",
     "workflows": [
@@ -576,7 +580,7 @@
   },
   {
     "chunk": "docs/llm/chunks/portal_validation_review_incident_runbook_v1.md",
-    "chunk_hash": "05d3e58f18fee78e8b3ea6134249a81b243887e42c5da882b33db7076d39c5a3",
+    "chunk_hash": "bdf900e131d0db898e79d937b0500b3572bb48d09500012c4b6e1905ba7a6641",
     "concepts": [
       "incident_runbook",
       "render_failure",
@@ -587,6 +591,10 @@
       "/v1/health",
       "/v2/validation-runs/{runId}/artifact",
       "/v2/validation-runs/{runId}/render",
+      "/v2/validation-sharing/invites/{inviteId}/accept",
+      "/v2/validation-sharing/runs/{runId}/invites",
+      "/v2/validation-sharing/runs/shared-with-me",
+      "/v2/validation-sharing/runs/{runId}/review",
       "/v2/validation-regressions/replay"
     ],
     "id": "portal_validation_review_incident_runbook_v1",
@@ -596,7 +604,7 @@
       "Team F"
     ],
     "source": "docs/portal/operations/validation-review-incident-runbook.md",
-    "source_hash": "16bd6fbc9f0fdb77ceaef9953def71f03ad3d46e4d3072b18b5237e8ab0841f9",
+    "source_hash": "f52f90ecee08e7f4ab280ccf59bf3d1945ffd837c638787dec6791accb8b447b",
     "title": "Validation Review Incident Runbook",
     "topic": "operations",
     "workflows": [
@@ -606,7 +614,7 @@
   },
   {
     "chunk": "docs/llm/chunks/portal_validation_reviewer_workflow_v1.md",
-    "chunk_hash": "aa7a9a4b47bc01cb2c47db28bc8ceac93cc4cef7932adfd366601b79efca1c52",
+    "chunk_hash": "ef1ea46583cb6682fe70711d6b705d1be2e1f53028e061a88d3a51a047a1e5fa",
     "concepts": [
       "reviewer_workflow",
       "web_lane",
@@ -618,7 +626,13 @@
       "/v2/validation-runs/{runId}",
       "/v2/validation-runs/{runId}/artifact",
       "/v2/validation-runs/{runId}/review",
-      "/v2/validation-runs/{runId}/render"
+      "/v2/validation-runs/{runId}/render",
+      "/v2/validation-sharing/runs/{runId}/invites",
+      "/v2/validation-sharing/invites/{inviteId}/revoke",
+      "/v2/validation-sharing/invites/{inviteId}/accept",
+      "/v2/validation-sharing/runs/{runId}",
+      "/v2/validation-sharing/runs/{runId}/artifact",
+      "/v2/validation-sharing/runs/{runId}/review"
     ],
     "id": "portal_validation_reviewer_workflow_v1",
     "owner_issue": "https://github.com/iamtxena/trade-nexus/issues/313",
@@ -626,7 +640,7 @@
       "Validation Review Web Docs"
     ],
     "source": "docs/portal/platform/validation-reviewer-workflow.md",
-    "source_hash": "8d60424331ea71c1c3563cc433dd88934a182f8e6e7bb9e4aff02a0905d369e7",
+    "source_hash": "3a96eb41181fb8337981fcfc3eb072676b33675e94bf480ddea21334a8cc5ae7",
     "title": "Validation Review Web Reviewer Workflow",
     "topic": "platform",
     "workflows": [

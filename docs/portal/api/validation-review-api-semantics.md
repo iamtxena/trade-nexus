@@ -3,7 +3,7 @@ title: Validation Review API Contracts And Response Semantics
 summary: Contract-first endpoint and payload semantics for validation review, bot identity, and run-level sharing integrations.
 owners:
   - Validation Review Web Docs
-updated: 2026-02-21
+updated: 2026-02-25
 ---
 
 # Validation Review API Contracts And Response Semantics
@@ -79,14 +79,19 @@ Validation review APIs are defined in `/docs/architecture/specs/platform-api.ope
 ## Run-Level Sharing Semantics
 
 1. Sharing scope is run-level only:
-   - all invite routes are under `/v2/validation-sharing/...`.
-2. Invite targeting is email-only:
+   - all shared routes (invite lifecycle + shared review writes) are under `/v2/validation-sharing/...`.
+2. Permission model is canonicalized to `ValidationSharePermission = view | review`:
+   - `view` is read-only shared access.
+   - `review` permits shared review writes through `POST /v2/validation-sharing/runs/{runId}/review`.
+3. Backward compatibility:
+   - legacy permission aliases (`comment`, `decide`) normalize to `review`.
+4. Invite targeting is email-only:
    - `CreateValidationInviteRequest` requires `email` and does not include `userId`.
-3. Invite lifecycle states:
+5. Invite lifecycle states:
    - `pending`, `accepted`, `revoked`, `expired`.
-4. Granted share lifecycle states:
+6. Granted share lifecycle states:
    - `active`, `revoked` (`ValidationRunShare`).
-5. Invite acceptance:
+7. Invite acceptance:
    - `AcceptValidationInviteRequest` requires `acceptedEmail`.
    - response includes both updated `invite` and created/updated `share`.
 

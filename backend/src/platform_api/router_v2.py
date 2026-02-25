@@ -218,7 +218,7 @@ def _bot_registration_path(method: Literal["invite", "partner"]) -> Literal["inv
 
 
 def _bot_key_prefix(raw_key: str) -> str:
-    return raw_key[:16]
+    return ValidationV2Service.bot_key_prefix(raw_key)
 
 
 def _invite_trial_expires_at(created_at: str) -> str | None:

@@ -345,6 +345,8 @@ def test_openapi_v2_runtime_status_codes() -> None:
     )
     assert rotate_key.status_code == 201
     rotated_key_id = rotate_key.json()["issuedKey"]["key"]["id"]
+    rotated_key_prefix = rotate_key.json()["issuedKey"]["key"]["keyPrefix"]
+    assert len(rotated_key_prefix) == 16
 
     assert (
         client.post(
@@ -420,6 +422,10 @@ def test_openapi_v2_runtime_status_codes() -> None:
     assert bots.status_code == 200
     listed_bots = bots.json().get("bots", [])
     assert any(bot["id"] == partner_bot_id for bot in listed_bots)
+    partner_bot = next(bot for bot in listed_bots if bot["id"] == partner_bot_id)
+    listed_rotated_key = next(item for item in partner_bot["keys"] if item["id"] == rotated_key_id)
+    assert listed_rotated_key["keyPrefix"] == rotated_key_prefix
+    assert len(listed_rotated_key["keyPrefix"]) == 16
 
 
 def test_validation_run_actor_linkage_is_present_across_runtime_surfaces() -> None:

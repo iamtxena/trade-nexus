@@ -430,7 +430,7 @@ class ValidationV2Service:
                 BotKeyMetadata(
                     id=key_record.key_id,
                     botId=item.bot_id,
-                    keyPrefix=f"tnx.bot.{item.bot_id}.{key_record.key_id}",
+                    keyPrefix=self.bot_key_prefix(f"tnx.bot.{item.bot_id}.{key_record.key_id}"),
                     status=self._resolve_bot_key_status(key_record=key_record, latest_key_id=latest_key_id),
                     createdAt=key_record.created_at,
                     lastUsedAt=key_record.last_used_at,
@@ -1802,6 +1802,10 @@ class ValidationV2Service:
         if latest_key_id is not None and key_record.key_id != latest_key_id:
             return "rotated"
         return "revoked"
+
+    @staticmethod
+    def bot_key_prefix(raw_key: str) -> str:
+        return raw_key[:16]
 
     @staticmethod
     def _bot_trial_expires_at(created_at: str) -> str | None:

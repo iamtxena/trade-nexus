@@ -17,6 +17,7 @@ from src.platform_api.schemas_v2 import (
     AcceptValidationInviteRequest,
     BacktestDataExportRequest,
     BacktestDataExportResponse,
+    BotListResponse,
     BotKeyMetadata,
     BotKeyMetadataResponse,
     BotKeyRotationResponse,
@@ -50,7 +51,9 @@ from src.platform_api.schemas_v2 import (
     ValidationInviteAcceptanceResponse,
     ValidationInviteListResponse,
     ValidationInviteResponse,
+    ValidationSharePermission,
     ValidationRunShare,
+    ValidationSharedRunListResponse,
     ValidationArtifactResponse,
     ValidationBaselineResponse,
     ValidationRegressionReplayResponse,
@@ -290,6 +293,7 @@ def _to_validation_invite(invite: object) -> ValidationInvite:
     invite_id = getattr(invite, "invite_id")
     run_id = getattr(invite, "run_id")
     invitee_email = getattr(invite, "invitee_email")
+    permission = getattr(invite, "permission")
     status_value = getattr(invite, "status")
     invited_by_user_id = getattr(invite, "invited_by_user_id")
     invited_by_actor_type = getattr(invite, "invited_by_actor_type")
@@ -301,6 +305,7 @@ def _to_validation_invite(invite: object) -> ValidationInvite:
         id=invite_id,
         runId=run_id,
         email=invitee_email,
+        permission=permission,
         status=status_value,
         invitedByUserId=invited_by_user_id,
         invitedByActorType=invited_by_actor_type,
@@ -439,6 +444,18 @@ async def list_validation_runs_v2(
     return await _validation_service.list_validation_runs(context=context)
 
 
+@router.get(
+    "/validation-bots",
+    response_model=BotListResponse,
+    tags=["Validation"],
+    operation_id="listValidationBotsV2",
+)
+async def list_validation_bots_v2(
+    context: ContextDep,
+) -> BotListResponse:
+    return await _validation_service.list_validation_bots(context=context)
+
+
 @router.post(
     "/validation-bots/registrations/invite-code",
     response_model=BotRegistrationResponse,
@@ -468,6 +485,8 @@ async def register_validation_bot_invite_code_v2(
         invite_code=payload.inviteCode,
         partner_key=None,
         partner_secret=None,
+        bot_name=payload.botName,
+        metadata=payload.metadata,
     )
     registration_path = _bot_registration_path(result.registration_method)
     issued_key = BotIssuedApiKey(
@@ -555,6 +574,8 @@ async def register_validation_bot_partner_bootstrap_v2(
         invite_code=None,
         partner_key=payload.partnerKey,
         partner_secret=payload.partnerSecret,
+        bot_name=payload.botName,
+        metadata=payload.metadata,
     )
     registration_path = _bot_registration_path(result.registration_method)
     issued_key = BotIssuedApiKey(
@@ -964,7 +985,7 @@ async def create_validation_run_invite_v2(
 ) -> ValidationInviteResponse:
     idempotency_payload = {
         "runId": runId,
-        "permission": "review",
+        "permission": request.permission,
         "request": request.model_dump(mode="json"),
     }
     cached = _get_idempotent_response(
@@ -978,7 +999,7 @@ async def create_validation_run_invite_v2(
     invite = await _validation_service.create_validation_run_invite(
         run_id=runId,
         invitee_email=request.email,
-        permission="review",
+        permission=request.permission,
         expires_at=request.expiresAt,
         context=context,
     )
@@ -1122,6 +1143,30 @@ async def accept_validation_invite_on_login_v2(
         response=response.model_dump(mode="json"),
     )
     return response
+
+
+@router.get(
+    "/validation-sharing/runs/shared-with-me",
+    response_model=ValidationSharedRunListResponse,
+    tags=["Shared Validation"],
+    operation_id="listValidationRunsSharedWithMeV2",
+)
+async def list_runs_shared_with_me_v2(
+    context: ContextDep,
+    status: str | None = Query(default=None),
+    finalDecision: str | None = Query(default=None),
+    permission: ValidationSharePermission | None = Query(default=None),
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=100),
+) -> ValidationSharedRunListResponse:
+    return await _validation_service.list_shared_validation_runs(
+        context=context,
+        status_filter=status,
+        final_decision_filter=finalDecision,
+        permission_filter=permission,
+        cursor=cursor,
+        limit=limit,
+    )
 
 
 @router.get(

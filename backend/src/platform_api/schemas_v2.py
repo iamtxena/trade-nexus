@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.platform_api.schemas_v1 import MarketScanIdea
 
@@ -538,6 +538,7 @@ class ValidationRegressionReplayResponse(BaseModel):
 BotStatus = Literal["active", "suspended", "revoked"]
 BotRegistrationPath = Literal["invite_code_trial", "partner_bootstrap"]
 BotKeyStatus = Literal["active", "rotated", "revoked"]
+ValidationSharePermission = Literal["view", "review"]
 ValidationInviteStatus = Literal["pending", "accepted", "revoked", "expired"]
 ValidationShareStatus = Literal["active", "revoked"]
 
@@ -586,6 +587,23 @@ class BotRegistrationResponse(BaseModel):
     issuedKey: BotIssuedApiKey
 
 
+class BotUsageMetadata(BaseModel):
+    totalRequests: int | None = Field(default=None, ge=0)
+    successfulRequests: int | None = Field(default=None, ge=0)
+    failedRequests: int | None = Field(default=None, ge=0)
+    lastSeenAt: str | None = None
+
+
+class BotSummary(Bot):
+    keys: list[BotKeyMetadata] = Field(default_factory=list)
+    usage: BotUsageMetadata | None = None
+
+
+class BotListResponse(BaseModel):
+    requestId: str
+    bots: list[BotSummary] = Field(default_factory=list)
+
+
 class CreateBotInviteRegistrationRequest(BaseModel):
     inviteCode: str = Field(min_length=8)
     botName: str = Field(min_length=1)
@@ -624,6 +642,7 @@ class ValidationInvite(BaseModel):
     id: str
     runId: str
     email: str
+    permission: ValidationSharePermission
     status: ValidationInviteStatus
     invitedByUserId: str
     invitedByActorType: ValidationActorType
@@ -647,8 +666,21 @@ class ValidationRunShare(BaseModel):
 
 class CreateValidationInviteRequest(BaseModel):
     email: str
+    permission: ValidationSharePermission = "review"
     message: str | None = None
     expiresAt: str | None = None
+
+    @field_validator("permission", mode="before")
+    @classmethod
+    def _normalize_legacy_permission_aliases(cls, value: Any) -> Any:
+        if value is None:
+            return "review"
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"comment", "decide"}:
+                return "review"
+            return normalized
+        return value
 
 
 class ValidationInviteResponse(BaseModel):
@@ -671,3 +703,21 @@ class ValidationInviteAcceptanceResponse(BaseModel):
     requestId: str
     invite: ValidationInvite
     share: ValidationRunShare
+
+
+class ValidationSharedRunSummary(BaseModel):
+    runId: str
+    permission: ValidationSharePermission
+    status: ValidationRunStatus
+    profile: ValidationProfile
+    finalDecision: ValidationDecision
+    ownerUserId: str
+    sharedAt: str | None = None
+    createdAt: str
+    updatedAt: str
+
+
+class ValidationSharedRunListResponse(BaseModel):
+    requestId: str
+    items: list[ValidationSharedRunSummary] = Field(default_factory=list)
+    nextCursor: str | None = None

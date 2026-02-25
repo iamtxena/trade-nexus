@@ -103,10 +103,12 @@ def test_openapi_v2_routes_are_registered() -> None:
         ("GET", "/v2/validation-review/runs/{runId}/renders/{format}"),
         ("POST", "/v2/validation-baselines"),
         ("POST", "/v2/validation-regressions/replay"),
+        ("GET", "/v2/validation-bots"),
         ("POST", "/v2/validation-bots/registrations/invite-code"),
         ("POST", "/v2/validation-bots/registrations/partner-bootstrap"),
         ("POST", "/v2/validation-bots/{botId}/keys/rotate"),
         ("POST", "/v2/validation-bots/{botId}/keys/{keyId}/revoke"),
+        ("GET", "/v2/validation-sharing/runs/shared-with-me"),
         ("GET", "/v2/validation-sharing/runs/{runId}/invites"),
         ("POST", "/v2/validation-sharing/runs/{runId}/invites"),
         ("POST", "/v2/validation-sharing/invites/{inviteId}/revoke"),
@@ -190,6 +192,7 @@ def test_openapi_v2_runtime_status_codes() -> None:
         user_id="owner-runtime-openapi",
         user_email="owner-runtime-openapi@example.com",
     )
+    assert client.get("/v2/validation-bots", headers=validation_headers).status_code == 200
 
     create_run = client.post(
         "/v2/validation-runs",
@@ -358,6 +361,7 @@ def test_openapi_v2_runtime_status_codes() -> None:
         json={"email": "reviewer-openapi@example.com", "message": "Please review this run."},
     )
     assert create_invite.status_code == 201
+    assert create_invite.json()["invite"]["permission"] == "review"
     invite_id = create_invite.json()["invite"]["id"]
 
     list_invites = client.get(f"/v2/validation-sharing/runs/{run_id}/invites", headers=validation_headers)
@@ -378,6 +382,20 @@ def test_openapi_v2_runtime_status_codes() -> None:
         ).status_code
         == 200
     )
+    shared_with_me = client.get(
+        "/v2/validation-sharing/runs/shared-with-me",
+        headers=invitee_headers,
+    )
+    assert shared_with_me.status_code == 200
+    shared_items = shared_with_me.json().get("items", [])
+    assert any(item["runId"] == run_id and item["permission"] == "review" for item in shared_items)
+
+    owner_shared_with_me = client.get(
+        "/v2/validation-sharing/runs/shared-with-me",
+        headers={**validation_headers, "X-Request-Id": "req-runtime-v2-share-owner-list-001"},
+    )
+    assert owner_shared_with_me.status_code == 200
+    assert owner_shared_with_me.json().get("items") == []
 
     create_revoke_invite = client.post(
         f"/v2/validation-sharing/runs/{run_id}/invites",
@@ -394,6 +412,14 @@ def test_openapi_v2_runtime_status_codes() -> None:
         ).status_code
         == 200
     )
+
+    bots = client.get(
+        "/v2/validation-bots",
+        headers={**validation_headers, "X-Request-Id": "req-runtime-v2-bot-list-001"},
+    )
+    assert bots.status_code == 200
+    listed_bots = bots.json().get("bots", [])
+    assert any(bot["id"] == partner_bot_id for bot in listed_bots)
 
 
 def test_validation_run_actor_linkage_is_present_across_runtime_surfaces() -> None:

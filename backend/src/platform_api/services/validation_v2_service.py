@@ -7,12 +7,17 @@ import html
 import json
 import logging
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, cast
 
 from src.platform_api.errors import PlatformAPIError
 from src.platform_api.observability import log_context_event
 from src.platform_api.schemas_v1 import RequestContext
 from src.platform_api.schemas_v2 import (
+    BotKeyMetadata,
+    BotListResponse,
+    BotSummary,
+    BotUsageMetadata,
     CreateValidationBaselineRequest,
     CreateValidationRegressionReplayRequest,
     CreateValidationRenderRequest,
@@ -46,6 +51,8 @@ from src.platform_api.schemas_v2 import (
     ValidationRunListResponse,
     ValidationRunResponse,
     ValidationRunReviewResponse,
+    ValidationSharedRunListResponse,
+    ValidationSharedRunSummary,
 )
 from src.platform_api.services.validation_agent_review_service import ValidationAgentReviewService
 from src.platform_api.services.validation_deterministic_service import (
@@ -55,6 +62,7 @@ from src.platform_api.services.validation_deterministic_service import (
     ValidationPolicyConfig,
 )
 from src.platform_api.services.validation_identity_service import (
+    BotRuntimeKeyRecord,
     SharedValidationInviteRecord,
     SharePermission,
     ValidationIdentityService,
@@ -412,6 +420,58 @@ class ValidationV2Service:
             runs=runs,
         )
 
+    async def list_validation_bots(self, *, context: RequestContext) -> BotListResponse:
+        inventory = self._identity_service.list_bots(context=context)
+        summaries: list[BotSummary] = []
+        for item in inventory:
+            key_records = sorted(item.keys, key=lambda key: key.created_at, reverse=True)
+            latest_key_id = key_records[0].key_id if key_records else None
+            keys = [
+                BotKeyMetadata(
+                    id=key_record.key_id,
+                    botId=item.bot_id,
+                    keyPrefix=f"tnx.bot.{item.bot_id}.{key_record.key_id}"[:16],
+                    status=self._resolve_bot_key_status(key_record=key_record, latest_key_id=latest_key_id),
+                    createdAt=key_record.created_at,
+                    lastUsedAt=key_record.last_used_at,
+                    revokedAt=key_record.revoked_at,
+                )
+                for key_record in key_records
+            ]
+            any_active_key = any(key.status == "active" for key in keys)
+            latest_seen = None
+            for key_record in key_records:
+                if key_record.last_used_at is None:
+                    continue
+                if latest_seen is None or key_record.last_used_at > latest_seen:
+                    latest_seen = key_record.last_used_at
+            usage = BotUsageMetadata(lastSeenAt=latest_seen) if latest_seen is not None else None
+            registration_path: Literal["invite_code_trial", "partner_bootstrap"] = (
+                "invite_code_trial" if item.registration_method == "invite" else "partner_bootstrap"
+            )
+            summaries.append(
+                BotSummary(
+                    id=item.bot_id,
+                    tenantId=item.tenant_id,
+                    ownerUserId=item.owner_user_id,
+                    name=item.bot_name,
+                    status="active" if any_active_key else "revoked",
+                    registrationPath=registration_path,
+                    trialExpiresAt=(
+                        self._bot_trial_expires_at(item.created_at)
+                        if item.registration_method == "invite"
+                        else None
+                    ),
+                    metadata=item.metadata,
+                    createdAt=item.created_at,
+                    updatedAt=item.updated_at,
+                    keys=keys,
+                    usage=usage,
+                )
+            )
+        summaries.sort(key=lambda item: item.updatedAt, reverse=True)
+        return BotListResponse(requestId=context.request_id, bots=summaries)
+
     async def get_validation_run(self, *, run_id: str, context: RequestContext) -> ValidationRunResponse:
         record = self._require_run(run_id=run_id, context=context)
         return ValidationRunResponse(requestId=context.request_id, run=record.run)
@@ -473,6 +533,59 @@ class ValidationV2Service:
         if bounded_start + limit < len(items):
             next_cursor = str(bounded_start + limit)
         return ValidationReviewRunListResponse(
+            requestId=context.request_id,
+            items=page,
+            nextCursor=next_cursor,
+        )
+
+    async def list_shared_validation_runs(
+        self,
+        *,
+        context: RequestContext,
+        status_filter: str | None = None,
+        final_decision_filter: str | None = None,
+        permission_filter: str | None = None,
+        cursor: str | None = None,
+        limit: int = 25,
+    ) -> ValidationSharedRunListResponse:
+        items: list[ValidationSharedRunSummary] = []
+        for record in self._runs.values():
+            share_grant = self._identity_service.get_run_share_grant(
+                run_id=record.run.id,
+                tenant_id=context.tenant_id,
+                run_tenant_id=record.tenant_id,
+                owner_user_id=record.owner_user_id,
+                user_id=context.user_id,
+            )
+            if share_grant is None:
+                continue
+            items.append(
+                ValidationSharedRunSummary(
+                    runId=record.run.id,
+                    permission=share_grant.permission,
+                    status=record.run.status,
+                    profile=record.run.profile,
+                    finalDecision=record.run.finalDecision,
+                    ownerUserId=record.owner_user_id,
+                    sharedAt=share_grant.granted_at,
+                    createdAt=record.run.createdAt,
+                    updatedAt=record.run.updatedAt,
+                )
+            )
+        if status_filter is not None:
+            items = [item for item in items if item.status == status_filter]
+        if final_decision_filter is not None:
+            items = [item for item in items if item.finalDecision == final_decision_filter]
+        if permission_filter is not None:
+            items = [item for item in items if item.permission == permission_filter]
+        items.sort(key=lambda item: item.updatedAt, reverse=True)
+        start = self._decode_pagination_cursor(cursor=cursor)
+        bounded_start = min(start, len(items))
+        page = items[bounded_start : bounded_start + limit]
+        next_cursor: str | None = None
+        if bounded_start + limit < len(items):
+            next_cursor = str(bounded_start + limit)
+        return ValidationSharedRunListResponse(
             requestId=context.request_id,
             items=page,
             nextCursor=next_cursor,
@@ -1677,6 +1790,29 @@ class ValidationV2Service:
                 request_id=context.request_id,
             )
         return record
+
+    @staticmethod
+    def _resolve_bot_key_status(
+        *,
+        key_record: BotRuntimeKeyRecord,
+        latest_key_id: str | None,
+    ) -> Literal["active", "rotated", "revoked"]:
+        if not key_record.revoked:
+            return "active"
+        if latest_key_id is not None and key_record.key_id != latest_key_id:
+            return "rotated"
+        return "revoked"
+
+    @staticmethod
+    def _bot_trial_expires_at(created_at: str) -> str | None:
+        try:
+            created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=UTC)
+        trial_expires = created.astimezone(UTC) + timedelta(days=30)
+        return trial_expires.replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
     def _require_shared_run(
         self,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hmac
 import json
 import logging
@@ -86,6 +87,37 @@ class BotRegistrationResult:
 
 
 @dataclass(frozen=True)
+class BotProfileRecord:
+    tenant_id: str
+    owner_user_id: str
+    bot_id: str
+    bot_name: str
+    registration_method: RegistrationMethod
+    metadata: dict[str, Any]
+    created_at: str
+    updated_at: str
+
+
+@dataclass(frozen=True)
+class BotInventoryRecord:
+    tenant_id: str
+    owner_user_id: str
+    bot_id: str
+    bot_name: str
+    registration_method: RegistrationMethod
+    metadata: dict[str, Any]
+    created_at: str
+    updated_at: str
+    keys: tuple[BotRuntimeKeyRecord, ...]
+
+
+@dataclass(frozen=True)
+class RunShareGrant:
+    permission: SharePermission
+    granted_at: str | None
+
+
+@dataclass(frozen=True)
 class SharedValidationInviteRecord:
     invite_id: str
     run_id: str
@@ -129,6 +161,7 @@ class ValidationIdentityService:
         self._invite_codes: dict[str, BotInviteCodeRecord] = {}
         self._bot_keys: dict[str, BotRuntimeKeyRecord] = {}
         self._bot_key_index: dict[tuple[str, str, str], set[str]] = {}
+        self._bot_profiles: dict[tuple[str, str, str], BotProfileRecord] = {}
         self._invite_rate_limit_index: dict[str, list[float]] = {}
 
         self._share_invites_by_run: dict[str, list[SharedValidationInviteRecord]] = {}
@@ -196,6 +229,8 @@ class ValidationIdentityService:
         invite_code: str | None,
         partner_key: str | None,
         partner_secret: str | None,
+        bot_name: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> BotRegistrationResult:
         try:
             normalized_bot_id = _normalize_bot_id(bot_id)
@@ -266,6 +301,14 @@ class ValidationIdentityService:
             registration_method=method,
         )
         self._bot_key_index.setdefault((context.tenant_id, context.user_id, normalized_bot_id), set()).add(key_id)
+        self._upsert_bot_profile(
+            context=context,
+            bot_id=normalized_bot_id,
+            bot_name=bot_name,
+            registration_method=method,
+            metadata=metadata,
+            timestamp=now,
+        )
 
         self._record_audit(
             event_type="register",
@@ -355,6 +398,12 @@ class ValidationIdentityService:
                 "revokedKeyIds": revoked,
             },
         )
+        self._touch_bot_profile_updated_at(
+            tenant_id=context.tenant_id,
+            owner_user_id=context.user_id,
+            bot_id=normalized_bot_id,
+            timestamp=now,
+        )
         return revoked
 
     def rotate_bot_key(
@@ -416,6 +465,12 @@ class ValidationIdentityService:
             registration_method=registration_method,
         )
         self._bot_key_index.setdefault((context.tenant_id, context.user_id, normalized_bot_id), set()).add(key_id)
+        self._touch_bot_profile_updated_at(
+            tenant_id=context.tenant_id,
+            owner_user_id=context.user_id,
+            bot_id=normalized_bot_id,
+            timestamp=now,
+        )
 
         self._record_audit(
             event_type="rotate",
@@ -444,6 +499,44 @@ class ValidationIdentityService:
 
     def get_bot_key(self, *, key_id: str) -> BotRuntimeKeyRecord | None:
         return self._bot_keys.get(key_id)
+
+    def list_bots(self, *, context: RequestContext) -> list[BotInventoryRecord]:
+        inventory: list[BotInventoryRecord] = []
+        for tenant_id, owner_user_id, bot_id in sorted(self._bot_key_index.keys()):
+            if tenant_id != context.tenant_id or owner_user_id != context.user_id:
+                continue
+            key_ids = sorted(self._bot_key_index.get((tenant_id, owner_user_id, bot_id), set()))
+            key_records = tuple(self._bot_keys[key_id] for key_id in key_ids if key_id in self._bot_keys)
+            profile = self._bot_profiles.get((tenant_id, owner_user_id, bot_id))
+            registration_method: RegistrationMethod = (
+                profile.registration_method
+                if profile is not None
+                else (key_records[-1].registration_method if key_records else "partner")
+            )
+            created_at = (
+                profile.created_at
+                if profile is not None
+                else (key_records[0].created_at if key_records else utc_now())
+            )
+            updated_at = (
+                profile.updated_at
+                if profile is not None
+                else (key_records[-1].created_at if key_records else created_at)
+            )
+            inventory.append(
+                BotInventoryRecord(
+                    tenant_id=tenant_id,
+                    owner_user_id=owner_user_id,
+                    bot_id=bot_id,
+                    bot_name=profile.bot_name if profile is not None else _default_bot_name(bot_id),
+                    registration_method=registration_method,
+                    metadata=copy.deepcopy(profile.metadata) if profile is not None else {},
+                    created_at=created_at,
+                    updated_at=updated_at,
+                    keys=key_records,
+                )
+            )
+        return inventory
 
     def resolve_api_key(
         self,
@@ -940,17 +1033,100 @@ class ValidationIdentityService:
             return False
         if user_id == owner_user_id:
             return True
-
-        grants = self._share_grants_by_run.get(run_id)
-        if grants is None:
+        share_grant = self.get_run_share_grant(
+            run_id=run_id,
+            tenant_id=tenant_id,
+            run_tenant_id=run_tenant_id,
+            owner_user_id=owner_user_id,
+            user_id=user_id,
+        )
+        if share_grant is None:
             return False
-        permission = grants.get(user_id)
-        if permission is None:
-            return False
+        permission = share_grant.permission
 
         if required_permission == "view":
             return permission in {"view", "review"}
         return permission == "review"
+
+    def get_run_share_grant(
+        self,
+        *,
+        run_id: str,
+        tenant_id: str,
+        run_tenant_id: str,
+        owner_user_id: str,
+        user_id: str,
+    ) -> RunShareGrant | None:
+        if tenant_id != run_tenant_id or user_id == owner_user_id:
+            return None
+        grants = self._share_grants_by_run.get(run_id)
+        if grants is None:
+            return None
+        permission = grants.get(user_id)
+        if permission is None:
+            return None
+        granted_at: str | None = None
+        for invite in self._share_invites_by_run.get(run_id, []):
+            if invite.status != "accepted" or invite.accepted_user_id != user_id:
+                continue
+            accepted_at = invite.accepted_at or invite.created_at
+            if granted_at is None or accepted_at > granted_at:
+                granted_at = accepted_at
+        return RunShareGrant(permission=permission, granted_at=granted_at)
+
+    def _upsert_bot_profile(
+        self,
+        *,
+        context: RequestContext,
+        bot_id: str,
+        bot_name: str | None,
+        registration_method: RegistrationMethod,
+        metadata: dict[str, Any] | None,
+        timestamp: str,
+    ) -> None:
+        key = (context.tenant_id, context.user_id, bot_id)
+        existing = self._bot_profiles.get(key)
+        resolved_bot_name = (bot_name or "").strip()
+        if not resolved_bot_name:
+            resolved_bot_name = existing.bot_name if existing is not None else _default_bot_name(bot_id)
+        resolved_metadata = (
+            copy.deepcopy(metadata)
+            if metadata is not None
+            else (copy.deepcopy(existing.metadata) if existing is not None else {})
+        )
+        self._bot_profiles[key] = BotProfileRecord(
+            tenant_id=context.tenant_id,
+            owner_user_id=context.user_id,
+            bot_id=bot_id,
+            bot_name=resolved_bot_name,
+            registration_method=registration_method,
+            metadata=resolved_metadata,
+            created_at=existing.created_at if existing is not None else timestamp,
+            updated_at=timestamp,
+        )
+
+    def _touch_bot_profile_updated_at(
+        self,
+        *,
+        tenant_id: str,
+        owner_user_id: str,
+        bot_id: str,
+        timestamp: str,
+    ) -> None:
+        key = (tenant_id, owner_user_id, bot_id)
+        existing = self._bot_profiles.get(key)
+        if existing is None:
+            return
+        self._bot_profiles[key] = BotProfileRecord(
+            tenant_id=existing.tenant_id,
+            owner_user_id=existing.owner_user_id,
+            bot_id=existing.bot_id,
+            bot_name=existing.bot_name,
+            registration_method=existing.registration_method,
+            metadata=copy.deepcopy(existing.metadata),
+            created_at=existing.created_at,
+            updated_at=timestamp,
+        )
 
     def _index_pending_share_invite(self, *, invite: SharedValidationInviteRecord) -> None:
         if invite.status != "pending":
@@ -1179,6 +1355,10 @@ def _normalize_email(value: str) -> str:
     if "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
         raise ValueError("Invite email must be a valid address.")
     return normalized
+
+
+def _default_bot_name(bot_id: str) -> str:
+    return bot_id.replace("-", " ").strip() or bot_id
 
 
 def normalize_email(value: str) -> str:

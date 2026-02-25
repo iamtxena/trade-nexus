@@ -119,6 +119,7 @@ def _reset_runtime_state() -> None:
         identity._invite_codes.clear()  # noqa: SLF001
         identity._bot_keys.clear()  # noqa: SLF001
         identity._bot_key_index.clear()  # noqa: SLF001
+        identity._bot_profiles.clear()  # noqa: SLF001
         identity._invite_rate_limit_index.clear()  # noqa: SLF001
         identity._share_invites_by_run.clear()  # noqa: SLF001
         identity._share_grants_by_run.clear()  # noqa: SLF001
@@ -912,6 +913,28 @@ def test_runtime_bot_registration_routes_do_not_override_jwt_identity_with_runti
 def test_runtime_identity_routes_require_authenticated_identity() -> None:
     client = _client()
 
+    bot_list = client.get(
+        "/v2/validation-bots",
+        headers={
+            "X-Request-Id": "req-bot-list-unauth-001",
+            "X-Tenant-Id": "tenant-unauth",
+            "X-User-Id": "user-unauth",
+        },
+    )
+    assert bot_list.status_code == 401
+    assert bot_list.json()["error"]["code"] == "AUTH_UNAUTHORIZED"
+
+    shared_list = client.get(
+        "/v2/validation-sharing/runs/shared-with-me",
+        headers={
+            "X-Request-Id": "req-shared-list-unauth-001",
+            "X-Tenant-Id": "tenant-unauth",
+            "X-User-Id": "user-unauth",
+        },
+    )
+    assert shared_list.status_code == 401
+    assert shared_list.json()["error"]["code"] == "AUTH_UNAUTHORIZED"
+
     shared = client.get(
         "/v2/validation-sharing/runs/valrun-0001",
         headers={
@@ -1033,6 +1056,127 @@ def test_shared_validation_access_owner_invited_and_denied_users() -> None:
     assert any(item.event_type == "accept" for item in audit_events)
 
 
+def test_shared_with_me_list_supports_permission_filters_and_review_gate() -> None:
+    client = _client()
+    owner_headers = _auth_headers(
+        request_id="req-shared-with-me-owner-001",
+        tenant_id="tenant-shared-with-me",
+        user_id="owner-shared-with-me",
+    )
+
+    create_run_view = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-with-me-run-view-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run_view.status_code == 202
+    run_id_view = create_run_view.json()["run"]["id"]
+
+    create_run_review = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-with-me-run-review-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run_review.status_code == 202
+    run_id_review = create_run_review.json()["run"]["id"]
+
+    invite_view = client.post(
+        f"/v2/validation-sharing/runs/{run_id_view}/invites",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-with-me-invite-view-001"},
+        json={"email": "filter-reviewer@example.com", "permission": "view"},
+    )
+    assert invite_view.status_code == 201
+    assert invite_view.json()["invite"]["permission"] == "view"
+    invite_view_id = invite_view.json()["invite"]["id"]
+
+    invite_review = client.post(
+        f"/v2/validation-sharing/runs/{run_id_review}/invites",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-with-me-invite-review-001"},
+        json={"email": "filter-reviewer@example.com", "permission": "review"},
+    )
+    assert invite_review.status_code == 201
+    assert invite_review.json()["invite"]["permission"] == "review"
+    invite_review_id = invite_review.json()["invite"]["id"]
+
+    invitee_headers = _auth_headers(
+        request_id="req-shared-with-me-invitee-001",
+        tenant_id="tenant-shared-with-me",
+        user_id="invitee-shared-with-me",
+        user_email="filter-reviewer@example.com",
+    )
+
+    accept_view = client.post(
+        f"/v2/validation-sharing/invites/{invite_view_id}/accept",
+        headers={**invitee_headers, "Idempotency-Key": "idem-shared-with-me-accept-view-001"},
+        json={"acceptedEmail": "filter-reviewer@example.com"},
+    )
+    assert accept_view.status_code == 200
+
+    accept_review = client.post(
+        f"/v2/validation-sharing/invites/{invite_review_id}/accept",
+        headers={**invitee_headers, "Idempotency-Key": "idem-shared-with-me-accept-review-001"},
+        json={"acceptedEmail": "filter-reviewer@example.com"},
+    )
+    assert accept_review.status_code == 200
+
+    shared_all = client.get(
+        "/v2/validation-sharing/runs/shared-with-me",
+        headers=invitee_headers,
+    )
+    assert shared_all.status_code == 200
+    shared_items = {item["runId"]: item for item in shared_all.json()["items"]}
+    assert shared_items[run_id_view]["permission"] == "view"
+    assert shared_items[run_id_review]["permission"] == "review"
+
+    shared_view_only = client.get(
+        "/v2/validation-sharing/runs/shared-with-me?permission=view",
+        headers={**invitee_headers, "X-Request-Id": "req-shared-with-me-filter-view-001"},
+    )
+    assert shared_view_only.status_code == 200
+    assert [item["runId"] for item in shared_view_only.json()["items"]] == [run_id_view]
+
+    shared_review_only = client.get(
+        "/v2/validation-sharing/runs/shared-with-me?permission=review",
+        headers={**invitee_headers, "X-Request-Id": "req-shared-with-me-filter-review-001"},
+    )
+    assert shared_review_only.status_code == 200
+    assert [item["runId"] for item in shared_review_only.json()["items"]] == [run_id_review]
+
+    denied_review = client.post(
+        f"/v2/validation-sharing/runs/{run_id_view}/review",
+        headers={**invitee_headers, "Idempotency-Key": "idem-shared-with-me-review-denied-001"},
+        json={
+            "reviewerType": "agent",
+            "decision": "pass",
+            "summary": "View-only invite must not allow shared review writes.",
+            "findings": [],
+            "comments": [],
+        },
+    )
+    assert denied_review.status_code == 403
+    assert denied_review.json()["error"]["code"] == "VALIDATION_RUN_ACCESS_DENIED"
+
+    allowed_review = client.post(
+        f"/v2/validation-sharing/runs/{run_id_review}/review",
+        headers={**invitee_headers, "Idempotency-Key": "idem-shared-with-me-review-allowed-001"},
+        json={
+            "reviewerType": "agent",
+            "decision": "pass",
+            "summary": "Review invite should allow shared review writes.",
+            "findings": [],
+            "comments": [],
+        },
+    )
+    assert allowed_review.status_code == 202
+
+    owner_shared = client.get(
+        "/v2/validation-sharing/runs/shared-with-me",
+        headers={**owner_headers, "X-Request-Id": "req-shared-with-me-owner-list-001"},
+    )
+    assert owner_shared.status_code == 200
+    assert owner_shared.json()["items"] == []
+
+
 def test_shared_review_idempotency_key_does_not_cache_across_owner_surface() -> None:
     client = _client()
     owner_headers = _auth_headers(
@@ -1141,6 +1285,47 @@ def test_shared_validation_invite_rejects_duplicate_pending_email() -> None:
     )
     assert invites.status_code == 200
     assert len(invites.json()["items"]) == 1
+
+
+def test_shared_validation_invite_permission_aliases_map_to_review() -> None:
+    client = _client()
+    owner_headers = _auth_headers(
+        request_id="req-shared-validation-permission-alias-owner-001",
+        tenant_id="tenant-shared-validation-permission-alias",
+        user_id="owner-shared-validation-permission-alias",
+    )
+
+    create_run = client.post(
+        "/v2/validation-runs",
+        headers={**owner_headers, "Idempotency-Key": "idem-shared-validation-permission-alias-run-001"},
+        json=_validation_run_payload(),
+    )
+    assert create_run.status_code == 202
+    run_id = create_run.json()["run"]["id"]
+
+    comment_alias_invite = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-permission-alias-comment-001",
+            "Idempotency-Key": "idem-shared-validation-permission-alias-comment-001",
+        },
+        json={"email": "permission-comment@example.com", "permission": "comment"},
+    )
+    assert comment_alias_invite.status_code == 201
+    assert comment_alias_invite.json()["invite"]["permission"] == "review"
+
+    decide_alias_invite = client.post(
+        f"/v2/validation-sharing/runs/{run_id}/invites",
+        headers={
+            **owner_headers,
+            "X-Request-Id": "req-shared-validation-permission-alias-decide-001",
+            "Idempotency-Key": "idem-shared-validation-permission-alias-decide-001",
+        },
+        json={"email": "permission-decide@example.com", "permission": "decide"},
+    )
+    assert decide_alias_invite.status_code == 201
+    assert decide_alias_invite.json()["invite"]["permission"] == "review"
 
 
 def test_shared_validation_access_check_enforces_tenant_match() -> None:

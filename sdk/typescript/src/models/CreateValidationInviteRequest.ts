@@ -13,6 +13,14 @@
  */
 
 import { mapValues } from '../runtime';
+import type { ValidationSharePermission } from './ValidationSharePermission';
+import {
+    ValidationSharePermissionFromJSON,
+    ValidationSharePermissionFromJSONTyped,
+    ValidationSharePermissionToJSON,
+    ValidationSharePermissionToJSONTyped,
+} from './ValidationSharePermission';
+
 /**
  * 
  * @export
@@ -27,6 +35,12 @@ export interface CreateValidationInviteRequest {
     email: string;
     /**
      * 
+     * @type {ValidationSharePermission}
+     * @memberof CreateValidationInviteRequest
+     */
+    permission?: ValidationSharePermission;
+    /**
+     * 
      * @type {string}
      * @memberof CreateValidationInviteRequest
      */
@@ -38,6 +52,8 @@ export interface CreateValidationInviteRequest {
      */
     expiresAt?: Date;
 }
+
+
 
 /**
  * Check if a given object implements the CreateValidationInviteRequest interface.
@@ -58,6 +74,7 @@ export function CreateValidationInviteRequestFromJSONTyped(json: any, ignoreDisc
     return {
         
         'email': json['email'],
+        'permission': json['permission'] == null ? undefined : ValidationSharePermissionFromJSON(json['permission']),
         'message': json['message'] == null ? undefined : json['message'],
         'expiresAt': json['expiresAt'] == null ? undefined : (new Date(json['expiresAt'])),
     };
@@ -75,6 +92,7 @@ export function CreateValidationInviteRequestToJSONTyped(value?: CreateValidatio
     return {
         
         'email': value['email'],
+        'permission': ValidationSharePermissionToJSON(value['permission']),
         'message': value['message'],
         'expiresAt': value['expiresAt'] == null ? undefined : ((value['expiresAt']).toISOString()),
     };

@@ -458,7 +458,7 @@ class ValidationV2Service:
                     status="active" if any_active_key else "revoked",
                     registrationPath=registration_path,
                     trialExpiresAt=(
-                        self._bot_trial_expires_at(item.created_at)
+                        self.bot_trial_expires_at(item.created_at)
                         if item.registration_method == "invite"
                         else None
                     ),
@@ -1808,7 +1808,7 @@ class ValidationV2Service:
         return raw_key[:16]
 
     @staticmethod
-    def _bot_trial_expires_at(created_at: str) -> str | None:
+    def bot_trial_expires_at(created_at: str) -> str | None:
         try:
             created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
         except ValueError:

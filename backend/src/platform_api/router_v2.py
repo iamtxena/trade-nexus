@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 from uuid import uuid4
 
@@ -222,13 +221,7 @@ def _bot_key_prefix(raw_key: str) -> str:
 
 
 def _invite_trial_expires_at(created_at: str) -> str | None:
-    try:
-        created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if created.tzinfo is None:
-        created = created.replace(tzinfo=UTC)
-    return (created.astimezone(UTC) + timedelta(days=30)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return ValidationV2Service.bot_trial_expires_at(created_at)
 
 
 def _is_validation_request_path(path: str) -> bool:

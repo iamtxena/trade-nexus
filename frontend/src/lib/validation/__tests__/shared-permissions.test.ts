@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  describeSharedValidationPermission,
   hasSharedValidationPermission,
   resolveSharedValidationCapabilities,
 } from '../shared-permissions';
@@ -24,5 +25,18 @@ describe('shared validation permissions', () => {
     expect(hasSharedValidationPermission('decide', 'view')).toBe(true);
     expect(hasSharedValidationPermission('decide', 'comment')).toBe(true);
     expect(hasSharedValidationPermission('decide', 'decide')).toBe(true);
+  });
+
+  test('describeSharedValidationPermission exposes clear UI metadata', () => {
+    const viewDescriptor = describeSharedValidationPermission('view');
+    expect(viewDescriptor.label).toBe('View only');
+    expect(viewDescriptor.summary).toContain('inspect artifact');
+    expect(viewDescriptor.canComment).toBe(false);
+
+    const decideDescriptor = describeSharedValidationPermission('decide');
+    expect(decideDescriptor.label).toBe('Decide');
+    expect(decideDescriptor.canView).toBe(true);
+    expect(decideDescriptor.canComment).toBe(true);
+    expect(decideDescriptor.canDecide).toBe(true);
   });
 });

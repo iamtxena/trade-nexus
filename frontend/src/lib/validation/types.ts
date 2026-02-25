@@ -220,7 +220,7 @@ export function isValidationRunArtifact(
   );
 }
 
-export type ValidationSharePermission = 'view' | 'comment' | 'decide';
+export type ValidationSharePermission = 'view' | 'review';
 export type ValidationInviteStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
 export type ValidationShareStatus = 'active' | 'revoked';
 export type ValidationBotStatus = 'active' | 'suspended' | 'revoked';

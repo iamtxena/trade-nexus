@@ -78,6 +78,10 @@ const COMMANDS: Record<
     description: 'Validation lifecycle (create, list, get, review, render, replay)',
     handler: lazyLoad('validation'),
   },
+  moltbook: {
+    description: 'Moltbook integration (replicate strategies)',
+    handler: lazyLoad('moltbook'),
+  },
 };
 
 function lazyLoad(command: string): (args: string[]) => Promise<void> {

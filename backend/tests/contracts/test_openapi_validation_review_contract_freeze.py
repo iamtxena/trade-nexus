@@ -45,8 +45,10 @@ def test_validation_review_path_set_is_frozen() -> None:
 
 def test_validation_review_operation_ids_are_frozen() -> None:
     spec = _spec_text()
-    operation_ids = set(re.findall(r"^\s+operationId:\s+([A-Za-z0-9_]+)\s*$", spec, flags=re.MULTILINE))
-    review_ids = {operation_id for operation_id in operation_ids if "ValidationReview" in operation_id}
+    review_ids: set[str] = set()
+    for path in EXPECTED_REVIEW_PATHS:
+        path_block = _path_block(spec, path=path)
+        review_ids.update(re.findall(r"^\s+operationId:\s+([A-Za-z0-9_]+)\s*$", path_block, flags=re.MULTILINE))
     assert review_ids == EXPECTED_REVIEW_OPERATION_IDS
 
 

@@ -15,17 +15,29 @@
 
 import * as runtime from '../runtime';
 import type {
+  CreateValidationReviewCommentRequest,
+  CreateValidationReviewDecisionRequest,
   ErrorResponse,
   ValidationDecision,
+  ValidationReviewCommentResponse,
+  ValidationReviewDecisionResponse,
   ValidationRunStatus,
   ValidationSharePermission,
   ValidationSharedRunListResponse,
 } from '../models/index';
 import {
+    CreateValidationReviewCommentRequestFromJSON,
+    CreateValidationReviewCommentRequestToJSON,
+    CreateValidationReviewDecisionRequestFromJSON,
+    CreateValidationReviewDecisionRequestToJSON,
     ErrorResponseFromJSON,
     ErrorResponseToJSON,
     ValidationDecisionFromJSON,
     ValidationDecisionToJSON,
+    ValidationReviewCommentResponseFromJSON,
+    ValidationReviewCommentResponseToJSON,
+    ValidationReviewDecisionResponseFromJSON,
+    ValidationReviewDecisionResponseToJSON,
     ValidationRunStatusFromJSON,
     ValidationRunStatusToJSON,
     ValidationSharePermissionFromJSON,
@@ -33,6 +45,20 @@ import {
     ValidationSharedRunListResponseFromJSON,
     ValidationSharedRunListResponseToJSON,
 } from '../models/index';
+
+export interface CreateSharedValidationReviewCommentV2Request {
+    runId: string;
+    idempotencyKey: string;
+    createValidationReviewCommentRequest: CreateValidationReviewCommentRequest;
+    xRequestId?: string;
+}
+
+export interface CreateSharedValidationReviewDecisionV2Request {
+    runId: string;
+    idempotencyKey: string;
+    createValidationReviewDecisionRequest: CreateValidationReviewDecisionRequest;
+    xRequestId?: string;
+}
 
 export interface ListValidationRunsSharedWithMeV2Request {
     xRequestId?: string;
@@ -50,6 +76,42 @@ export interface ListValidationRunsSharedWithMeV2Request {
  * @interface SharedValidationApiInterface
  */
 export interface SharedValidationApiInterface {
+    /**
+     * 
+     * @summary Append shared reviewer comment to a validation run
+     * @param {string} runId 
+     * @param {string} idempotencyKey Required for idempotent write operations.
+     * @param {CreateValidationReviewCommentRequest} createValidationReviewCommentRequest 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof SharedValidationApiInterface
+     */
+    createSharedValidationReviewCommentV2Raw(requestParameters: CreateSharedValidationReviewCommentV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewCommentResponse>>;
+
+    /**
+     * Append shared reviewer comment to a validation run
+     */
+    createSharedValidationReviewCommentV2(requestParameters: CreateSharedValidationReviewCommentV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewCommentResponse>;
+
+    /**
+     * 
+     * @summary Submit shared reviewer decision for a validation run
+     * @param {string} runId 
+     * @param {string} idempotencyKey Required for idempotent write operations.
+     * @param {CreateValidationReviewDecisionRequest} createValidationReviewDecisionRequest 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof SharedValidationApiInterface
+     */
+    createSharedValidationReviewDecisionV2Raw(requestParameters: CreateSharedValidationReviewDecisionV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewDecisionResponse>>;
+
+    /**
+     * Submit shared reviewer decision for a validation run
+     */
+    createSharedValidationReviewDecisionV2(requestParameters: CreateSharedValidationReviewDecisionV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewDecisionResponse>;
+
     /**
      * 
      * @summary List validation runs shared with authenticated user identity
@@ -76,6 +138,154 @@ export interface SharedValidationApiInterface {
  * 
  */
 export class SharedValidationApi extends runtime.BaseAPI implements SharedValidationApiInterface {
+
+    /**
+     * Append shared reviewer comment to a validation run
+     */
+    async createSharedValidationReviewCommentV2Raw(requestParameters: CreateSharedValidationReviewCommentV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewCommentResponse>> {
+        if (requestParameters['runId'] == null) {
+            throw new runtime.RequiredError(
+                'runId',
+                'Required parameter "runId" was null or undefined when calling createSharedValidationReviewCommentV2().'
+            );
+        }
+
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling createSharedValidationReviewCommentV2().'
+            );
+        }
+
+        if (requestParameters['createValidationReviewCommentRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createValidationReviewCommentRequest',
+                'Required parameter "createValidationReviewCommentRequest" was null or undefined when calling createSharedValidationReviewCommentV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-sharing/runs/{runId}/comments`;
+        urlPath = urlPath.replace(`{${"runId"}}`, encodeURIComponent(String(requestParameters['runId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateValidationReviewCommentRequestToJSON(requestParameters['createValidationReviewCommentRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationReviewCommentResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Append shared reviewer comment to a validation run
+     */
+    async createSharedValidationReviewCommentV2(requestParameters: CreateSharedValidationReviewCommentV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewCommentResponse> {
+        const response = await this.createSharedValidationReviewCommentV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Submit shared reviewer decision for a validation run
+     */
+    async createSharedValidationReviewDecisionV2Raw(requestParameters: CreateSharedValidationReviewDecisionV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationReviewDecisionResponse>> {
+        if (requestParameters['runId'] == null) {
+            throw new runtime.RequiredError(
+                'runId',
+                'Required parameter "runId" was null or undefined when calling createSharedValidationReviewDecisionV2().'
+            );
+        }
+
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling createSharedValidationReviewDecisionV2().'
+            );
+        }
+
+        if (requestParameters['createValidationReviewDecisionRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createValidationReviewDecisionRequest',
+                'Required parameter "createValidationReviewDecisionRequest" was null or undefined when calling createSharedValidationReviewDecisionV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-API-Key"] = await this.configuration.apiKey("X-API-Key"); // apiKeyAuth authentication
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-sharing/runs/{runId}/decisions`;
+        urlPath = urlPath.replace(`{${"runId"}}`, encodeURIComponent(String(requestParameters['runId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateValidationReviewDecisionRequestToJSON(requestParameters['createValidationReviewDecisionRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationReviewDecisionResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Submit shared reviewer decision for a validation run
+     */
+    async createSharedValidationReviewDecisionV2(requestParameters: CreateSharedValidationReviewDecisionV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationReviewDecisionResponse> {
+        const response = await this.createSharedValidationReviewDecisionV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * List validation runs shared with authenticated user identity

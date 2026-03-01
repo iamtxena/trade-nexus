@@ -625,11 +625,46 @@ class ValidationV2Service:
         context: RequestContext,
         idempotency_key: str | None,
     ) -> ValidationReviewCommentResponse:
+        return await self._create_validation_review_comment(
+            run_id=run_id,
+            request=request,
+            context=context,
+            idempotency_key=idempotency_key,
+            shared_surface=False,
+        )
+
+    async def create_shared_validation_review_comment(
+        self,
+        *,
+        run_id: str,
+        request: CreateValidationReviewCommentRequest,
+        context: RequestContext,
+        idempotency_key: str | None,
+    ) -> ValidationReviewCommentResponse:
+        return await self._create_validation_review_comment(
+            run_id=run_id,
+            request=request,
+            context=context,
+            idempotency_key=idempotency_key,
+            shared_surface=True,
+        )
+
+    async def _create_validation_review_comment(
+        self,
+        *,
+        run_id: str,
+        request: CreateValidationReviewCommentRequest,
+        context: RequestContext,
+        idempotency_key: str | None,
+        shared_surface: bool,
+    ) -> ValidationReviewCommentResponse:
         payload = {"runId": run_id, **request.model_dump(mode="json")}
         key = self._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
+        scoped_comment_key = self._scoped_idempotency_key(context=context, key=key)
+        scoped_comment_key = f"{'shared' if shared_surface else 'owner'}:{scoped_comment_key}"
         conflict, cached = self._get_idempotent_response(
             scope="validation_review_comments",
-            key=self._scoped_idempotency_key(context=context, key=key),
+            key=scoped_comment_key,
             payload=payload,
         )
         if conflict:
@@ -642,7 +677,10 @@ class ValidationV2Service:
         if cached is not None:
             return ValidationReviewCommentResponse.model_validate(cached)
 
-        record = self._require_run(run_id=run_id, context=context)
+        if shared_surface:
+            record = self._require_shared_run(run_id=run_id, context=context, required_permission="review")
+        else:
+            record = self._require_run(run_id=run_id, context=context)
         normalized_body = _non_empty(request.body)
         if normalized_body is None:
             raise PlatformAPIError(
@@ -678,7 +716,7 @@ class ValidationV2Service:
         )
         self._save_idempotent_response(
             scope="validation_review_comments",
-            key=self._scoped_idempotency_key(context=context, key=key),
+            key=scoped_comment_key,
             payload=payload,
             response=response.model_dump(mode="json"),
         )
@@ -692,11 +730,46 @@ class ValidationV2Service:
         context: RequestContext,
         idempotency_key: str | None,
     ) -> ValidationReviewDecisionResponse:
+        return await self._create_validation_review_decision(
+            run_id=run_id,
+            request=request,
+            context=context,
+            idempotency_key=idempotency_key,
+            shared_surface=False,
+        )
+
+    async def create_shared_validation_review_decision(
+        self,
+        *,
+        run_id: str,
+        request: CreateValidationReviewDecisionRequest,
+        context: RequestContext,
+        idempotency_key: str | None,
+    ) -> ValidationReviewDecisionResponse:
+        return await self._create_validation_review_decision(
+            run_id=run_id,
+            request=request,
+            context=context,
+            idempotency_key=idempotency_key,
+            shared_surface=True,
+        )
+
+    async def _create_validation_review_decision(
+        self,
+        *,
+        run_id: str,
+        request: CreateValidationReviewDecisionRequest,
+        context: RequestContext,
+        idempotency_key: str | None,
+        shared_surface: bool,
+    ) -> ValidationReviewDecisionResponse:
         payload = {"runId": run_id, **request.model_dump(mode="json")}
         key = self._resolve_idempotency_key(context=context, idempotency_key=idempotency_key)
+        scoped_decision_key = self._scoped_idempotency_key(context=context, key=key)
+        scoped_decision_key = f"{'shared' if shared_surface else 'owner'}:{scoped_decision_key}"
         conflict, cached = self._get_idempotent_response(
             scope="validation_review_decisions",
-            key=self._scoped_idempotency_key(context=context, key=key),
+            key=scoped_decision_key,
             payload=payload,
         )
         if conflict:
@@ -709,7 +782,10 @@ class ValidationV2Service:
         if cached is not None:
             return ValidationReviewDecisionResponse.model_validate(cached)
 
-        record = self._require_run(run_id=run_id, context=context)
+        if shared_surface:
+            record = self._require_shared_run(run_id=run_id, context=context, required_permission="review")
+        else:
+            record = self._require_run(run_id=run_id, context=context)
         if request.action == "approve" and request.decision == "fail":
             raise PlatformAPIError(
                 status_code=400,
@@ -786,7 +862,7 @@ class ValidationV2Service:
         )
         self._save_idempotent_response(
             scope="validation_review_decisions",
-            key=self._scoped_idempotency_key(context=context, key=key),
+            key=scoped_decision_key,
             payload=payload,
             response=response.model_dump(mode="json"),
         )

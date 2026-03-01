@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   describeSharedValidationPermission,
   hasSharedValidationPermission,
+  normalizeSharedValidationPermission,
   resolveSharedValidationCapabilities,
 } from '../shared-permissions';
 
@@ -14,17 +15,32 @@ describe('shared validation permissions', () => {
     expect(capabilities.canDecide).toBe(false);
   });
 
-  test('comment permission allows comments but blocks decisions', () => {
-    const capabilities = resolveSharedValidationCapabilities('comment');
+  test('review permission allows comments and decisions', () => {
+    const capabilities = resolveSharedValidationCapabilities('review');
     expect(capabilities.canView).toBe(true);
     expect(capabilities.canComment).toBe(true);
-    expect(capabilities.canDecide).toBe(false);
+    expect(capabilities.canDecide).toBe(true);
   });
 
-  test('decide permission includes all actions', () => {
-    expect(hasSharedValidationPermission('decide', 'view')).toBe(true);
-    expect(hasSharedValidationPermission('decide', 'comment')).toBe(true);
-    expect(hasSharedValidationPermission('decide', 'decide')).toBe(true);
+  test('legacy aliases normalize deterministically to review', () => {
+    expect(normalizeSharedValidationPermission('comment')).toBe('review');
+    expect(normalizeSharedValidationPermission('decide')).toBe('review');
+    expect(normalizeSharedValidationPermission('unknown')).toBe('view');
+
+    expect(resolveSharedValidationCapabilities('comment')).toEqual(
+      resolveSharedValidationCapabilities('review'),
+    );
+    expect(resolveSharedValidationCapabilities('decide')).toEqual(
+      resolveSharedValidationCapabilities('review'),
+    );
+  });
+
+  test('review access includes all reviewer actions', () => {
+    expect(hasSharedValidationPermission('review', 'view')).toBe(true);
+    expect(hasSharedValidationPermission('review', 'review')).toBe(true);
+    expect(hasSharedValidationPermission('view', 'review')).toBe(false);
+    expect(hasSharedValidationPermission('comment', 'review')).toBe(true);
+    expect(hasSharedValidationPermission('decide', 'review')).toBe(true);
   });
 
   test('describeSharedValidationPermission exposes clear UI metadata', () => {
@@ -33,10 +49,15 @@ describe('shared validation permissions', () => {
     expect(viewDescriptor.summary).toContain('inspect artifact');
     expect(viewDescriptor.canComment).toBe(false);
 
-    const decideDescriptor = describeSharedValidationPermission('decide');
-    expect(decideDescriptor.label).toBe('Decide');
-    expect(decideDescriptor.canView).toBe(true);
-    expect(decideDescriptor.canComment).toBe(true);
-    expect(decideDescriptor.canDecide).toBe(true);
+    const reviewDescriptor = describeSharedValidationPermission('review');
+    expect(reviewDescriptor.permission).toBe('review');
+    expect(reviewDescriptor.label).toBe('Review');
+    expect(reviewDescriptor.canView).toBe(true);
+    expect(reviewDescriptor.canComment).toBe(true);
+    expect(reviewDescriptor.canDecide).toBe(true);
+
+    const legacyDescriptor = describeSharedValidationPermission('decide');
+    expect(legacyDescriptor.permission).toBe('review');
+    expect(legacyDescriptor.label).toBe('Review');
   });
 });

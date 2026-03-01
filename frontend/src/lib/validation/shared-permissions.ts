@@ -1,9 +1,18 @@
 import type { ValidationSharePermission } from '@/lib/validation/types';
 
+const LEGACY_SHARED_PERMISSION_ALIASES = {
+  comment: 'review',
+  decide: 'review',
+} as const;
+
+export type LegacyValidationSharePermissionAlias = keyof typeof LEGACY_SHARED_PERMISSION_ALIASES;
+export type SharedValidationPermissionLike =
+  | ValidationSharePermission
+  | LegacyValidationSharePermissionAlias;
+
 const PERMISSION_RANK: Record<ValidationSharePermission, number> = {
   view: 0,
-  comment: 1,
-  decide: 2,
+  review: 1,
 };
 
 export interface SharedValidationCapabilities {
@@ -28,39 +37,52 @@ const SHARED_PERMISSION_METADATA: Record<ValidationSharePermission, SharedPermis
     label: 'View only',
     summary: 'Can open the run and inspect artifact data.',
   },
-  comment: {
-    label: 'Comment',
-    summary: 'Includes view access and can submit review comments.',
-  },
-  decide: {
-    label: 'Decide',
-    summary: 'Includes comment access and can submit final decisions.',
+  review: {
+    label: 'Review',
+    summary: 'Includes view access and can submit review comments and decisions.',
   },
 };
 
+export function normalizeSharedValidationPermission(
+  permission: SharedValidationPermissionLike | string | null | undefined,
+  fallback: ValidationSharePermission = 'view',
+): ValidationSharePermission {
+  if (permission === 'view' || permission === 'review') {
+    return permission;
+  }
+  if (permission === 'comment' || permission === 'decide') {
+    return LEGACY_SHARED_PERMISSION_ALIASES[permission];
+  }
+  return fallback;
+}
+
 export function hasSharedValidationPermission(
-  permission: ValidationSharePermission,
-  required: ValidationSharePermission,
+  permission: SharedValidationPermissionLike,
+  required: SharedValidationPermissionLike,
 ): boolean {
-  return PERMISSION_RANK[permission] >= PERMISSION_RANK[required];
+  const normalizedPermission = normalizeSharedValidationPermission(permission);
+  const normalizedRequiredPermission = normalizeSharedValidationPermission(required);
+  return PERMISSION_RANK[normalizedPermission] >= PERMISSION_RANK[normalizedRequiredPermission];
 }
 
 export function resolveSharedValidationCapabilities(
-  permission: ValidationSharePermission,
+  permission: SharedValidationPermissionLike,
 ): SharedValidationCapabilities {
+  const normalizedPermission = normalizeSharedValidationPermission(permission);
   return {
-    canView: hasSharedValidationPermission(permission, 'view'),
-    canComment: hasSharedValidationPermission(permission, 'comment'),
-    canDecide: hasSharedValidationPermission(permission, 'decide'),
+    canView: hasSharedValidationPermission(normalizedPermission, 'view'),
+    canComment: hasSharedValidationPermission(normalizedPermission, 'review'),
+    canDecide: hasSharedValidationPermission(normalizedPermission, 'review'),
   };
 }
 
 export function describeSharedValidationPermission(
-  permission: ValidationSharePermission,
+  permission: SharedValidationPermissionLike,
 ): SharedValidationPermissionDescriptor {
+  const normalizedPermission = normalizeSharedValidationPermission(permission);
   return {
-    permission,
-    ...SHARED_PERMISSION_METADATA[permission],
-    ...resolveSharedValidationCapabilities(permission),
+    permission: normalizedPermission,
+    ...SHARED_PERMISSION_METADATA[normalizedPermission],
+    ...resolveSharedValidationCapabilities(normalizedPermission),
   };
 }

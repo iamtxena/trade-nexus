@@ -26,6 +26,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import {
   describeSharedValidationPermission,
+  normalizeSharedValidationPermission,
   resolveSharedValidationCapabilities,
 } from '@/lib/validation/shared-permissions';
 import {
@@ -102,9 +103,12 @@ function normalizeSharedRunList(payload: unknown): ValidationSharedRunSummary[] 
   };
 
   if (Array.isArray(value.runs)) {
-    return [...value.runs].sort(
-      (left, right) => toTimestamp(right.updatedAt) - toTimestamp(left.updatedAt),
-    );
+    return value.runs
+      .map((item) => ({
+        ...item,
+        permission: normalizeSharedValidationPermission(item.permission),
+      }))
+      .sort((left, right) => toTimestamp(right.updatedAt) - toTimestamp(left.updatedAt));
   }
 
   if (!Array.isArray(value.items)) {
@@ -113,12 +117,16 @@ function normalizeSharedRunList(payload: unknown): ValidationSharedRunSummary[] 
 
   const normalized = value.items.map((item) => {
     if ('runId' in item) {
-      return item as ValidationSharedRunSummary;
+      const sharedRun = item as ValidationSharedRunSummary;
+      return {
+        ...sharedRun,
+        permission: normalizeSharedValidationPermission(sharedRun.permission),
+      };
     }
     const fallback = item as ReviewRunSummaryFallback;
     return {
       runId: fallback.id,
-      permission: 'view' as const,
+      permission: normalizeSharedValidationPermission(undefined),
       status: fallback.status,
       profile: fallback.profile,
       finalDecision: fallback.finalDecision,
@@ -159,7 +167,7 @@ function normalizeSharedRunDetail(
     return {
       run: value.run,
       artifact: value.artifact as ValidationRunArtifact,
-      permission: value.permission ?? permissionFromList,
+      permission: normalizeSharedValidationPermission(value.permission ?? permissionFromList),
       comments: value.comments ?? [],
       decision: value.decision ?? null,
     };
@@ -176,7 +184,7 @@ function normalizeSharedRunDetail(
       return {
         run: artifactPayload.run,
         artifact: artifactPayload.artifact,
-        permission: value.permission ?? permissionFromList,
+        permission: normalizeSharedValidationPermission(value.permission ?? permissionFromList),
         comments: artifactPayload.comments ?? [],
         decision: artifactPayload.decision ?? null,
       };
@@ -189,11 +197,8 @@ function normalizeSharedRunDetail(
 function permissionBadgeVariant(
   permission: ValidationSharePermission,
 ): 'default' | 'secondary' | 'outline' {
-  if (permission === 'decide') {
+  if (permission === 'review') {
     return 'default';
-  }
-  if (permission === 'comment') {
-    return 'secondary';
   }
   return 'outline';
 }
@@ -470,8 +475,7 @@ export default function SharedValidationPage() {
                 <SelectContent>
                   <SelectItem value="all">all permissions</SelectItem>
                   <SelectItem value="view">view</SelectItem>
-                  <SelectItem value="comment">comment</SelectItem>
-                  <SelectItem value="decide">decide</SelectItem>
+                  <SelectItem value="review">review</SelectItem>
                 </SelectContent>
               </Select>
               <Select
@@ -633,7 +637,7 @@ export default function SharedValidationPage() {
                 Comment Action
               </CardTitle>
               <CardDescription>
-                Available when permission is <code>comment</code> or <code>decide</code>.
+                Available with <code>review</code> permission.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -675,7 +679,7 @@ export default function SharedValidationPage() {
                 Decide Action
               </CardTitle>
               <CardDescription>
-                Available only with <code>decide</code> permission.
+                Available only with <code>review</code> permission.
               </CardDescription>
             </CardHeader>
             <CardContent>

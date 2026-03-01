@@ -14,7 +14,7 @@ function run(
 ): ValidationSharedRunSummary {
   return {
     runId: id,
-    permission: 'comment',
+    permission: 'review',
     status: 'completed',
     profile: 'STANDARD',
     finalDecision: 'pass',
@@ -47,7 +47,7 @@ describe('filterRunsSharedWithMe', () => {
     const visible = filterRunsSharedWithMe(input, 'user-owner');
     visible[0] = {
       ...visible[0],
-      permission: 'decide',
+      permission: 'review',
       status: 'running',
       finalDecision: 'conditional_pass',
     };
@@ -55,7 +55,7 @@ describe('filterRunsSharedWithMe', () => {
     const filtered = filterSharedRunsForDisplay(visible, {
       ...DEFAULT_SHARED_RUN_LIST_FILTERS,
       query: '002',
-      permission: 'decide',
+      permission: 'review',
       status: 'running',
       decision: 'conditional_pass',
     });

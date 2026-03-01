@@ -19,7 +19,7 @@ function invite(
     id,
     runId: 'valrun-001',
     email: `${id}@example.com`,
-    permission: 'comment',
+    permission: 'review',
     status,
     invitedByUserId: 'user-1',
     invitedByActorType: 'user',
@@ -63,7 +63,7 @@ describe('invite lifecycle helpers', () => {
     const base = [
       invite('inv-001', 'pending', '2026-02-20T10:00:00Z'),
       { ...invite('inv-002', 'accepted', '2026-02-20T11:00:00Z'), permission: 'view' as const },
-      { ...invite('inv-003', 'revoked', '2026-02-20T12:00:00Z'), permission: 'decide' as const },
+      { ...invite('inv-003', 'revoked', '2026-02-20T12:00:00Z'), permission: 'review' as const },
     ];
 
     const filtered = filterInvites(base, {

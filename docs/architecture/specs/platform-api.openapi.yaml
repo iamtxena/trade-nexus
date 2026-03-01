@@ -2347,8 +2347,6 @@ paths:
           $ref: '#/components/responses/Error400'
         '401':
           $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
         '404':
           $ref: '#/components/responses/Error404'
         '409':
@@ -2400,8 +2398,6 @@ paths:
           $ref: '#/components/responses/Error400'
         '401':
           $ref: '#/components/responses/Error401'
-        '403':
-          $ref: '#/components/responses/Error403'
         '404':
           $ref: '#/components/responses/Error404'
         '409':

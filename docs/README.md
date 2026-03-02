@@ -5,6 +5,8 @@ This index is the canonical navigation entry point for Gate-based documentation 
 ## Audience Lanes
 
 - End users: workflow and troubleshooting guides in `/docs/portal/cli/` and `/docs/portal/operations/`.
+- CLI auth quickstart: `/docs/portal/cli/authenticate-cli.md`.
+- CLI auth operator runbook: `/docs/portal/operations/cli-auth-operator-runbook.md`.
 - API consumers: contract and integration docs in `/docs/architecture/INTERFACES.md` and `/docs/portal/api/`.
 - Operators: deployment and operational docs in `/docs/architecture/DEPLOYMENT.md` and `/docs/portal/operations/`.
 - Internal developers: architecture boundaries and gate playbooks in `/docs/architecture/`.

@@ -20,6 +20,7 @@ updated: 2026-02-14
 
 ## Usage References
 
+- CLI authentication quickstart: [Authenticate CLI](./authenticate-cli.md)
 - CLI interface model: `/docs/architecture/CLI_INTERFACE.md`
 - Delivery topology: `/docs/architecture/DELIVERY_PLAN_AND_TEAM_TOPOLOGY.md`
 - Platform API contract: `/docs/architecture/specs/platform-api.openapi.yaml`

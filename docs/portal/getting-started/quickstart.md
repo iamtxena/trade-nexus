@@ -36,6 +36,7 @@ This quickstart covers the baseline Gate0 + Gate1 user journey: research, strate
 
 ## Next Steps
 
+- Authentication quickstart: [Authenticate CLI](../cli/authenticate-cli.md)
 - Detailed CLI flow: [CLI Common Workflows](../cli/workflows.md)
 - Contract boundaries: [Platform API Contract](../api/platform-api.md)
 - Troubleshooting: [Troubleshooting](../operations/troubleshooting.md)

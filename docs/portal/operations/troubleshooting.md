@@ -27,3 +27,12 @@ updated: 2026-02-14
   - `python3 scripts/docs/check_links.py`
   - `python3 scripts/docs/check_stale_references.py`
   - `npm --prefix docs/portal-site run build`
+
+## Auth Failures (CLI)
+
+- Quickstart + auth mode selection: [Authenticate CLI](../cli/authenticate-cli.md)
+- Operator incident response and audit fields: [CLI Auth Operator Runbook](./cli-auth-operator-runbook.md)
+- Common 401 patterns:
+  - `AUTH_UNAUTHORIZED`: missing/expired/invalid bearer credentials.
+  - `BOT_API_KEY_INVALID`: malformed or unknown runtime bot key.
+  - `BOT_API_KEY_REVOKED`: runtime bot key was revoked.

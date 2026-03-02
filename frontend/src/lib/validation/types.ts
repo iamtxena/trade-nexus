@@ -322,6 +322,46 @@ export interface CreateValidationBotKeyRevocationPayload {
   reason?: string;
 }
 
+export type ValidationCliScope = 'validation:read' | 'validation:write';
+
+export interface ValidationCliSession {
+  id: string;
+  tenantId: string;
+  userId: string;
+  createdByUserId: string;
+  scopes: ValidationCliScope[];
+  createdAt: string;
+  expiresAt: string;
+  revokedAt?: string | null;
+  lastUsedAt?: string | null;
+}
+
+export interface ValidationCliSessionListResponse {
+  requestId: string;
+  sessions: ValidationCliSession[];
+}
+
+export interface CreateValidationCliDeviceApprovalPayload {
+  userCode: string;
+}
+
+export interface ValidationCliDeviceApprovalResponse {
+  requestId: string;
+  status: 'approved';
+  userCode: string;
+  tenantId: string;
+  userId: string;
+  createdByUserId: string;
+  scopes: ValidationCliScope[];
+  approvedAt: string;
+  expiresAt: string;
+}
+
+export interface ValidationCliSessionRevokeResponse {
+  requestId: string;
+  session: ValidationCliSession;
+}
+
 export interface ValidationShareInvite {
   id: string;
   runId: string;

@@ -6,6 +6,8 @@ describe('isPathProtected', () => {
   test('protects owner and shared validation surfaces', () => {
     expect(isPathProtected('/validation')).toBe(true);
     expect(isPathProtected('/validation/run-1')).toBe(true);
+    expect(isPathProtected('/cli-access')).toBe(true);
+    expect(isPathProtected('/cli-access/session-1')).toBe(true);
     expect(isPathProtected('/shared-validation')).toBe(true);
     expect(isPathProtected('/shared-validation/valrun-123')).toBe(true);
   });
@@ -13,6 +15,7 @@ describe('isPathProtected', () => {
   test('protects bots pages and related API routes', () => {
     expect(isPathProtected('/bots')).toBe(true);
     expect(isPathProtected('/api/validation/bots')).toBe(true);
+    expect(isPathProtected('/api/validation/cli-access/sessions')).toBe(true);
     expect(isPathProtected('/api/shared-validation/runs')).toBe(true);
   });
 

@@ -15,6 +15,7 @@ import {
   LineChart,
   Menu,
   ShieldCheck,
+  Terminal,
   Users,
   Wallet,
 } from 'lucide-react';
@@ -27,6 +28,7 @@ const navItems = [
   { href: '/strategist', label: 'Strategist', icon: Brain },
   { href: '/strategies', label: 'Strategies', icon: LineChart },
   { href: '/validation', label: 'Validation', icon: ShieldCheck },
+  { href: '/cli-access', label: 'CLI Access', icon: Terminal },
   { href: '/shared-validation', label: 'Shared Validation', icon: Users },
   { href: '/bots', label: 'Bots', icon: Fingerprint },
   { href: '/agents', label: 'Agents', icon: Bot },

@@ -2246,6 +2246,275 @@ paths:
         '409':
           $ref: '#/components/responses/Error409'
 
+  /v2/validation-cli-auth/device/start:
+    post:
+      tags: [Validation]
+      summary: Start CLI device authorization flow and return device/user codes
+      operationId: startValidationCliDeviceAuthV2
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValidationCliDeviceStartRequest'
+            example:
+              scopes: ["validation:read", "validation:write"]
+      responses:
+        '201':
+          description: Device authorization flow started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationCliDeviceStartResponse'
+              example:
+                requestId: req-cli-device-start-001
+                deviceCode: tnx_device_qYmA1CFwKrJ91WjNye8XU0c8V75x72cS
+                userCode: K8JH-4WQ2
+                verificationUri: https://trade-nexus.local/cli/device
+                verificationUriComplete: https://trade-nexus.local/cli/device?user_code=K8JH-4WQ2
+                scopes: ["validation:read", "validation:write"]
+                expiresAt: '2026-02-20T12:40:00Z'
+                expiresIn: 900
+                interval: 5
+        '400':
+          $ref: '#/components/responses/Error400'
+
+  /v2/validation-cli-auth/device/approve:
+    post:
+      tags: [Validation]
+      summary: Approve pending CLI device authorization from web-authenticated user
+      operationId: approveValidationCliDeviceAuthV2
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValidationCliDeviceApprovalRequest'
+            example:
+              userCode: K8JH-4WQ2
+      responses:
+        '200':
+          description: Device authorization approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationCliDeviceApprovalResponse'
+              example:
+                requestId: req-cli-device-approve-001
+                status: approved
+                userCode: K8JH-4WQ2
+                tenantId: tenant-001
+                userId: user-001
+                createdByUserId: user-001
+                scopes: ["validation:read", "validation:write"]
+                approvedAt: '2026-02-20T12:32:00Z'
+                expiresAt: '2026-02-20T12:40:00Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+
+  /v2/validation-cli-auth/device/token:
+    post:
+      tags: [Validation]
+      summary: Poll device authorization and exchange approved device code for CLI access token
+      operationId: pollValidationCliDeviceTokenV2
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValidationCliDeviceTokenPollRequest'
+            example:
+              deviceCode: tnx_device_qYmA1CFwKrJ91WjNye8XU0c8V75x72cS
+      responses:
+        '200':
+          description: CLI access token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationCliTokenResponse'
+              example:
+                requestId: req-cli-device-token-001
+                tokenType: Bearer
+                accessToken: tnx.cli.clisess-000001.z2DBjOqT8z4hY3Y8g4J8I6dw_7YgB2bM
+                sessionId: clisess-000001
+                tenantId: tenant-001
+                userId: user-001
+                createdByUserId: user-001
+                scopes: ["validation:read", "validation:write"]
+                createdAt: '2026-02-20T12:33:00Z'
+                expiresAt: '2026-02-20T13:33:00Z'
+                expiresIn: 3600
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '409':
+          $ref: '#/components/responses/Error409'
+
+  /v2/validation-cli-auth/whoami:
+    get:
+      tags: [Validation]
+      summary: Introspect current authenticated CLI access token
+      operationId: whoamiValidationCliAuthV2
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Current CLI session metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationCliWhoAmIResponse'
+              example:
+                requestId: req-cli-whoami-001
+                session:
+                  id: clisess-000001
+                  tenantId: tenant-001
+                  userId: user-001
+                  createdByUserId: user-001
+                  scopes: ["validation:read", "validation:write"]
+                  createdAt: '2026-02-20T12:33:00Z'
+                  expiresAt: '2026-02-20T13:33:00Z'
+                  revokedAt: null
+                  lastUsedAt: '2026-02-20T12:34:00Z'
+        '401':
+          $ref: '#/components/responses/Error401'
+
+  /v2/validation-cli-auth/introspect:
+    post:
+      tags: [Validation]
+      summary: Introspect a CLI access token as authenticated owner
+      operationId: introspectValidationCliTokenV2
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValidationCliTokenIntrospectRequest'
+            example:
+              accessToken: tnx.cli.clisess-000001.z2DBjOqT8z4hY3Y8g4J8I6dw_7YgB2bM
+      responses:
+        '200':
+          description: Token introspection result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationCliTokenIntrospectResponse'
+              example:
+                requestId: req-cli-introspect-001
+                active: true
+                session:
+                  id: clisess-000001
+                  tenantId: tenant-001
+                  userId: user-001
+                  createdByUserId: user-001
+                  scopes: ["validation:read", "validation:write"]
+                  createdAt: '2026-02-20T12:33:00Z'
+                  expiresAt: '2026-02-20T13:33:00Z'
+                  revokedAt: null
+                  lastUsedAt: '2026-02-20T12:34:00Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+
+  /v2/validation-cli-auth/sessions:
+    get:
+      tags: [Validation]
+      summary: List active CLI sessions for authenticated owner
+      operationId: listValidationCliSessionsV2
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Active CLI sessions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationCliSessionListResponse'
+              example:
+                requestId: req-cli-sessions-001
+                sessions:
+                  - id: clisess-000001
+                    tenantId: tenant-001
+                    userId: user-001
+                    createdByUserId: user-001
+                    scopes: ["validation:read", "validation:write"]
+                    createdAt: '2026-02-20T12:33:00Z'
+                    expiresAt: '2026-02-20T13:33:00Z'
+                    revokedAt: null
+                    lastUsedAt: '2026-02-20T12:34:00Z'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+
+  /v2/validation-cli-auth/sessions/{sessionId}/revoke:
+    post:
+      tags: [Validation]
+      summary: Revoke active CLI session for authenticated owner
+      operationId: revokeValidationCliSessionV2
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/ValidationCliSessionId'
+      responses:
+        '200':
+          description: Session revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationCliSessionRevokeResponse'
+              example:
+                requestId: req-cli-session-revoke-001
+                session:
+                  id: clisess-000001
+                  tenantId: tenant-001
+                  userId: user-001
+                  createdByUserId: user-001
+                  scopes: ["validation:read", "validation:write"]
+                  createdAt: '2026-02-20T12:33:00Z'
+                  expiresAt: '2026-02-20T13:33:00Z'
+                  revokedAt: '2026-02-20T12:35:00Z'
+                  lastUsedAt: '2026-02-20T12:34:00Z'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+
   /v2/validation-sharing/runs/shared-with-me:
     get:
       tags: [Shared Validation]
@@ -2705,6 +2974,12 @@ components:
       required: true
       schema:
         type: string
+    ValidationCliSessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
 
   responses:
     Error400:
@@ -2715,6 +2990,12 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     Error401:
       description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Error403:
+      description: Forbidden
       content:
         application/json:
           schema:
@@ -4832,6 +5113,232 @@ components:
           type: string
         key:
           $ref: '#/components/schemas/BotKeyMetadata'
+
+    ValidationCliScope:
+      type: string
+      enum: ["validation:read", "validation:write"]
+
+    CreateValidationCliDeviceStartRequest:
+      type: object
+      properties:
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationCliScope'
+          default: ["validation:read", "validation:write"]
+
+    ValidationCliDeviceStartResponse:
+      type: object
+      required:
+        [
+          requestId,
+          deviceCode,
+          userCode,
+          verificationUri,
+          verificationUriComplete,
+          scopes,
+          expiresAt,
+          expiresIn,
+          interval,
+        ]
+      properties:
+        requestId:
+          type: string
+        deviceCode:
+          type: string
+        userCode:
+          type: string
+        verificationUri:
+          type: string
+          format: uri
+        verificationUriComplete:
+          type: string
+          format: uri
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationCliScope'
+        expiresAt:
+          type: string
+          format: date-time
+        expiresIn:
+          type: integer
+          minimum: 1
+        interval:
+          type: integer
+          minimum: 1
+
+    CreateValidationCliDeviceApprovalRequest:
+      type: object
+      required: [userCode]
+      properties:
+        userCode:
+          type: string
+          minLength: 4
+
+    ValidationCliDeviceApprovalResponse:
+      type: object
+      required: [requestId, status, userCode, tenantId, userId, createdByUserId, scopes, approvedAt, expiresAt]
+      properties:
+        requestId:
+          type: string
+        status:
+          type: string
+          enum: [approved]
+        userCode:
+          type: string
+        tenantId:
+          type: string
+        userId:
+          type: string
+        createdByUserId:
+          type: string
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationCliScope'
+        approvedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+
+    CreateValidationCliDeviceTokenPollRequest:
+      type: object
+      required: [deviceCode]
+      properties:
+        deviceCode:
+          type: string
+          minLength: 8
+
+    ValidationCliTokenResponse:
+      type: object
+      required:
+        [
+          requestId,
+          tokenType,
+          accessToken,
+          sessionId,
+          tenantId,
+          userId,
+          createdByUserId,
+          scopes,
+          createdAt,
+          expiresAt,
+          expiresIn,
+        ]
+      properties:
+        requestId:
+          type: string
+        tokenType:
+          type: string
+          enum: [Bearer]
+        accessToken:
+          type: string
+        sessionId:
+          type: string
+        tenantId:
+          type: string
+        userId:
+          type: string
+        createdByUserId:
+          type: string
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationCliScope'
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        expiresIn:
+          type: integer
+          minimum: 1
+
+    ValidationCliSession:
+      type: object
+      required: [id, tenantId, userId, createdByUserId, scopes, createdAt, expiresAt]
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        userId:
+          type: string
+        createdByUserId:
+          type: string
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationCliScope'
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ValidationCliWhoAmIResponse:
+      type: object
+      required: [requestId, session]
+      properties:
+        requestId:
+          type: string
+        session:
+          $ref: '#/components/schemas/ValidationCliSession'
+
+    ValidationCliSessionListResponse:
+      type: object
+      required: [requestId, sessions]
+      properties:
+        requestId:
+          type: string
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationCliSession'
+
+    CreateValidationCliTokenIntrospectRequest:
+      type: object
+      required: [accessToken]
+      properties:
+        accessToken:
+          type: string
+          minLength: 16
+
+    ValidationCliTokenIntrospectResponse:
+      type: object
+      required: [requestId, active]
+      properties:
+        requestId:
+          type: string
+        active:
+          type: boolean
+        session:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/ValidationCliSession'
+          nullable: true
+
+    ValidationCliSessionRevokeResponse:
+      type: object
+      required: [requestId, session]
+      properties:
+        requestId:
+          type: string
+        session:
+          $ref: '#/components/schemas/ValidationCliSession'
 
     ValidationInviteStatus:
       type: string

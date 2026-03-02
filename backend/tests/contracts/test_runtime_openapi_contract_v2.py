@@ -108,6 +108,13 @@ def test_openapi_v2_routes_are_registered() -> None:
         ("POST", "/v2/validation-bots/registrations/partner-bootstrap"),
         ("POST", "/v2/validation-bots/{botId}/keys/rotate"),
         ("POST", "/v2/validation-bots/{botId}/keys/{keyId}/revoke"),
+        ("POST", "/v2/validation-cli-auth/device/start"),
+        ("POST", "/v2/validation-cli-auth/device/approve"),
+        ("POST", "/v2/validation-cli-auth/device/token"),
+        ("GET", "/v2/validation-cli-auth/whoami"),
+        ("POST", "/v2/validation-cli-auth/introspect"),
+        ("GET", "/v2/validation-cli-auth/sessions"),
+        ("POST", "/v2/validation-cli-auth/sessions/{sessionId}/revoke"),
         ("GET", "/v2/validation-sharing/runs/shared-with-me"),
         ("POST", "/v2/validation-sharing/runs/{runId}/comments"),
         ("POST", "/v2/validation-sharing/runs/{runId}/decisions"),
@@ -194,6 +201,63 @@ def test_openapi_v2_runtime_status_codes() -> None:
         user_id="owner-runtime-openapi",
         user_email="owner-runtime-openapi@example.com",
     )
+    start_cli_auth = client.post(
+        "/v2/validation-cli-auth/device/start",
+        headers={"X-Request-Id": "req-runtime-v2-cli-auth-start-001"},
+        json={"scopes": ["validation:read", "validation:write"]},
+    )
+    assert start_cli_auth.status_code == 201
+    device_code = start_cli_auth.json()["deviceCode"]
+    user_code = start_cli_auth.json()["userCode"]
+
+    approve_cli_auth = client.post(
+        "/v2/validation-cli-auth/device/approve",
+        headers={**validation_headers, "X-Request-Id": "req-runtime-v2-cli-auth-approve-001"},
+        json={"userCode": user_code},
+    )
+    assert approve_cli_auth.status_code == 200
+
+    poll_cli_auth = client.post(
+        "/v2/validation-cli-auth/device/token",
+        headers={"X-Request-Id": "req-runtime-v2-cli-auth-token-001"},
+        json={"deviceCode": device_code},
+    )
+    assert poll_cli_auth.status_code == 200
+    cli_access_token = poll_cli_auth.json()["accessToken"]
+    cli_session_id = poll_cli_auth.json()["sessionId"]
+
+    cli_whoami = client.get(
+        "/v2/validation-cli-auth/whoami",
+        headers={
+            "Authorization": f"Bearer {cli_access_token}",
+            "X-Request-Id": "req-runtime-v2-cli-auth-whoami-001",
+        },
+    )
+    assert cli_whoami.status_code == 200
+    assert cli_whoami.json()["session"]["id"] == cli_session_id
+
+    cli_introspect = client.post(
+        "/v2/validation-cli-auth/introspect",
+        headers={**validation_headers, "X-Request-Id": "req-runtime-v2-cli-auth-introspect-001"},
+        json={"accessToken": cli_access_token},
+    )
+    assert cli_introspect.status_code == 200
+    assert cli_introspect.json()["active"] is True
+
+    cli_sessions = client.get(
+        "/v2/validation-cli-auth/sessions",
+        headers={**validation_headers, "X-Request-Id": "req-runtime-v2-cli-auth-sessions-001"},
+    )
+    assert cli_sessions.status_code == 200
+    assert any(item["id"] == cli_session_id for item in cli_sessions.json().get("sessions", []))
+
+    cli_revoke = client.post(
+        f"/v2/validation-cli-auth/sessions/{cli_session_id}/revoke",
+        headers={**validation_headers, "X-Request-Id": "req-runtime-v2-cli-auth-revoke-001"},
+    )
+    assert cli_revoke.status_code == 200
+    assert cli_revoke.json()["session"]["revokedAt"] is not None
+
     assert client.get("/v2/validation-bots", headers=validation_headers).status_code == 200
 
     create_run = client.post(

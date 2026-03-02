@@ -25,6 +25,10 @@ import type {
   CreateBotKeyRotationRequest,
   CreateBotPartnerBootstrapRequest,
   CreateValidationBaselineRequest,
+  CreateValidationCliDeviceApprovalRequest,
+  CreateValidationCliDeviceStartRequest,
+  CreateValidationCliDeviceTokenPollRequest,
+  CreateValidationCliTokenIntrospectRequest,
   CreateValidationInviteRequest,
   CreateValidationRegressionReplayRequest,
   CreateValidationRenderRequest,
@@ -36,6 +40,13 @@ import type {
   ErrorResponse,
   ValidationArtifactResponse,
   ValidationBaselineResponse,
+  ValidationCliDeviceApprovalResponse,
+  ValidationCliDeviceStartResponse,
+  ValidationCliSessionListResponse,
+  ValidationCliSessionRevokeResponse,
+  ValidationCliTokenIntrospectResponse,
+  ValidationCliTokenResponse,
+  ValidationCliWhoAmIResponse,
   ValidationInviteAcceptanceResponse,
   ValidationInviteListResponse,
   ValidationInviteResponse,
@@ -74,6 +85,14 @@ import {
     CreateBotPartnerBootstrapRequestToJSON,
     CreateValidationBaselineRequestFromJSON,
     CreateValidationBaselineRequestToJSON,
+    CreateValidationCliDeviceApprovalRequestFromJSON,
+    CreateValidationCliDeviceApprovalRequestToJSON,
+    CreateValidationCliDeviceStartRequestFromJSON,
+    CreateValidationCliDeviceStartRequestToJSON,
+    CreateValidationCliDeviceTokenPollRequestFromJSON,
+    CreateValidationCliDeviceTokenPollRequestToJSON,
+    CreateValidationCliTokenIntrospectRequestFromJSON,
+    CreateValidationCliTokenIntrospectRequestToJSON,
     CreateValidationInviteRequestFromJSON,
     CreateValidationInviteRequestToJSON,
     CreateValidationRegressionReplayRequestFromJSON,
@@ -96,6 +115,20 @@ import {
     ValidationArtifactResponseToJSON,
     ValidationBaselineResponseFromJSON,
     ValidationBaselineResponseToJSON,
+    ValidationCliDeviceApprovalResponseFromJSON,
+    ValidationCliDeviceApprovalResponseToJSON,
+    ValidationCliDeviceStartResponseFromJSON,
+    ValidationCliDeviceStartResponseToJSON,
+    ValidationCliSessionListResponseFromJSON,
+    ValidationCliSessionListResponseToJSON,
+    ValidationCliSessionRevokeResponseFromJSON,
+    ValidationCliSessionRevokeResponseToJSON,
+    ValidationCliTokenIntrospectResponseFromJSON,
+    ValidationCliTokenIntrospectResponseToJSON,
+    ValidationCliTokenResponseFromJSON,
+    ValidationCliTokenResponseToJSON,
+    ValidationCliWhoAmIResponseFromJSON,
+    ValidationCliWhoAmIResponseToJSON,
     ValidationInviteAcceptanceResponseFromJSON,
     ValidationInviteAcceptanceResponseToJSON,
     ValidationInviteListResponseFromJSON,
@@ -134,6 +167,11 @@ export interface AcceptValidationInviteOnLoginV2Request {
     inviteId: string;
     idempotencyKey: string;
     acceptValidationInviteRequest: AcceptValidationInviteRequest;
+    xRequestId?: string;
+}
+
+export interface ApproveValidationCliDeviceAuthV2Request {
+    createValidationCliDeviceApprovalRequest: CreateValidationCliDeviceApprovalRequest;
     xRequestId?: string;
 }
 
@@ -205,7 +243,16 @@ export interface GetValidationRunV2Request {
     xRequestId?: string;
 }
 
+export interface IntrospectValidationCliTokenV2Request {
+    createValidationCliTokenIntrospectRequest: CreateValidationCliTokenIntrospectRequest;
+    xRequestId?: string;
+}
+
 export interface ListValidationBotsV2Request {
+    xRequestId?: string;
+}
+
+export interface ListValidationCliSessionsV2Request {
     xRequestId?: string;
 }
 
@@ -225,6 +272,11 @@ export interface ListValidationRunInvitesV2Request {
 }
 
 export interface ListValidationRunsV2Request {
+    xRequestId?: string;
+}
+
+export interface PollValidationCliDeviceTokenV2Request {
+    createValidationCliDeviceTokenPollRequest: CreateValidationCliDeviceTokenPollRequest;
     xRequestId?: string;
 }
 
@@ -254,6 +306,11 @@ export interface RevokeValidationBotKeyV2Request {
     createBotKeyRevocationRequest?: CreateBotKeyRevocationRequest;
 }
 
+export interface RevokeValidationCliSessionV2Request {
+    sessionId: string;
+    xRequestId?: string;
+}
+
 export interface RevokeValidationInviteV2Request {
     inviteId: string;
     idempotencyKey: string;
@@ -267,10 +324,19 @@ export interface RotateValidationBotKeyV2Request {
     createBotKeyRotationRequest?: CreateBotKeyRotationRequest;
 }
 
+export interface StartValidationCliDeviceAuthV2Request {
+    xRequestId?: string;
+    createValidationCliDeviceStartRequest?: CreateValidationCliDeviceStartRequest;
+}
+
 export interface SubmitValidationRunReviewV2Request {
     runId: string;
     idempotencyKey: string;
     createValidationRunReviewRequest: CreateValidationRunReviewRequest;
+    xRequestId?: string;
+}
+
+export interface WhoamiValidationCliAuthV2Request {
     xRequestId?: string;
 }
 
@@ -298,6 +364,22 @@ export interface ValidationApiInterface {
      * Accept validation invite during login flow into Shared Validation
      */
     acceptValidationInviteOnLoginV2(requestParameters: AcceptValidationInviteOnLoginV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationInviteAcceptanceResponse>;
+
+    /**
+     * 
+     * @summary Approve pending CLI device authorization from web-authenticated user
+     * @param {CreateValidationCliDeviceApprovalRequest} createValidationCliDeviceApprovalRequest 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    approveValidationCliDeviceAuthV2Raw(requestParameters: ApproveValidationCliDeviceAuthV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationCliDeviceApprovalResponse>>;
+
+    /**
+     * Approve pending CLI device authorization from web-authenticated user
+     */
+    approveValidationCliDeviceAuthV2(requestParameters: ApproveValidationCliDeviceAuthV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationCliDeviceApprovalResponse>;
 
     /**
      * 
@@ -490,6 +572,22 @@ export interface ValidationApiInterface {
 
     /**
      * 
+     * @summary Introspect a CLI access token as authenticated owner
+     * @param {CreateValidationCliTokenIntrospectRequest} createValidationCliTokenIntrospectRequest 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    introspectValidationCliTokenV2Raw(requestParameters: IntrospectValidationCliTokenV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationCliTokenIntrospectResponse>>;
+
+    /**
+     * Introspect a CLI access token as authenticated owner
+     */
+    introspectValidationCliTokenV2(requestParameters: IntrospectValidationCliTokenV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationCliTokenIntrospectResponse>;
+
+    /**
+     * 
      * @summary List runtime bot registry and key lifecycle metadata for authenticated owner
      * @param {string} [xRequestId] Caller-provided request id for trace correlation.
      * @param {*} [options] Override http request option.
@@ -502,6 +600,21 @@ export interface ValidationApiInterface {
      * List runtime bot registry and key lifecycle metadata for authenticated owner
      */
     listValidationBotsV2(requestParameters: ListValidationBotsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BotListResponse>;
+
+    /**
+     * 
+     * @summary List active CLI sessions for authenticated owner
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    listValidationCliSessionsV2Raw(requestParameters: ListValidationCliSessionsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationCliSessionListResponse>>;
+
+    /**
+     * List active CLI sessions for authenticated owner
+     */
+    listValidationCliSessionsV2(requestParameters: ListValidationCliSessionsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationCliSessionListResponse>;
 
     /**
      * 
@@ -554,6 +667,22 @@ export interface ValidationApiInterface {
      * List validation runs for authenticated identity scope
      */
     listValidationRunsV2(requestParameters: ListValidationRunsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationRunListResponse>;
+
+    /**
+     * 
+     * @summary Poll device authorization and exchange approved device code for CLI access token
+     * @param {CreateValidationCliDeviceTokenPollRequest} createValidationCliDeviceTokenPollRequest 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    pollValidationCliDeviceTokenV2Raw(requestParameters: PollValidationCliDeviceTokenV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationCliTokenResponse>>;
+
+    /**
+     * Poll device authorization and exchange approved device code for CLI access token
+     */
+    pollValidationCliDeviceTokenV2(requestParameters: PollValidationCliDeviceTokenV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationCliTokenResponse>;
 
     /**
      * 
@@ -627,6 +756,22 @@ export interface ValidationApiInterface {
 
     /**
      * 
+     * @summary Revoke active CLI session for authenticated owner
+     * @param {string} sessionId 
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    revokeValidationCliSessionV2Raw(requestParameters: RevokeValidationCliSessionV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationCliSessionRevokeResponse>>;
+
+    /**
+     * Revoke active CLI session for authenticated owner
+     */
+    revokeValidationCliSessionV2(requestParameters: RevokeValidationCliSessionV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationCliSessionRevokeResponse>;
+
+    /**
+     * 
      * @summary Revoke run-level validation invite by email
      * @param {string} inviteId 
      * @param {string} idempotencyKey Required for idempotent write operations.
@@ -662,6 +807,22 @@ export interface ValidationApiInterface {
 
     /**
      * 
+     * @summary Start CLI device authorization flow and return device/user codes
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {CreateValidationCliDeviceStartRequest} [createValidationCliDeviceStartRequest] 
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    startValidationCliDeviceAuthV2Raw(requestParameters: StartValidationCliDeviceAuthV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationCliDeviceStartResponse>>;
+
+    /**
+     * Start CLI device authorization flow and return device/user codes
+     */
+    startValidationCliDeviceAuthV2(requestParameters: StartValidationCliDeviceAuthV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationCliDeviceStartResponse>;
+
+    /**
+     * 
      * @summary Submit validation review decision
      * @param {string} runId 
      * @param {string} idempotencyKey Required for idempotent write operations.
@@ -677,6 +838,21 @@ export interface ValidationApiInterface {
      * Submit validation review decision
      */
     submitValidationRunReviewV2(requestParameters: SubmitValidationRunReviewV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationRunReviewResponse>;
+
+    /**
+     * 
+     * @summary Introspect current authenticated CLI access token
+     * @param {string} [xRequestId] Caller-provided request id for trace correlation.
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ValidationApiInterface
+     */
+    whoamiValidationCliAuthV2Raw(requestParameters: WhoamiValidationCliAuthV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationCliWhoAmIResponse>>;
+
+    /**
+     * Introspect current authenticated CLI access token
+     */
+    whoamiValidationCliAuthV2(requestParameters: WhoamiValidationCliAuthV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationCliWhoAmIResponse>;
 
 }
 
@@ -756,6 +932,57 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
      */
     async acceptValidationInviteOnLoginV2(requestParameters: AcceptValidationInviteOnLoginV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationInviteAcceptanceResponse> {
         const response = await this.acceptValidationInviteOnLoginV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Approve pending CLI device authorization from web-authenticated user
+     */
+    async approveValidationCliDeviceAuthV2Raw(requestParameters: ApproveValidationCliDeviceAuthV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationCliDeviceApprovalResponse>> {
+        if (requestParameters['createValidationCliDeviceApprovalRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createValidationCliDeviceApprovalRequest',
+                'Required parameter "createValidationCliDeviceApprovalRequest" was null or undefined when calling approveValidationCliDeviceAuthV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-cli-auth/device/approve`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateValidationCliDeviceApprovalRequestToJSON(requestParameters['createValidationCliDeviceApprovalRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationCliDeviceApprovalResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Approve pending CLI device authorization from web-authenticated user
+     */
+    async approveValidationCliDeviceAuthV2(requestParameters: ApproveValidationCliDeviceAuthV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationCliDeviceApprovalResponse> {
+        const response = await this.approveValidationCliDeviceAuthV2Raw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -1482,6 +1709,57 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
     }
 
     /**
+     * Introspect a CLI access token as authenticated owner
+     */
+    async introspectValidationCliTokenV2Raw(requestParameters: IntrospectValidationCliTokenV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationCliTokenIntrospectResponse>> {
+        if (requestParameters['createValidationCliTokenIntrospectRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createValidationCliTokenIntrospectRequest',
+                'Required parameter "createValidationCliTokenIntrospectRequest" was null or undefined when calling introspectValidationCliTokenV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-cli-auth/introspect`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateValidationCliTokenIntrospectRequestToJSON(requestParameters['createValidationCliTokenIntrospectRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationCliTokenIntrospectResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Introspect a CLI access token as authenticated owner
+     */
+    async introspectValidationCliTokenV2(requestParameters: IntrospectValidationCliTokenV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationCliTokenIntrospectResponse> {
+        const response = await this.introspectValidationCliTokenV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * List runtime bot registry and key lifecycle metadata for authenticated owner
      */
     async listValidationBotsV2Raw(requestParameters: ListValidationBotsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<BotListResponse>> {
@@ -1523,6 +1801,47 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
      */
     async listValidationBotsV2(requestParameters: ListValidationBotsV2Request = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<BotListResponse> {
         const response = await this.listValidationBotsV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * List active CLI sessions for authenticated owner
+     */
+    async listValidationCliSessionsV2Raw(requestParameters: ListValidationCliSessionsV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationCliSessionListResponse>> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-cli-auth/sessions`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationCliSessionListResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * List active CLI sessions for authenticated owner
+     */
+    async listValidationCliSessionsV2(requestParameters: ListValidationCliSessionsV2Request = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationCliSessionListResponse> {
+        const response = await this.listValidationCliSessionsV2Raw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -1690,6 +2009,49 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
      */
     async listValidationRunsV2(requestParameters: ListValidationRunsV2Request = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationRunListResponse> {
         const response = await this.listValidationRunsV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Poll device authorization and exchange approved device code for CLI access token
+     */
+    async pollValidationCliDeviceTokenV2Raw(requestParameters: PollValidationCliDeviceTokenV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationCliTokenResponse>> {
+        if (requestParameters['createValidationCliDeviceTokenPollRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createValidationCliDeviceTokenPollRequest',
+                'Required parameter "createValidationCliDeviceTokenPollRequest" was null or undefined when calling pollValidationCliDeviceTokenV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+
+        let urlPath = `/v2/validation-cli-auth/device/token`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateValidationCliDeviceTokenPollRequestToJSON(requestParameters['createValidationCliDeviceTokenPollRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationCliTokenResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Poll device authorization and exchange approved device code for CLI access token
+     */
+    async pollValidationCliDeviceTokenV2(requestParameters: PollValidationCliDeviceTokenV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationCliTokenResponse> {
+        const response = await this.pollValidationCliDeviceTokenV2Raw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -1943,6 +2305,55 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
     }
 
     /**
+     * Revoke active CLI session for authenticated owner
+     */
+    async revokeValidationCliSessionV2Raw(requestParameters: RevokeValidationCliSessionV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationCliSessionRevokeResponse>> {
+        if (requestParameters['sessionId'] == null) {
+            throw new runtime.RequiredError(
+                'sessionId',
+                'Required parameter "sessionId" was null or undefined when calling revokeValidationCliSessionV2().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-cli-auth/sessions/{sessionId}/revoke`;
+        urlPath = urlPath.replace(`{${"sessionId"}}`, encodeURIComponent(String(requestParameters['sessionId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationCliSessionRevokeResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Revoke active CLI session for authenticated owner
+     */
+    async revokeValidationCliSessionV2(requestParameters: RevokeValidationCliSessionV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationCliSessionRevokeResponse> {
+        const response = await this.revokeValidationCliSessionV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Revoke run-level validation invite by email
      */
     async revokeValidationInviteV2Raw(requestParameters: RevokeValidationInviteV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationInviteResponse>> {
@@ -2074,6 +2485,42 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
     }
 
     /**
+     * Start CLI device authorization flow and return device/user codes
+     */
+    async startValidationCliDeviceAuthV2Raw(requestParameters: StartValidationCliDeviceAuthV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationCliDeviceStartResponse>> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+
+        let urlPath = `/v2/validation-cli-auth/device/start`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateValidationCliDeviceStartRequestToJSON(requestParameters['createValidationCliDeviceStartRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationCliDeviceStartResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Start CLI device authorization flow and return device/user codes
+     */
+    async startValidationCliDeviceAuthV2(requestParameters: StartValidationCliDeviceAuthV2Request = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationCliDeviceStartResponse> {
+        const response = await this.startValidationCliDeviceAuthV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Submit validation review decision
      */
     async submitValidationRunReviewV2Raw(requestParameters: SubmitValidationRunReviewV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationRunReviewResponse>> {
@@ -2144,6 +2591,47 @@ export class ValidationApi extends runtime.BaseAPI implements ValidationApiInter
      */
     async submitValidationRunReviewV2(requestParameters: SubmitValidationRunReviewV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationRunReviewResponse> {
         const response = await this.submitValidationRunReviewV2Raw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Introspect current authenticated CLI access token
+     */
+    async whoamiValidationCliAuthV2Raw(requestParameters: WhoamiValidationCliAuthV2Request, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ValidationCliWhoAmIResponse>> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (requestParameters['xRequestId'] != null) {
+            headerParameters['X-Request-Id'] = String(requestParameters['xRequestId']);
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v2/validation-cli-auth/whoami`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ValidationCliWhoAmIResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Introspect current authenticated CLI access token
+     */
+    async whoamiValidationCliAuthV2(requestParameters: WhoamiValidationCliAuthV2Request = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ValidationCliWhoAmIResponse> {
+        const response = await this.whoamiValidationCliAuthV2Raw(requestParameters, initOverrides);
         return await response.value();
     }
 

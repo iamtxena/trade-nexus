@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     max_position_pct: float = 5.0
     max_drawdown_pct: float = 15.0
 
+    # CLI Auth
+    cli_auth_device_code_ttl_seconds: int = 900
+    cli_auth_access_token_ttl_seconds: int = 3600
+    cli_auth_poll_interval_seconds: int = 5
+    cli_auth_verification_uri: str = "https://trade-nexus.vercel.app/cli/approve"
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

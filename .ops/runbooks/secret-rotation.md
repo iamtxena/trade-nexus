@@ -24,6 +24,7 @@
 | `CLERK_SECRET_KEY` | Vercel only | On compromise | Dev Team | Auth provider |
 | `UPSTASH_REDIS_REST_TOKEN` | Vercel only | On compromise | Dev Team | Cache |
 | `SUPABASE_SERVICE_ROLE_KEY` | Vercel only | On compromise | CloudOps | DB admin access |
+| _(CLI auth tokens)_ | Per-token (DB) | N/A (self-expiring) | Platform | PBKDF2 per-token salts; no global rotation secret |
 
 ## Rotation Schedule
 
@@ -126,9 +127,20 @@ If a secret is suspected compromised:
 
 **Verdict**: No secrets leak through `NEXT_PUBLIC_` variables. All sensitive vars are server-only.
 
+### Backend env vars (Azure Container App — non-secret config)
+
+| Variable | Value | Notes |
+|----------|-------|-------|
+| `CLI_AUTH_DEVICE_CODE_TTL_SECONDS` | `900` | Device code expiry (15 min) |
+| `CLI_AUTH_ACCESS_TOKEN_TTL_SECONDS` | `3600` | CLI session token lifetime (1 hr) |
+| `CLI_AUTH_POLL_INTERVAL_SECONDS` | `5` | Token poll interval |
+| `CLI_AUTH_VERIFICATION_URI` | `https://trade-nexus.vercel.app/cli/approve` | User-facing approval URL |
+
+These are **not secrets** — they are plaintext config. CLI auth uses per-token random salts (PBKDF2) and per-device SHA-256 hashes. There is no global signing key to rotate.
+
 ### No new frontend env vars needed
 
-Bot registration is handled entirely by the backend. The frontend's "Shared Validation" UX surface will use existing Clerk auth + API routes to the backend. No new Vercel env vars required for v1.
+Bot registration is handled entirely by the backend. The frontend's "Shared Validation" UX surface will use existing Clerk auth + API routes to the backend. No new Vercel env vars required for v1. CLI auth is also backend-only; the frontend only serves the `/cli/approve` page using existing Clerk auth.
 
 ## Least-Privilege Checklist
 

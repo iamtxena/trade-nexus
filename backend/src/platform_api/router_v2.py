@@ -26,6 +26,10 @@ from src.platform_api.schemas_v2 import (
     BotIssuedApiKey,
     ConversationSessionResponse,
     ConversationTurnResponse,
+    CreateValidationCliDeviceApprovalRequest,
+    CreateValidationCliDeviceStartRequest,
+    CreateValidationCliDeviceTokenPollRequest,
+    CreateValidationCliTokenIntrospectRequest,
     CreateBotInviteRegistrationRequest,
     CreateBotKeyRevocationRequest,
     CreateBotKeyRotationRequest,
@@ -55,6 +59,14 @@ from src.platform_api.schemas_v2 import (
     ValidationSharedRunListResponse,
     ValidationArtifactResponse,
     ValidationBaselineResponse,
+    ValidationCliDeviceApprovalResponse,
+    ValidationCliDeviceStartResponse,
+    ValidationCliSession,
+    ValidationCliSessionListResponse,
+    ValidationCliSessionRevokeResponse,
+    ValidationCliTokenIntrospectResponse,
+    ValidationCliTokenResponse,
+    ValidationCliWhoAmIResponse,
     ValidationRegressionReplayResponse,
     ValidationRenderResponse,
     ValidationReviewCommentResponse,
@@ -163,6 +175,22 @@ async def _request_context(
         )
     ):
         _identity_service.activate_email_invites(context=context)
+    if _request_auth_method(request) == "cli_token":
+        raw_scopes = getattr(request.state, "cli_scopes", ())
+        normalized_scopes = {
+            scope.strip().lower()
+            for scope in raw_scopes
+            if isinstance(scope, str) and scope.strip()
+        }
+        required_scope = _required_cli_scope(path=request.url.path, method=request.method)
+        if required_scope is not None and required_scope not in normalized_scopes:
+            raise PlatformAPIError(
+                status_code=403,
+                code="CLI_AUTH_SCOPE_FORBIDDEN",
+                message=f"CLI token is missing required scope: {required_scope}.",
+                request_id=request_id,
+                details={"requiredScope": required_scope, "scopes": sorted(normalized_scopes)},
+            )
     return context
 
 
@@ -224,12 +252,76 @@ def _invite_trial_expires_at(created_at: str) -> str | None:
     return ValidationV2Service.bot_trial_expires_at(created_at)
 
 
+def _to_validation_cli_session(session: object) -> ValidationCliSession:
+    return ValidationCliSession(
+        id=getattr(session, "session_id"),
+        tenantId=getattr(session, "tenant_id"),
+        userId=getattr(session, "user_id"),
+        createdByUserId=getattr(session, "created_by_user_id"),
+        scopes=list(getattr(session, "scopes")),
+        createdAt=getattr(session, "created_at"),
+        expiresAt=getattr(session, "expires_at"),
+        revokedAt=getattr(session, "revoked_at"),
+        lastUsedAt=getattr(session, "last_used_at"),
+    )
+
+
+def _request_auth_method(request: Request) -> str:
+    raw = getattr(request.state, "auth_method", None)
+    return raw if isinstance(raw, str) else "none"
+
+
+def _require_non_bot_identity(*, request: Request, context: RequestContext, request_id: str) -> None:
+    if context.actor_type != "user":
+        raise PlatformAPIError(
+            status_code=403,
+            code="CLI_AUTH_FORBIDDEN",
+            message="CLI auth control plane requires user identity.",
+            request_id=request_id,
+        )
+    if _request_auth_method(request) in {"api_key", "public", "none", "header_fallback"}:
+        raise PlatformAPIError(
+            status_code=403,
+            code="CLI_AUTH_FORBIDDEN",
+            message="CLI auth control plane requires authenticated user identity.",
+            request_id=request_id,
+        )
+
+
+def _require_web_authenticated_action(*, request: Request, context: RequestContext, request_id: str) -> None:
+    _require_non_bot_identity(request=request, context=context, request_id=request_id)
+    if _request_auth_method(request) != "jwt":
+        raise PlatformAPIError(
+            status_code=403,
+            code="CLI_AUTH_WEB_LOGIN_REQUIRED",
+            message="This action requires a web-authenticated user session.",
+            request_id=request_id,
+        )
+
+
+def _required_cli_scope(*, path: str, method: str) -> str | None:
+    if not path.startswith("/v2/validation"):
+        return None
+    if path in {
+        "/v2/validation-cli-auth/device/start",
+        "/v2/validation-cli-auth/device/token",
+        "/v2/validation-cli-auth/introspect",
+    }:
+        return None
+    if method.upper() == "GET":
+        return "validation:read"
+    return "validation:write"
+
+
 def _is_validation_request_path(path: str) -> bool:
     if not path.startswith("/v2/validation"):
         return False
     # Bot registration/management endpoints are user-authenticated control-plane calls.
     # Do not let runtime bot API keys override verified JWT identity on these routes.
     if path.startswith("/v2/validation-bots"):
+        return False
+    # CLI auth endpoints should use user JWT or CLI bearer-token identity only.
+    if path.startswith("/v2/validation-cli-auth"):
         return False
     # Explicit invite accept is a user-authenticated login flow and must retain
     # verified JWT identity (including email claim) even if X-API-Key is present.
@@ -435,6 +527,246 @@ async def list_validation_runs_v2(
     context: ContextDep,
 ) -> ValidationRunListResponse:
     return await _validation_service.list_validation_runs(context=context)
+
+
+@router.post(
+    "/validation-cli-auth/device/start",
+    response_model=ValidationCliDeviceStartResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Validation"],
+    operation_id="startValidationCliDeviceAuthV2",
+)
+async def start_validation_cli_device_auth_v2(
+    request: Request,
+    payload: CreateValidationCliDeviceStartRequest | None = None,
+) -> ValidationCliDeviceStartResponse:
+    request_id = getattr(request.state, "request_id", None)
+    resolved_request_id = request_id if isinstance(request_id, str) and request_id.strip() else f"req-{uuid4()}"
+    try:
+        issued = _identity_service.start_cli_device_authorization(
+            request_id=resolved_request_id,
+            scopes=payload.scopes if payload is not None else None,
+        )
+    except ValueError as exc:
+        raise PlatformAPIError(
+            status_code=400,
+            code="CLI_AUTH_SCOPE_INVALID",
+            message=str(exc),
+            request_id=resolved_request_id,
+        ) from exc
+    return ValidationCliDeviceStartResponse(
+        requestId=resolved_request_id,
+        deviceCode=issued.device_code,
+        userCode=issued.user_code,
+        verificationUri=issued.verification_uri,
+        verificationUriComplete=issued.verification_uri_complete,
+        scopes=list(issued.scopes),
+        expiresAt=issued.expires_at,
+        expiresIn=issued.expires_in,
+        interval=issued.interval,
+    )
+
+
+@router.post(
+    "/validation-cli-auth/device/approve",
+    response_model=ValidationCliDeviceApprovalResponse,
+    tags=["Validation"],
+    operation_id="approveValidationCliDeviceAuthV2",
+)
+async def approve_validation_cli_device_auth_v2(
+    payload: CreateValidationCliDeviceApprovalRequest,
+    context: ContextDep,
+    request: Request,
+) -> ValidationCliDeviceApprovalResponse:
+    _require_web_authenticated_action(request=request, context=context, request_id=context.request_id)
+    approval = _identity_service.approve_cli_device_authorization(
+        context=context,
+        user_code=payload.userCode,
+    )
+    if approval.approved_tenant_id is None or approval.approved_user_id is None or approval.created_by_user_id is None:
+        raise PlatformAPIError(
+            status_code=500,
+            code="INTERNAL_ERROR",
+            message="CLI device approval did not persist authenticated identity.",
+            request_id=context.request_id,
+        )
+    return ValidationCliDeviceApprovalResponse(
+        requestId=context.request_id,
+        status="approved",
+        userCode=payload.userCode.strip().upper(),
+        tenantId=approval.approved_tenant_id,
+        userId=approval.approved_user_id,
+        createdByUserId=approval.created_by_user_id,
+        scopes=list(approval.scopes),
+        approvedAt=approval.approved_at or approval.created_at,
+        expiresAt=approval.expires_at,
+    )
+
+
+@router.post(
+    "/validation-cli-auth/device/token",
+    response_model=ValidationCliTokenResponse,
+    tags=["Validation"],
+    operation_id="pollValidationCliDeviceTokenV2",
+)
+async def poll_validation_cli_device_token_v2(
+    request: Request,
+    payload: CreateValidationCliDeviceTokenPollRequest,
+) -> ValidationCliTokenResponse:
+    request_id = getattr(request.state, "request_id", None)
+    resolved_request_id = request_id if isinstance(request_id, str) and request_id.strip() else f"req-{uuid4()}"
+    issued = _identity_service.poll_cli_device_token(
+        request_id=resolved_request_id,
+        device_code=payload.deviceCode,
+    )
+    return ValidationCliTokenResponse(
+        requestId=resolved_request_id,
+        tokenType=issued.token_type,
+        accessToken=issued.access_token,
+        sessionId=issued.session_id,
+        tenantId=issued.tenant_id,
+        userId=issued.user_id,
+        createdByUserId=issued.created_by_user_id,
+        scopes=list(issued.scopes),
+        createdAt=issued.created_at,
+        expiresAt=issued.expires_at,
+        expiresIn=issued.expires_in,
+    )
+
+
+@router.get(
+    "/validation-cli-auth/whoami",
+    response_model=ValidationCliWhoAmIResponse,
+    tags=["Validation"],
+    operation_id="whoamiValidationCliAuthV2",
+)
+async def whoami_validation_cli_auth_v2(
+    context: ContextDep,
+    request: Request,
+) -> ValidationCliWhoAmIResponse:
+    if _request_auth_method(request) != "cli_token":
+        raise PlatformAPIError(
+            status_code=401,
+            code="AUTH_UNAUTHORIZED",
+            message="CLI access token required for whoami endpoint.",
+            request_id=context.request_id,
+        )
+    session_id = getattr(request.state, "cli_session_id", None)
+    if not isinstance(session_id, str) or session_id.strip() == "":
+        raise PlatformAPIError(
+            status_code=401,
+            code="CLI_ACCESS_TOKEN_INVALID",
+            message="CLI access token is invalid.",
+            request_id=context.request_id,
+        )
+    session = _identity_service.get_cli_session(session_id=session_id)
+    if session is None:
+        raise PlatformAPIError(
+            status_code=401,
+            code="CLI_ACCESS_TOKEN_INVALID",
+            message="CLI access token is invalid.",
+            request_id=context.request_id,
+        )
+    if session.tenant_id != context.tenant_id or session.user_id != context.user_id:
+        raise PlatformAPIError(
+            status_code=401,
+            code="CLI_ACCESS_TOKEN_INVALID",
+            message="CLI access token is invalid.",
+            request_id=context.request_id,
+        )
+    return ValidationCliWhoAmIResponse(
+        requestId=context.request_id,
+        session=_to_validation_cli_session(session),
+    )
+
+
+@router.post(
+    "/validation-cli-auth/introspect",
+    response_model=ValidationCliTokenIntrospectResponse,
+    tags=["Validation"],
+    operation_id="introspectValidationCliTokenV2",
+)
+async def introspect_validation_cli_token_v2(
+    payload: CreateValidationCliTokenIntrospectRequest,
+    context: ContextDep,
+    request: Request,
+) -> ValidationCliTokenIntrospectResponse:
+    _require_web_authenticated_action(request=request, context=context, request_id=context.request_id)
+    try:
+        identity = _identity_service.resolve_cli_access_token(
+            access_token=payload.accessToken,
+            request_id=context.request_id,
+            update_last_used=False,
+        )
+    except PlatformAPIError as exc:
+        if exc.code in {"CLI_ACCESS_TOKEN_INVALID", "CLI_ACCESS_TOKEN_REVOKED", "CLI_ACCESS_TOKEN_EXPIRED"}:
+            return ValidationCliTokenIntrospectResponse(
+                requestId=context.request_id,
+                active=False,
+                session=None,
+            )
+        raise
+    if identity is None:
+        return ValidationCliTokenIntrospectResponse(
+            requestId=context.request_id,
+            active=False,
+            session=None,
+        )
+    if identity.tenant_id != context.tenant_id or identity.user_id != context.user_id:
+        return ValidationCliTokenIntrospectResponse(
+            requestId=context.request_id,
+            active=False,
+            session=None,
+        )
+    session = _identity_service.get_cli_session(session_id=identity.session_id)
+    if session is None:
+        return ValidationCliTokenIntrospectResponse(
+            requestId=context.request_id,
+            active=False,
+            session=None,
+        )
+    return ValidationCliTokenIntrospectResponse(
+        requestId=context.request_id,
+        active=not session.revoked,
+        session=_to_validation_cli_session(session),
+    )
+
+
+@router.get(
+    "/validation-cli-auth/sessions",
+    response_model=ValidationCliSessionListResponse,
+    tags=["Validation"],
+    operation_id="listValidationCliSessionsV2",
+)
+async def list_validation_cli_sessions_v2(
+    context: ContextDep,
+    request: Request,
+) -> ValidationCliSessionListResponse:
+    _require_non_bot_identity(request=request, context=context, request_id=context.request_id)
+    sessions = _identity_service.list_cli_active_sessions(context=context)
+    return ValidationCliSessionListResponse(
+        requestId=context.request_id,
+        sessions=[_to_validation_cli_session(item) for item in sessions],
+    )
+
+
+@router.post(
+    "/validation-cli-auth/sessions/{sessionId}/revoke",
+    response_model=ValidationCliSessionRevokeResponse,
+    tags=["Validation"],
+    operation_id="revokeValidationCliSessionV2",
+)
+async def revoke_validation_cli_session_v2(
+    sessionId: str,
+    context: ContextDep,
+    request: Request,
+) -> ValidationCliSessionRevokeResponse:
+    _require_non_bot_identity(request=request, context=context, request_id=context.request_id)
+    session = _identity_service.revoke_cli_session(context=context, session_id=sessionId)
+    return ValidationCliSessionRevokeResponse(
+        requestId=context.request_id,
+        session=_to_validation_cli_session(session),
+    )
 
 
 @router.get(

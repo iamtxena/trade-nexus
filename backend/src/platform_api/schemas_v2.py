@@ -538,6 +538,7 @@ class ValidationRegressionReplayResponse(BaseModel):
 BotStatus = Literal["active", "suspended", "revoked"]
 BotRegistrationPath = Literal["invite_code_trial", "partner_bootstrap"]
 BotKeyStatus = Literal["active", "rotated", "revoked"]
+ValidationCliScope = Literal["validation:read", "validation:write"]
 ValidationSharePermission = Literal["view", "review"]
 ValidationInviteStatus = Literal["pending", "accepted", "revoked", "expired"]
 ValidationShareStatus = Literal["active", "revoked"]
@@ -636,6 +637,93 @@ class BotKeyMetadataResponse(BaseModel):
     requestId: str
     botId: str
     key: BotKeyMetadata
+
+
+class CreateValidationCliDeviceStartRequest(BaseModel):
+    scopes: list[ValidationCliScope] = Field(default_factory=lambda: ["validation:read", "validation:write"])
+
+
+class ValidationCliDeviceStartResponse(BaseModel):
+    requestId: str
+    deviceCode: str
+    userCode: str
+    verificationUri: str
+    verificationUriComplete: str
+    scopes: list[ValidationCliScope]
+    expiresAt: str
+    expiresIn: int = Field(ge=1)
+    interval: int = Field(ge=1)
+
+
+class CreateValidationCliDeviceApprovalRequest(BaseModel):
+    userCode: str = Field(min_length=4)
+
+
+class ValidationCliDeviceApprovalResponse(BaseModel):
+    requestId: str
+    status: Literal["approved"]
+    userCode: str
+    tenantId: str
+    userId: str
+    createdByUserId: str
+    scopes: list[ValidationCliScope]
+    approvedAt: str
+    expiresAt: str
+
+
+class CreateValidationCliDeviceTokenPollRequest(BaseModel):
+    deviceCode: str = Field(min_length=8)
+
+
+class ValidationCliTokenResponse(BaseModel):
+    requestId: str
+    tokenType: Literal["Bearer"]
+    accessToken: str
+    sessionId: str
+    tenantId: str
+    userId: str
+    createdByUserId: str
+    scopes: list[ValidationCliScope]
+    createdAt: str
+    expiresAt: str
+    expiresIn: int = Field(ge=1)
+
+
+class ValidationCliSession(BaseModel):
+    id: str
+    tenantId: str
+    userId: str
+    createdByUserId: str
+    scopes: list[ValidationCliScope]
+    createdAt: str
+    expiresAt: str
+    revokedAt: str | None = None
+    lastUsedAt: str | None = None
+
+
+class ValidationCliWhoAmIResponse(BaseModel):
+    requestId: str
+    session: ValidationCliSession
+
+
+class ValidationCliSessionListResponse(BaseModel):
+    requestId: str
+    sessions: list[ValidationCliSession] = Field(default_factory=list)
+
+
+class CreateValidationCliTokenIntrospectRequest(BaseModel):
+    accessToken: str = Field(min_length=16)
+
+
+class ValidationCliTokenIntrospectResponse(BaseModel):
+    requestId: str
+    active: bool
+    session: ValidationCliSession | None = None
+
+
+class ValidationCliSessionRevokeResponse(BaseModel):
+    requestId: str
+    session: ValidationCliSession
 
 
 class ValidationInvite(BaseModel):

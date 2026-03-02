@@ -16,6 +16,7 @@ from src.platform_api.errors import (
 )
 from src.platform_api.observability import log_request_event, request_log_fields
 from src.platform_api.router_v1 import router as platform_api_v1_router
+from src.platform_api import router_v2 as router_v2_module
 from src.platform_api.router_v2 import router as platform_api_v2_router
 from src.config import get_settings
 
@@ -112,6 +113,8 @@ def _is_v2_validation_public_registration_request(path: str) -> bool:
     return path in {
         "/v2/validation-bots/registrations/invite-code",
         "/v2/validation-bots/registrations/partner-bootstrap",
+        "/v2/validation-cli-auth/device/start",
+        "/v2/validation-cli-auth/device/token",
     }
 
 
@@ -122,11 +125,27 @@ def _header_or_fallback(request: Request, *, header: str, fallback: str) -> str:
     return fallback
 
 
+def _parse_bearer_token(authorization: str | None) -> str | None:
+    if not isinstance(authorization, str):
+        return None
+    raw = authorization.strip()
+    if raw == "":
+        return None
+    scheme, _, token = raw.partition(" ")
+    if scheme.lower() != "bearer":
+        return None
+    normalized = token.strip()
+    return normalized if normalized else None
+
+
 @app.middleware("http")
 async def platform_api_observability_context_middleware(request: Request, call_next):
     """Attach request correlation identifiers and emit structured request logs."""
     if _is_platform_request(request.url.path):
         request.state.request_id = request.headers.get("X-Request-Id") or f"req-{uuid4()}"
+        request.state.auth_method = "none"
+        request.state.cli_scopes = ()
+        request.state.cli_session_id = None
         if _is_v1_protected_request(request.url.path):
             try:
                 identity = resolve_validation_identity(
@@ -141,6 +160,7 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                 request.state.user_id = "user-unauthenticated"
                 request.state.user_email_authenticated = False
                 request.state.user_email = None
+                request.state.auth_method = "none"
                 log_request_event(
                     logger,
                     level=logging.WARNING,
@@ -157,6 +177,7 @@ async def platform_api_observability_context_middleware(request: Request, call_n
             request.state.user_id = identity.user_id
             request.state.user_email_authenticated = bool(identity.user_email)
             request.state.user_email = identity.user_email
+            request.state.auth_method = "jwt" if _parse_bearer_token(request.headers.get("Authorization")) else "api_key"
         elif _is_v2_validation_request(request.url.path):
             is_public_registration_route = _is_v2_validation_public_registration_request(request.url.path)
             has_auth_headers = bool(
@@ -178,16 +199,21 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                         request.state.user_id = "user-public-registration"
                         request.state.user_email_authenticated = False
                         request.state.user_email = None
+                        request.state.auth_method = "public"
                     else:
                         request.state.tenant_id = identity.tenant_id
                         request.state.user_id = identity.user_id
                         request.state.user_email_authenticated = bool(identity.user_email)
                         request.state.user_email = identity.user_email
+                        request.state.auth_method = (
+                            "jwt" if _parse_bearer_token(request.headers.get("Authorization")) else "api_key"
+                        )
                 else:
                     request.state.tenant_id = "tenant-public-registration"
                     request.state.user_id = "user-public-registration"
                     request.state.user_email_authenticated = False
                     request.state.user_email = None
+                    request.state.auth_method = "public"
             else:
                 try:
                     identity = resolve_validation_identity(
@@ -198,26 +224,55 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                         request_id=request.state.request_id,
                     )
                 except PlatformAPIError as exc:
-                    request.state.tenant_id = "tenant-unauthenticated"
-                    request.state.user_id = "user-unauthenticated"
+                    bearer_token = _parse_bearer_token(request.headers.get("Authorization"))
+                    cli_identity = None
+                    if (
+                        exc.code == "AUTH_UNAUTHORIZED"
+                        and isinstance(bearer_token, str)
+                        and bearer_token.startswith("tnx.cli.")
+                    ):
+                        try:
+                            cli_identity = router_v2_module._identity_service.resolve_cli_access_token(  # noqa: SLF001
+                                access_token=bearer_token,
+                                tenant_header=request.headers.get("X-Tenant-Id"),
+                                user_header=request.headers.get("X-User-Id"),
+                                request_id=request.state.request_id,
+                            )
+                        except PlatformAPIError as cli_exc:
+                            exc = cli_exc
+                    if cli_identity is None:
+                        request.state.tenant_id = "tenant-unauthenticated"
+                        request.state.user_id = "user-unauthenticated"
+                        request.state.user_email_authenticated = False
+                        request.state.user_email = None
+                        request.state.auth_method = "none"
+                        log_request_event(
+                            logger,
+                            level=logging.WARNING,
+                            message="Platform API validation request rejected.",
+                            request=request,
+                            component="api",
+                            operation="request_rejected",
+                            status_code=exc.status_code,
+                            errorCode=exc.code,
+                            method=request.method,
+                        )
+                        return await platform_api_error_handler(request, exc)
+                    request.state.tenant_id = cli_identity.tenant_id
+                    request.state.user_id = cli_identity.user_id
                     request.state.user_email_authenticated = False
                     request.state.user_email = None
-                    log_request_event(
-                        logger,
-                        level=logging.WARNING,
-                        message="Platform API validation request rejected.",
-                        request=request,
-                        component="api",
-                        operation="request_rejected",
-                        status_code=exc.status_code,
-                        errorCode=exc.code,
-                        method=request.method,
+                    request.state.auth_method = "cli_token"
+                    request.state.cli_scopes = cli_identity.scopes
+                    request.state.cli_session_id = cli_identity.session_id
+                else:
+                    request.state.tenant_id = identity.tenant_id
+                    request.state.user_id = identity.user_id
+                    request.state.user_email_authenticated = bool(identity.user_email)
+                    request.state.user_email = identity.user_email
+                    request.state.auth_method = (
+                        "jwt" if _parse_bearer_token(request.headers.get("Authorization")) else "api_key"
                     )
-                    return await platform_api_error_handler(request, exc)
-                request.state.tenant_id = identity.tenant_id
-                request.state.user_id = identity.user_id
-                request.state.user_email_authenticated = bool(identity.user_email)
-                request.state.user_email = identity.user_email
         else:
             request.state.tenant_id = _header_or_fallback(
                 request,
@@ -231,6 +286,7 @@ async def platform_api_observability_context_middleware(request: Request, call_n
             )
             request.state.user_email_authenticated = False
             request.state.user_email = None
+            request.state.auth_method = "header_fallback"
         log_request_event(
             logger,
             level=logging.INFO,

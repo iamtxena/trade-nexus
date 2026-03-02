@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import hmac
 import json
 import logging
@@ -23,6 +24,8 @@ ActorType = Literal["user", "bot"]
 RegistrationMethod = Literal["invite", "partner"]
 SharePermission = Literal["view", "review"]
 ShareInviteStatus = Literal["pending", "accepted", "revoked", "expired"]
+CliScope = Literal["validation:read", "validation:write"]
+CliDeviceAuthorizationStatus = Literal["pending", "approved", "consumed", "expired"]
 
 
 @dataclass(frozen=True)
@@ -135,10 +138,95 @@ class SharedValidationInviteRecord:
     accepted_at: str | None = None
 
 
+@dataclass(frozen=True)
+class CliDeviceAuthorizationRecord:
+    flow_id: str
+    device_code_hash: str
+    user_code_hash: str
+    scopes: tuple[CliScope, ...]
+    status: CliDeviceAuthorizationStatus
+    created_at: str
+    expires_at: str
+    verification_uri: str
+    polling_interval_seconds: int
+    approved_tenant_id: str | None = None
+    approved_user_id: str | None = None
+    created_by_user_id: str | None = None
+    approved_at: str | None = None
+    consumed_at: str | None = None
+    session_id: str | None = None
+
+
+@dataclass(frozen=True)
+class CliDeviceAuthorizationStart:
+    device_code: str
+    user_code: str
+    verification_uri: str
+    verification_uri_complete: str
+    scopes: tuple[CliScope, ...]
+    expires_at: str
+    expires_in: int
+    interval: int
+
+
+@dataclass(frozen=True)
+class CliAccessSessionRecord:
+    session_id: str
+    tenant_id: str
+    user_id: str
+    created_by_user_id: str
+    token_hash: str
+    token_salt: str
+    scopes: tuple[CliScope, ...]
+    created_at: str
+    expires_at: str
+    revoked_at: str | None = None
+    last_used_at: str | None = None
+
+    @property
+    def revoked(self) -> bool:
+        return self.revoked_at is not None
+
+
+@dataclass(frozen=True)
+class CliAccessTokenIssued:
+    access_token: str
+    token_type: Literal["Bearer"]
+    session_id: str
+    tenant_id: str
+    user_id: str
+    created_by_user_id: str
+    scopes: tuple[CliScope, ...]
+    created_at: str
+    expires_at: str
+    expires_in: int
+
+
+@dataclass(frozen=True)
+class CliAccessTokenIdentity:
+    tenant_id: str
+    user_id: str
+    created_by_user_id: str
+    session_id: str
+    scopes: tuple[CliScope, ...]
+    created_at: str
+    expires_at: str
+    revoked_at: str | None
+    last_used_at: str | None
+
+
 class ValidationIdentityService:
     """Owns runtime bot identity, bot-key resolution, and run-share invite state."""
 
     _RUNTIME_KEY_PREFIX = "tnx.bot"
+    _CLI_ACCESS_TOKEN_PREFIX = "tnx.cli"
+    _CLI_DEVICE_CODE_PREFIX = "tnx_device"
+    _CLI_DEFAULT_SCOPES: tuple[CliScope, ...] = ("validation:read", "validation:write")
+    _CLI_ALLOWED_SCOPES: tuple[CliScope, ...] = ("validation:read", "validation:write")
+    _CLI_USER_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    _CLI_USER_CODE_LENGTH = 8
+    _CLI_ACCESS_TOKEN_SECRET_BYTES = 24
+    _CLI_DEVICE_CODE_TOKEN_BYTES = 24
     _INVITE_CODE_TOKEN_BYTES = 24
     _SECRET_HASH_ITERATIONS = 240_000
     _SECRET_HASH_BYTES = 32
@@ -150,12 +238,18 @@ class ValidationIdentityService:
         invite_rate_limit: int = 3,
         invite_window_seconds: int = 3600,
         invite_ttl_seconds: int = 3600,
+        cli_device_ttl_seconds: int = 900,
+        cli_access_token_ttl_seconds: int = 3600,
+        cli_poll_interval_seconds: int = 5,
         partner_credentials: dict[str, str] | None = None,
     ) -> None:
         self._store = store
         self._invite_rate_limit = invite_rate_limit
         self._invite_window_seconds = invite_window_seconds
         self._invite_ttl_seconds = invite_ttl_seconds
+        self._cli_device_ttl_seconds = cli_device_ttl_seconds
+        self._cli_access_token_ttl_seconds = cli_access_token_ttl_seconds
+        self._cli_poll_interval_seconds = cli_poll_interval_seconds
         self._partner_credentials = partner_credentials if partner_credentials is not None else _load_partner_credentials()
 
         self._invite_codes: dict[str, BotInviteCodeRecord] = {}
@@ -167,10 +261,17 @@ class ValidationIdentityService:
         self._share_invites_by_run: dict[str, list[SharedValidationInviteRecord]] = {}
         self._share_grants_by_run: dict[str, dict[str, SharePermission]] = {}
         self._pending_share_invite_index: dict[tuple[str, str], dict[str, int]] = {}
+        self._cli_device_authorizations: dict[str, CliDeviceAuthorizationRecord] = {}
+        self._cli_device_code_index: dict[str, str] = {}
+        self._cli_user_code_index: dict[str, str] = {}
+        self._cli_access_sessions: dict[str, CliAccessSessionRecord] = {}
+        self._cli_session_index: dict[tuple[str, str], set[str]] = {}
 
         self._invite_counter = 1
         self._key_counter = 1
         self._share_counter = 1
+        self._cli_device_counter = 1
+        self._cli_session_counter = 1
 
     def request_invite_code(
         self,
@@ -614,6 +715,419 @@ class ValidationIdentityService:
             actor_type="bot",
             actor_id=record.bot_id,
         )
+
+    def start_cli_device_authorization(
+        self,
+        *,
+        request_id: str,
+        scopes: list[str] | tuple[str, ...] | None = None,
+    ) -> CliDeviceAuthorizationStart:
+        normalized_scopes = _normalize_cli_scopes(scopes=scopes)
+
+        flow_id = f"clidev-{self._cli_device_counter:06d}"
+        self._cli_device_counter += 1
+
+        device_code = f"{self._CLI_DEVICE_CODE_PREFIX}_{secrets.token_urlsafe(self._CLI_DEVICE_CODE_TOKEN_BYTES)}"
+        user_code = _generate_cli_user_code()
+        verification_uri = _cli_device_verification_uri()
+        expires_dt = datetime.now(tz=UTC) + timedelta(seconds=self._cli_device_ttl_seconds)
+        expires_at = _to_utc(expires_dt)
+
+        record = CliDeviceAuthorizationRecord(
+            flow_id=flow_id,
+            device_code_hash=_sha256_hex(device_code),
+            user_code_hash=_sha256_hex(user_code),
+            scopes=normalized_scopes,
+            status="pending",
+            created_at=utc_now(),
+            expires_at=expires_at,
+            verification_uri=verification_uri,
+            polling_interval_seconds=self._cli_poll_interval_seconds,
+        )
+        self._cli_device_authorizations[flow_id] = record
+        self._cli_device_code_index[record.device_code_hash] = flow_id
+        self._cli_user_code_index[record.user_code_hash] = flow_id
+
+        return CliDeviceAuthorizationStart(
+            device_code=device_code,
+            user_code=user_code,
+            verification_uri=verification_uri,
+            verification_uri_complete=f"{verification_uri}?user_code={user_code}",
+            scopes=normalized_scopes,
+            expires_at=expires_at,
+            expires_in=self._cli_device_ttl_seconds,
+            interval=self._cli_poll_interval_seconds,
+        )
+
+    def approve_cli_device_authorization(
+        self,
+        *,
+        context: RequestContext,
+        user_code: str,
+    ) -> CliDeviceAuthorizationRecord:
+        try:
+            normalized_user_code = _normalize_cli_user_code(user_code)
+        except ValueError as exc:
+            raise PlatformAPIError(
+                status_code=400,
+                code="CLI_DEVICE_CODE_INVALID",
+                message=str(exc),
+                request_id=context.request_id,
+            ) from exc
+        flow_id = self._cli_user_code_index.get(_sha256_hex(normalized_user_code))
+        if flow_id is None:
+            raise PlatformAPIError(
+                status_code=404,
+                code="CLI_DEVICE_CODE_NOT_FOUND",
+                message="Device authorization request was not found.",
+                request_id=context.request_id,
+            )
+        record = self._cli_device_authorizations[flow_id]
+        record = self._refresh_cli_device_authorization(record=record)
+
+        if record.status == "expired":
+            raise PlatformAPIError(
+                status_code=409,
+                code="CLI_DEVICE_CODE_EXPIRED",
+                message="Device authorization code expired.",
+                request_id=context.request_id,
+            )
+        if record.status == "consumed":
+            raise PlatformAPIError(
+                status_code=409,
+                code="CLI_DEVICE_CODE_CONSUMED",
+                message="Device authorization code has already been consumed.",
+                request_id=context.request_id,
+            )
+        if record.status == "approved":
+            if record.approved_tenant_id != context.tenant_id or record.approved_user_id != context.user_id:
+                raise PlatformAPIError(
+                    status_code=409,
+                    code="CLI_DEVICE_CODE_APPROVED",
+                    message="Device authorization code was approved by another user identity.",
+                    request_id=context.request_id,
+                )
+            return record
+
+        updated = CliDeviceAuthorizationRecord(
+            flow_id=record.flow_id,
+            device_code_hash=record.device_code_hash,
+            user_code_hash=record.user_code_hash,
+            scopes=record.scopes,
+            status="approved",
+            created_at=record.created_at,
+            expires_at=record.expires_at,
+            verification_uri=record.verification_uri,
+            polling_interval_seconds=record.polling_interval_seconds,
+            approved_tenant_id=context.tenant_id,
+            approved_user_id=context.user_id,
+            created_by_user_id=context.user_id,
+            approved_at=utc_now(),
+            consumed_at=record.consumed_at,
+            session_id=record.session_id,
+        )
+        self._cli_device_authorizations[flow_id] = updated
+        return updated
+
+    def poll_cli_device_token(
+        self,
+        *,
+        request_id: str,
+        device_code: str,
+    ) -> CliAccessTokenIssued:
+        normalized_device_code = (device_code or "").strip()
+        if normalized_device_code == "":
+            raise PlatformAPIError(
+                status_code=400,
+                code="CLI_DEVICE_CODE_INVALID",
+                message="deviceCode must be provided.",
+                request_id=request_id,
+            )
+        flow_id = self._cli_device_code_index.get(_sha256_hex(normalized_device_code))
+        if flow_id is None:
+            raise PlatformAPIError(
+                status_code=401,
+                code="CLI_DEVICE_CODE_INVALID",
+                message="Device authorization code is invalid.",
+                request_id=request_id,
+            )
+        record = self._cli_device_authorizations[flow_id]
+        record = self._refresh_cli_device_authorization(record=record)
+        if record.status == "expired":
+            raise PlatformAPIError(
+                status_code=401,
+                code="CLI_DEVICE_CODE_EXPIRED",
+                message="Device authorization code expired.",
+                request_id=request_id,
+            )
+        if record.status == "pending":
+            raise PlatformAPIError(
+                status_code=409,
+                code="CLI_DEVICE_AUTHORIZATION_PENDING",
+                message="Device authorization is still pending approval.",
+                request_id=request_id,
+                details={"interval": record.polling_interval_seconds},
+            )
+        if record.status == "consumed":
+            raise PlatformAPIError(
+                status_code=409,
+                code="CLI_DEVICE_CODE_CONSUMED",
+                message="Device authorization code has already been consumed.",
+                request_id=request_id,
+            )
+        if record.approved_tenant_id is None or record.approved_user_id is None:
+            raise PlatformAPIError(
+                status_code=401,
+                code="CLI_DEVICE_AUTHORIZATION_PENDING",
+                message="Device authorization is still pending approval.",
+                request_id=request_id,
+            )
+
+        created_at = utc_now()
+        expires_at = _to_utc(datetime.now(tz=UTC) + timedelta(seconds=self._cli_access_token_ttl_seconds))
+        session_id = f"clisess-{self._cli_session_counter:06d}"
+        self._cli_session_counter += 1
+        secret = secrets.token_urlsafe(self._CLI_ACCESS_TOKEN_SECRET_BYTES)
+        token_salt = secrets.token_hex(16)
+        token_hash = _hash_secret(secret=secret, salt=token_salt)
+        access_token = f"{self._CLI_ACCESS_TOKEN_PREFIX}.{session_id}.{secret}"
+
+        session_record = CliAccessSessionRecord(
+            session_id=session_id,
+            tenant_id=record.approved_tenant_id,
+            user_id=record.approved_user_id,
+            created_by_user_id=record.created_by_user_id or record.approved_user_id,
+            token_hash=token_hash,
+            token_salt=token_salt,
+            scopes=record.scopes,
+            created_at=created_at,
+            expires_at=expires_at,
+            revoked_at=None,
+            last_used_at=None,
+        )
+        self._cli_access_sessions[session_id] = session_record
+        self._cli_session_index.setdefault((session_record.tenant_id, session_record.user_id), set()).add(session_id)
+
+        consumed = CliDeviceAuthorizationRecord(
+            flow_id=record.flow_id,
+            device_code_hash=record.device_code_hash,
+            user_code_hash=record.user_code_hash,
+            scopes=record.scopes,
+            status="consumed",
+            created_at=record.created_at,
+            expires_at=record.expires_at,
+            verification_uri=record.verification_uri,
+            polling_interval_seconds=record.polling_interval_seconds,
+            approved_tenant_id=record.approved_tenant_id,
+            approved_user_id=record.approved_user_id,
+            created_by_user_id=record.created_by_user_id,
+            approved_at=record.approved_at,
+            consumed_at=created_at,
+            session_id=session_id,
+        )
+        self._cli_device_authorizations[flow_id] = consumed
+        self._cli_device_code_index.pop(consumed.device_code_hash, None)
+        self._cli_user_code_index.pop(consumed.user_code_hash, None)
+
+        return CliAccessTokenIssued(
+            access_token=access_token,
+            token_type="Bearer",
+            session_id=session_id,
+            tenant_id=session_record.tenant_id,
+            user_id=session_record.user_id,
+            created_by_user_id=session_record.created_by_user_id,
+            scopes=session_record.scopes,
+            created_at=session_record.created_at,
+            expires_at=session_record.expires_at,
+            expires_in=self._cli_access_token_ttl_seconds,
+        )
+
+    def resolve_cli_access_token(
+        self,
+        *,
+        access_token: str | None,
+        request_id: str,
+        tenant_header: str | None = None,
+        user_header: str | None = None,
+        update_last_used: bool = True,
+    ) -> CliAccessTokenIdentity | None:
+        normalized = (access_token or "").strip()
+        if normalized == "":
+            return None
+        if not normalized.startswith(f"{self._CLI_ACCESS_TOKEN_PREFIX}."):
+            return None
+
+        parts = normalized.split(".")
+        if len(parts) != 4 or parts[0] != "tnx" or parts[1] != "cli":
+            raise PlatformAPIError(
+                status_code=401,
+                code="CLI_ACCESS_TOKEN_INVALID",
+                message="CLI access token format is invalid.",
+                request_id=request_id,
+            )
+        _, _, session_id, secret = parts
+        record = self._cli_access_sessions.get(session_id)
+        if record is None:
+            raise PlatformAPIError(
+                status_code=401,
+                code="CLI_ACCESS_TOKEN_INVALID",
+                message="CLI access token is invalid.",
+                request_id=request_id,
+            )
+
+        _assert_identity_header_match(
+            expected_value=record.tenant_id,
+            provided_value=tenant_header,
+            header_name="X-Tenant-Id",
+            request_id=request_id,
+        )
+        _assert_identity_header_match(
+            expected_value=record.user_id,
+            provided_value=user_header,
+            header_name="X-User-Id",
+            request_id=request_id,
+        )
+
+        expected_hash = _hash_secret(secret=secret, salt=record.token_salt)
+        if not hmac.compare_digest(expected_hash, record.token_hash):
+            raise PlatformAPIError(
+                status_code=401,
+                code="CLI_ACCESS_TOKEN_INVALID",
+                message="CLI access token is invalid.",
+                request_id=request_id,
+            )
+        if record.revoked:
+            raise PlatformAPIError(
+                status_code=401,
+                code="CLI_ACCESS_TOKEN_REVOKED",
+                message="CLI access token has been revoked.",
+                request_id=request_id,
+            )
+        if _utc_now_dt() >= _parse_utc_datetime_required(record.expires_at):
+            raise PlatformAPIError(
+                status_code=401,
+                code="CLI_ACCESS_TOKEN_EXPIRED",
+                message="CLI access token expired.",
+                request_id=request_id,
+            )
+
+        if update_last_used:
+            refreshed = CliAccessSessionRecord(
+                session_id=record.session_id,
+                tenant_id=record.tenant_id,
+                user_id=record.user_id,
+                created_by_user_id=record.created_by_user_id,
+                token_hash=record.token_hash,
+                token_salt=record.token_salt,
+                scopes=record.scopes,
+                created_at=record.created_at,
+                expires_at=record.expires_at,
+                revoked_at=record.revoked_at,
+                last_used_at=utc_now(),
+            )
+            self._cli_access_sessions[session_id] = refreshed
+            record = refreshed
+        return CliAccessTokenIdentity(
+            tenant_id=record.tenant_id,
+            user_id=record.user_id,
+            created_by_user_id=record.created_by_user_id,
+            session_id=record.session_id,
+            scopes=record.scopes,
+            created_at=record.created_at,
+            expires_at=record.expires_at,
+            revoked_at=record.revoked_at,
+            last_used_at=record.last_used_at,
+        )
+
+    def list_cli_active_sessions(self, *, context: RequestContext) -> list[CliAccessSessionRecord]:
+        candidate_ids = sorted(self._cli_session_index.get((context.tenant_id, context.user_id), set()))
+        sessions: list[CliAccessSessionRecord] = []
+        now = _utc_now_dt()
+        for session_id in candidate_ids:
+            record = self._cli_access_sessions.get(session_id)
+            if record is None:
+                continue
+            if record.revoked:
+                continue
+            if now >= _parse_utc_datetime_required(record.expires_at):
+                continue
+            sessions.append(record)
+        sessions.sort(key=lambda item: item.created_at, reverse=True)
+        return sessions
+
+    def revoke_cli_session(
+        self,
+        *,
+        context: RequestContext,
+        session_id: str,
+    ) -> CliAccessSessionRecord:
+        normalized_session_id = session_id.strip()
+        if normalized_session_id == "":
+            raise PlatformAPIError(
+                status_code=400,
+                code="CLI_SESSION_INVALID",
+                message="sessionId must be provided.",
+                request_id=context.request_id,
+            )
+        record = self._cli_access_sessions.get(normalized_session_id)
+        if (
+            record is None
+            or record.tenant_id != context.tenant_id
+            or record.user_id != context.user_id
+        ):
+            raise PlatformAPIError(
+                status_code=404,
+                code="CLI_SESSION_NOT_FOUND",
+                message=f"CLI session {session_id} not found.",
+                request_id=context.request_id,
+            )
+        if record.revoked:
+            return record
+        updated = CliAccessSessionRecord(
+            session_id=record.session_id,
+            tenant_id=record.tenant_id,
+            user_id=record.user_id,
+            created_by_user_id=record.created_by_user_id,
+            token_hash=record.token_hash,
+            token_salt=record.token_salt,
+            scopes=record.scopes,
+            created_at=record.created_at,
+            expires_at=record.expires_at,
+            revoked_at=utc_now(),
+            last_used_at=record.last_used_at,
+        )
+        self._cli_access_sessions[session_id] = updated
+        return updated
+
+    def get_cli_session(self, *, session_id: str) -> CliAccessSessionRecord | None:
+        return self._cli_access_sessions.get(session_id)
+
+    def _refresh_cli_device_authorization(self, *, record: CliDeviceAuthorizationRecord) -> CliDeviceAuthorizationRecord:
+        if record.status not in {"pending", "approved"}:
+            return record
+        if _utc_now_dt() < _parse_utc_datetime_required(record.expires_at):
+            return record
+        expired = CliDeviceAuthorizationRecord(
+            flow_id=record.flow_id,
+            device_code_hash=record.device_code_hash,
+            user_code_hash=record.user_code_hash,
+            scopes=record.scopes,
+            status="expired",
+            created_at=record.created_at,
+            expires_at=record.expires_at,
+            verification_uri=record.verification_uri,
+            polling_interval_seconds=record.polling_interval_seconds,
+            approved_tenant_id=record.approved_tenant_id,
+            approved_user_id=record.approved_user_id,
+            created_by_user_id=record.created_by_user_id,
+            approved_at=record.approved_at,
+            consumed_at=record.consumed_at,
+            session_id=record.session_id,
+        )
+        self._cli_device_authorizations[record.flow_id] = expired
+        self._cli_device_code_index.pop(record.device_code_hash, None)
+        self._cli_user_code_index.pop(record.user_code_hash, None)
+        return expired
 
     def create_run_share_invite(
         self,
@@ -1350,6 +1864,80 @@ def _hash_secret(*, secret: str, salt: str) -> str:
     return digest.hex()
 
 
+def _sha256_hex(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _normalize_cli_scopes(*, scopes: list[str] | tuple[str, ...] | None) -> tuple[CliScope, ...]:
+    if scopes is None or len(scopes) == 0:
+        return ValidationIdentityService._CLI_DEFAULT_SCOPES
+    normalized: list[CliScope] = []
+    seen: set[str] = set()
+    for raw_scope in scopes:
+        scope = raw_scope.strip().lower()
+        if scope == "":
+            continue
+        if scope not in ValidationIdentityService._CLI_ALLOWED_SCOPES:
+            allowed = ", ".join(ValidationIdentityService._CLI_ALLOWED_SCOPES)
+            raise ValueError(f"scope must be one of: {allowed}.")
+        if scope in seen:
+            continue
+        seen.add(scope)
+        normalized.append(scope)  # type: ignore[arg-type]
+    if not normalized:
+        return ValidationIdentityService._CLI_DEFAULT_SCOPES
+    return tuple(normalized)
+
+
+def _normalize_cli_user_code(value: str) -> str:
+    normalized = value.strip().upper().replace(" ", "").replace("_", "-")
+    compact = normalized.replace("-", "")
+    if len(compact) != ValidationIdentityService._CLI_USER_CODE_LENGTH:
+        raise ValueError("userCode must be in the expected 8-character format.")
+    if any(char not in ValidationIdentityService._CLI_USER_CODE_ALPHABET for char in compact):
+        raise ValueError("userCode must contain only alphanumeric device-code characters.")
+    return f"{compact[:4]}-{compact[4:]}"
+
+
+def _generate_cli_user_code() -> str:
+    alphabet = ValidationIdentityService._CLI_USER_CODE_ALPHABET
+    compact = "".join(secrets.choice(alphabet) for _ in range(ValidationIdentityService._CLI_USER_CODE_LENGTH))
+    return f"{compact[:4]}-{compact[4:]}"
+
+
+def _cli_device_verification_uri() -> str:
+    configured = os.getenv("PLATFORM_CLI_DEVICE_VERIFICATION_URI")
+    normalized = configured.strip() if isinstance(configured, str) else ""
+    if normalized:
+        return normalized
+    return "https://trade-nexus.local/cli/device"
+
+
+def _assert_identity_header_match(
+    *,
+    expected_value: str,
+    provided_value: str | None,
+    header_name: str,
+    request_id: str,
+) -> None:
+    if provided_value is None:
+        return
+    normalized = provided_value.strip()
+    if normalized == "" or normalized == expected_value:
+        return
+    raise PlatformAPIError(
+        status_code=401,
+        code="AUTH_IDENTITY_MISMATCH",
+        message=f"{header_name} does not match authenticated identity.",
+        request_id=request_id,
+        details={"header": header_name, "reason": "identity_header_mismatch"},
+    )
+
+
+def _utc_now_dt() -> datetime:
+    return datetime.now(tz=UTC)
+
+
 def _normalize_email(value: str) -> str:
     normalized = value.strip().lower()
     if "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
@@ -1415,6 +2003,13 @@ def _parse_utc_datetime(value: str) -> datetime | None:
     return parsed.astimezone(UTC)
 
 
+def _parse_utc_datetime_required(value: str) -> datetime:
+    parsed = _parse_utc_datetime(value)
+    if parsed is None:
+        raise ValueError(f"Expected ISO8601 datetime, got {value!r}.")
+    return parsed
+
+
 def _resolve_share_invite_expiration(*, expires_at: str | None, request_id: str) -> str:
     now = datetime.now(tz=UTC)
     normalized = (expires_at or "").strip()
@@ -1456,6 +2051,12 @@ def _to_utc(value: datetime) -> str:
 
 __all__ = [
     "ActorType",
+    "CliAccessSessionRecord",
+    "CliAccessTokenIdentity",
+    "CliAccessTokenIssued",
+    "CliDeviceAuthorizationRecord",
+    "CliDeviceAuthorizationStart",
+    "CliScope",
     "BotRegistrationResult",
     "RegistrationMethod",
     "RuntimeActorIdentity",

@@ -328,16 +328,8 @@ jobs:
             const hasGreptileReview = reviewActors.some((actor) =>
               actor.startsWith("greptile-apps"),
             );
-            if (!hasGreptileReview) {
-              core.setFailed("Missing required Greptile review submission.");
-              return;
-            }
-            const hasCursorReview = reviewActors.some((actor) =>
-              actor.startsWith("cursor"),
-            );
-
-            if (hasCursorReview) {
-              core.info("Cursor review submission detected; accepting review signal without waiting for cursor check-run completion.");
+            if (hasGreptileReview) {
+              core.info("Greptile review submission detected.");
               core.info("Review governance checks passed.");
               return;
             }
@@ -346,10 +338,9 @@ jobs:
               run.name.toLowerCase().includes("cursor"),
             );
             if (cursorRuns.length === 0) {
-              core.info(
-                "No cursor review/check-run detected for this PR scope; accepting Greptile-only review signal.",
+              core.setFailed(
+                "Missing required review signal: expected Greptile review submission or a completed Cursor check-run with success/neutral/skipped conclusion.",
               );
-              core.info("Review governance checks passed.");
               return;
             }
 
@@ -362,10 +353,9 @@ jobs:
               const checkRuns = await getCheckRuns();
               cursorRuns = checkRuns.filter((run) => run.name.toLowerCase().includes("cursor"));
               if (cursorRuns.length === 0) {
-                core.info(
-                  "Cursor check-run no longer present; accepting Greptile-only review signal.",
+                core.setFailed(
+                  "Missing required review signal: expected Greptile review submission or a completed Cursor check-run with success/neutral/skipped conclusion.",
                 );
-                core.info("Review governance checks passed.");
                 return;
               }
 
@@ -390,7 +380,9 @@ jobs:
               const statuses = cursorRuns.length
                 ? cursorRuns.map((run) => `${run.name}:${run.status}/${run.conclusion || "null"}`).join(", ")
                 : "no-cursor-check-runs";
-              core.setFailed(`Cursor check has not reached a passing conclusion within timeout. Current status: ${statuses}`);
+              core.setFailed(
+                `Missing required review signal: expected Greptile review submission or a completed Cursor check-run with success/neutral/skipped conclusion. Current cursor status: ${statuses}`,
+              );
               return;
             }
 

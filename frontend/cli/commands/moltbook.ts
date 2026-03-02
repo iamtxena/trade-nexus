@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -75,6 +75,127 @@ function sanitizeStrategySegment(value: string): string {
     .replace(/[^a-zA-Z0-9]/g, '_')
     .replace(/_+/g, '_')
     .replace(/^_+|_+$/g, '');
+}
+
+type StrategyCreateSpawnResult = {
+  stdout: NodeJS.ReadableStream | null;
+  stderr: NodeJS.ReadableStream | null;
+  on(event: 'error', listener: (error: Error) => void): StrategyCreateSpawnResult;
+  on(
+    event: 'close',
+    listener: (code: number | null, signal: NodeJS.Signals | null) => void,
+  ): StrategyCreateSpawnResult;
+};
+
+type StrategyCreateSpawn = (
+  command: string,
+  args: string[],
+  options: {
+    cwd: string;
+    stdio: 'pipe';
+    timeout: number;
+  },
+) => StrategyCreateSpawnResult;
+
+function stripAnsi(value: string): string {
+  let sanitized = '';
+  let i = 0;
+
+  while (i < value.length) {
+    if (value[i] !== '\u001b') {
+      sanitized += value[i];
+      i += 1;
+      continue;
+    }
+
+    i += 1;
+    if (value[i] !== '[') {
+      continue;
+    }
+
+    i += 1;
+    while (i < value.length) {
+      const code = value.charCodeAt(i);
+      if (code >= 0x40 && code <= 0x7e) {
+        i += 1;
+        break;
+      }
+      i += 1;
+    }
+  }
+
+  return sanitized;
+}
+
+function toTextChunk(chunk: unknown): string {
+  if (typeof chunk === 'string') return chunk;
+  if (chunk instanceof Uint8Array) return Buffer.from(chunk).toString('utf-8');
+  return String(chunk);
+}
+
+export function extractStrategyIdFromOutput(commandOutput: string): string | null {
+  const output = stripAnsi(commandOutput);
+  const strategyIdMatch = output.match(/\bID:\s*([a-f0-9-]+)/i);
+  return strategyIdMatch ? strategyIdMatch[1] : null;
+}
+
+export async function runStrategyCreateCommand(
+  strategyDesc: string,
+  strategyName: string,
+  options?: {
+    cwd?: string;
+    spawnCommand?: StrategyCreateSpawn;
+  },
+): Promise<string> {
+  const cwd = options?.cwd ?? '.';
+  const spawnCommand = options?.spawnCommand ?? spawn;
+
+  return await new Promise((resolve, reject) => {
+    let child: StrategyCreateSpawnResult;
+    try {
+      child = spawnCommand(
+        'bun',
+        [
+          'run',
+          'nexus',
+          'strategy',
+          'create',
+          '--description',
+          strategyDesc,
+          '--name',
+          strategyName,
+        ],
+        {
+          cwd,
+          stdio: 'pipe',
+          timeout: 310000,
+        },
+      );
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    let commandOutput = '';
+    child.stdout?.on('data', (chunk) => {
+      commandOutput += toTextChunk(chunk);
+    });
+    child.stderr?.on('data', (chunk) => {
+      commandOutput += toTextChunk(chunk);
+    });
+
+    child.on('error', reject);
+    child.on('close', (code, signal) => {
+      if (code === 0) {
+        resolve(commandOutput);
+        return;
+      }
+
+      const signalPart = signal ? ` (signal ${signal})` : '';
+      const fallback = `Command failed with exit code ${code ?? 'unknown'}${signalPart}`;
+      reject(new Error(commandOutput || fallback));
+    });
+  });
 }
 
 export async function moltbookCommand(args: string[]) {
@@ -276,30 +397,12 @@ async function replicateStrategy(args: string[]) {
 
   try {
     const strategyName = `${sanitizeStrategySegment(post.author.name)}_${sanitizeStrategySegment(post.title).substring(0, 30)}`;
-    const result = spawnSync(
-      'bun',
-      ['run', 'nexus', 'strategy', 'create', '--description', strategyDesc, '--name', strategyName],
-      {
-        cwd: process.env.TRADE_NEXUS_PATH || '.',
-        encoding: 'utf-8',
-        timeout: 310000,
-      },
-    );
-
-    if (result.error) {
-      throw result.error;
-    }
-
-    const commandOutput = `${result.stdout ?? ''}${result.stderr ?? ''}`;
-    if (result.status !== 0) {
-      throw new Error(
-        commandOutput || `Command failed with exit code ${result.status ?? 'unknown'}`,
-      );
-    }
+    const commandOutput = await runStrategyCreateCommand(strategyDesc, strategyName, {
+      cwd: process.env.TRADE_NEXUS_PATH || '.',
+    });
 
     // Extract strategy ID
-    const strategyIdMatch = commandOutput.match(/ID: ([a-f0-9-]+)/i);
-    const strategyId = strategyIdMatch ? strategyIdMatch[1] : null;
+    const strategyId = extractStrategyIdFromOutput(commandOutput);
 
     if (!strategyId) {
       throw new Error('Could not extract strategy ID from output');

@@ -15,7 +15,6 @@ interface ValidationPlatformCallOptions {
 }
 
 const VALIDATION_RUN_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
-const VALIDATION_CLI_SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 function isDeployedEnvironment(): boolean {
   const vercelEnv = process.env.VERCEL_ENV;
@@ -69,7 +68,7 @@ export function isValidValidationRunId(runId: string): boolean {
 }
 
 export function isValidValidationCliSessionId(sessionId: string): boolean {
-  return VALIDATION_CLI_SESSION_ID_PATTERN.test(sessionId);
+  return VALIDATION_RUN_ID_PATTERN.test(sessionId);
 }
 
 export async function callValidationPlatform(

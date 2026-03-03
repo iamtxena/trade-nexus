@@ -195,25 +195,45 @@ export default function CliAccessPage() {
     setErrorMessage(null);
     setNoticeMessage(null);
 
-    const failedSessions: string[] = [];
-    for (const session of sessions) {
-      const response = await fetch(`/api/validation/cli-access/sessions/${session.id}/revoke`, {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        failedSessions.push(session.id);
-      }
-    }
-
-    await loadSessions();
-    if (failedSessions.length > 0) {
-      setErrorMessage(
-        `Failed to revoke ${failedSessions.length} session(s): ${failedSessions.join(', ')}.`,
+    const sessionsToRevoke = [...sessions];
+    try {
+      const revokeResults = await Promise.allSettled(
+        sessionsToRevoke.map(async (session) => {
+          const response = await fetch(`/api/validation/cli-access/sessions/${session.id}/revoke`, {
+            method: 'POST',
+          });
+          const payload = await response.json().catch(() => null);
+          if (!response.ok) {
+            throw new Error(extractErrorMessage(payload, `Revoke failed (${response.status})`));
+          }
+        }),
       );
-    } else {
-      setNoticeMessage('Revoked all active CLI sessions.');
+
+      const failedSessions = revokeResults.flatMap((result, index) => {
+        if (result.status === 'fulfilled') {
+          return [];
+        }
+        const sessionId = sessionsToRevoke[index]?.id ?? `session-${index + 1}`;
+        const reason =
+          result.reason instanceof Error && result.reason.message.length > 0
+            ? ` (${result.reason.message})`
+            : '';
+        return [`${sessionId}${reason}`];
+      });
+
+      await loadSessions();
+      if (failedSessions.length > 0) {
+        setErrorMessage(
+          `Failed to revoke ${failedSessions.length} session(s): ${failedSessions.join(', ')}.`,
+        );
+      } else {
+        setNoticeMessage('Revoked all active CLI sessions.');
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to revoke sessions.');
+    } finally {
+      setIsBulkRevoking(false);
     }
-    setIsBulkRevoking(false);
   }
 
   function handleAddPendingRequest(event: FormEvent<HTMLFormElement>) {

@@ -9,7 +9,6 @@ export const PROTECTED_ROUTE_PATTERNS = [
   '/agents(.*)',
   '/portfolio(.*)',
   '/api/validation(.*)',
-  '/api/validation/cli-access(.*)',
   '/api/shared-validation(.*)',
   '/api/strategies(.*)',
   '/api/agents(.*)',

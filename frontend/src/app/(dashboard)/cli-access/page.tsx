@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   Trash2,
 } from 'lucide-react';
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -49,7 +49,7 @@ function extractErrorMessage(payload: unknown, fallback: string): string {
   return fallback;
 }
 
-export default function CliAccessPage() {
+function CliAccessPageContent() {
   const { userId } = useAuth();
   const searchParams = useSearchParams();
   const pendingOwnerScope = userId ?? 'anonymous';
@@ -504,5 +504,19 @@ export default function CliAccessPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function CliAccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">
+          Loading CLI Access...
+        </div>
+      }
+    >
+      <CliAccessPageContent />
+    </Suspense>
   );
 }

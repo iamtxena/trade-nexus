@@ -197,7 +197,12 @@ async def _request_context(
                 code="CLI_AUTH_SCOPE_FORBIDDEN",
                 message=f"CLI token is missing required scope: {required_scope}.",
                 request_id=request_id,
-                details={"requiredScope": required_scope, "scopes": sorted(normalized_scopes)},
+                details={
+                    "requiredScope": required_scope,
+                    "scopes": sorted(normalized_scopes),
+                    "path": _normalized_request_path(request.url.path),
+                    "method": request.method.upper(),
+                },
             )
 
     return RequestContext(

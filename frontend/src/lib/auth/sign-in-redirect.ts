@@ -8,7 +8,7 @@ function toSingleValue(value: string | string[] | null | undefined): string | nu
 }
 
 function toInAppPath(value: string): string | null {
-  if (value.startsWith('/')) {
+  if (value.startsWith('/') && !value.startsWith('//')) {
     return value;
   }
 

@@ -18,5 +18,6 @@ describe('resolveSignInForceRedirectUrl', () => {
   test('falls back to dashboard for missing or invalid redirect url', () => {
     expect(resolveSignInForceRedirectUrl(null)).toBe('/dashboard');
     expect(resolveSignInForceRedirectUrl('not-a-valid-url')).toBe('/dashboard');
+    expect(resolveSignInForceRedirectUrl('//evil.example/path')).toBe('/dashboard');
   });
 });

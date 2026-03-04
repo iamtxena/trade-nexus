@@ -27,6 +27,10 @@
 | LONA_AGENT_TOKEN | secretRef: lona-agent-token | Yes | — | Lona auth (30-day TTL) |
 | LIVE_ENGINE_URL | plain | Yes | `https://live.lona.agency` | Live engine endpoint |
 | LIVE_ENGINE_SERVICE_API_KEY | secretRef: live-engine-service-api-key | Yes | — | Live engine auth |
+| PLATFORM_CLI_DEVICE_VERIFICATION_URI | plain | Yes | `https://trade-nexus.lona.agency/cli-access` | CLI device-flow verification URL shown to users. **Canonical key.** Legacy alias `CLI_AUTH_VERIFICATION_URI` is accepted at lower precedence. |
+| CLI_AUTH_DEVICE_CODE_TTL_SECONDS | plain | No | `900` | Device code expiry (seconds) |
+| CLI_AUTH_ACCESS_TOKEN_TTL_SECONDS | plain | No | `3600` | CLI access token TTL (seconds) |
+| CLI_AUTH_POLL_INTERVAL_SECONDS | plain | No | `5` | Device-flow poll interval (seconds) |
 
 > **Note**: This table covers *deployed* Container App variables only. Local development requires additional variables (e.g., `LONA_AGENT_REGISTRATION_SECRET`, `INITIAL_CAPITAL`, `MAX_POSITION_PCT`, `MAX_DRAWDOWN_PCT`, `TRADER_DATA_*`). See `backend/.env.example` for the full local dev set.
 
@@ -106,3 +110,4 @@
 | #230 | Web review lane | Frontend Supabase vars | **Available** |
 | #231 | CLI validation commands | Backend env vars | **Available** |
 | #333 | Credentialed validation proxy smoke | `VALIDATION_PROXY_SMOKE_BASE_URL`, `VALIDATION_PROXY_SMOKE_SHARED_KEY`, `VALIDATION_PROXY_SMOKE_PARTNER_KEY`, `VALIDATION_PROXY_SMOKE_PARTNER_SECRET`, `VALIDATION_PROXY_SMOKE_OWNER_EMAIL`, `VALIDATION_PROXY_SMOKE_BOT_NAME` (optional), `VALIDATION_PROXY_SMOKE_API_KEY` (optional fallback) | **Available** |
+| — | CLI device-flow verification URI | `PLATFORM_CLI_DEVICE_VERIFICATION_URI` (canonical), `CLI_AUTH_VERIFICATION_URI` (legacy alias) | **Available** |

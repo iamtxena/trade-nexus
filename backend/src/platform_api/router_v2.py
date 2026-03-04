@@ -105,6 +105,24 @@ _identity_service = ValidationIdentityService(store=router_v1_module._store)
 _validation_service = ValidationV2Service(store=router_v1_module._store, identity_service=_identity_service)
 
 
+def resolve_cli_access_token_identity(
+    *,
+    access_token: str | None,
+    tenant_header: str | None,
+    user_header: str | None,
+    request_id: str,
+    update_last_used: bool = True,
+):
+    """Public wrapper for CLI access token identity resolution."""
+    return _identity_service.resolve_cli_access_token(
+        access_token=access_token,
+        tenant_header=tenant_header,
+        user_header=user_header,
+        request_id=request_id,
+        update_last_used=update_last_used,
+    )
+
+
 async def _request_context(
     request: Request,
     x_request_id: str | None = Header(default=None, alias="X-Request-Id"),

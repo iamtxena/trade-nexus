@@ -2,6 +2,7 @@
 
 import logging
 import os
+from typing import Any
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -138,6 +139,32 @@ def _parse_bearer_token(authorization: str | None) -> str | None:
     return normalized if normalized else None
 
 
+def _resolve_cli_identity_from_bearer(*, request: Request, request_id: str) -> tuple[Any | None, PlatformAPIError | None]:
+    bearer_token = _parse_bearer_token(request.headers.get("Authorization"))
+    if not (isinstance(bearer_token, str) and bearer_token.startswith("tnx.cli.")):
+        return None, None
+    try:
+        cli_identity = router_v2_module.resolve_cli_access_token_identity(
+            access_token=bearer_token,
+            tenant_header=request.headers.get("X-Tenant-Id"),
+            user_header=request.headers.get("X-User-Id"),
+            request_id=request_id,
+        )
+    except PlatformAPIError as exc:
+        return None, exc
+    return cli_identity, None
+
+
+def _apply_cli_identity_to_request_state(*, request: Request, cli_identity: Any) -> None:
+    request.state.tenant_id = cli_identity.tenant_id
+    request.state.user_id = cli_identity.user_id
+    request.state.user_email_authenticated = False
+    request.state.user_email = None
+    request.state.auth_method = "cli_token"
+    request.state.cli_scopes = cli_identity.scopes
+    request.state.cli_session_id = cli_identity.session_id
+
+
 @app.middleware("http")
 async def platform_api_observability_context_middleware(request: Request, call_next):
     """Attach request correlation identifiers and emit structured request logs."""
@@ -156,28 +183,42 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                     request_id=request.state.request_id,
                 )
             except PlatformAPIError as exc:
-                request.state.tenant_id = "tenant-unauthenticated"
-                request.state.user_id = "user-unauthenticated"
-                request.state.user_email_authenticated = False
-                request.state.user_email = None
-                request.state.auth_method = "none"
-                log_request_event(
-                    logger,
-                    level=logging.WARNING,
-                    message="Platform API request rejected.",
-                    request=request,
-                    component="api",
-                    operation="request_rejected",
-                    status_code=exc.status_code,
-                    errorCode=exc.code,
-                    method=request.method,
+                final_exc = exc
+                cli_identity = None
+                if exc.code == "AUTH_UNAUTHORIZED":
+                    cli_identity, cli_error = _resolve_cli_identity_from_bearer(
+                        request=request,
+                        request_id=request.state.request_id,
+                    )
+                    if cli_error is not None:
+                        final_exc = cli_error
+                if cli_identity is None:
+                    request.state.tenant_id = "tenant-unauthenticated"
+                    request.state.user_id = "user-unauthenticated"
+                    request.state.user_email_authenticated = False
+                    request.state.user_email = None
+                    request.state.auth_method = "none"
+                    log_request_event(
+                        logger,
+                        level=logging.WARNING,
+                        message="Platform API request rejected.",
+                        request=request,
+                        component="api",
+                        operation="request_rejected",
+                        status_code=final_exc.status_code,
+                        errorCode=final_exc.code,
+                        method=request.method,
+                    )
+                    return await platform_api_error_handler(request, final_exc)
+                _apply_cli_identity_to_request_state(request=request, cli_identity=cli_identity)
+            else:
+                request.state.tenant_id = identity.tenant_id
+                request.state.user_id = identity.user_id
+                request.state.user_email_authenticated = bool(identity.user_email)
+                request.state.user_email = identity.user_email
+                request.state.auth_method = (
+                    "jwt" if _parse_bearer_token(request.headers.get("Authorization")) else "api_key"
                 )
-                return await platform_api_error_handler(request, exc)
-            request.state.tenant_id = identity.tenant_id
-            request.state.user_id = identity.user_id
-            request.state.user_email_authenticated = bool(identity.user_email)
-            request.state.user_email = identity.user_email
-            request.state.auth_method = "jwt" if _parse_bearer_token(request.headers.get("Authorization")) else "api_key"
         elif _is_v2_validation_request(request.url.path):
             is_public_registration_route = _is_v2_validation_public_registration_request(request.url.path)
             has_auth_headers = bool(
@@ -224,22 +265,15 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                         request_id=request.state.request_id,
                     )
                 except PlatformAPIError as exc:
-                    bearer_token = _parse_bearer_token(request.headers.get("Authorization"))
                     cli_identity = None
-                    if (
-                        exc.code == "AUTH_UNAUTHORIZED"
-                        and isinstance(bearer_token, str)
-                        and bearer_token.startswith("tnx.cli.")
-                    ):
-                        try:
-                            cli_identity = router_v2_module._identity_service.resolve_cli_access_token(  # noqa: SLF001
-                                access_token=bearer_token,
-                                tenant_header=request.headers.get("X-Tenant-Id"),
-                                user_header=request.headers.get("X-User-Id"),
-                                request_id=request.state.request_id,
-                            )
-                        except PlatformAPIError as cli_exc:
-                            exc = cli_exc
+                    final_exc = exc
+                    if exc.code == "AUTH_UNAUTHORIZED":
+                        cli_identity, cli_error = _resolve_cli_identity_from_bearer(
+                            request=request,
+                            request_id=request.state.request_id,
+                        )
+                        if cli_error is not None:
+                            final_exc = cli_error
                     if cli_identity is None:
                         request.state.tenant_id = "tenant-unauthenticated"
                         request.state.user_id = "user-unauthenticated"
@@ -253,18 +287,12 @@ async def platform_api_observability_context_middleware(request: Request, call_n
                             request=request,
                             component="api",
                             operation="request_rejected",
-                            status_code=exc.status_code,
-                            errorCode=exc.code,
+                            status_code=final_exc.status_code,
+                            errorCode=final_exc.code,
                             method=request.method,
                         )
-                        return await platform_api_error_handler(request, exc)
-                    request.state.tenant_id = cli_identity.tenant_id
-                    request.state.user_id = cli_identity.user_id
-                    request.state.user_email_authenticated = False
-                    request.state.user_email = None
-                    request.state.auth_method = "cli_token"
-                    request.state.cli_scopes = cli_identity.scopes
-                    request.state.cli_session_id = cli_identity.session_id
+                        return await platform_api_error_handler(request, final_exc)
+                    _apply_cli_identity_to_request_state(request=request, cli_identity=cli_identity)
                 else:
                     request.state.tenant_id = identity.tenant_id
                     request.state.user_id = identity.user_id

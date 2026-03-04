@@ -17,6 +17,7 @@ from src.platform_api.adapters.data_knowledge_adapter import (
 )
 from src.platform_api.adapters.execution_adapter import InMemoryExecutionAdapter, LiveEngineExecutionAdapter
 from src.platform_api.adapters.lona_adapter import LonaAdapterBaseline
+from src.platform_api.errors import PlatformAPIError
 from src.platform_api.knowledge.ingestion import KnowledgeIngestionPipeline
 from src.platform_api.knowledge.query import KnowledgeQueryService
 from src.platform_api.schemas_v1 import (
@@ -123,6 +124,38 @@ _execution_service = ExecutionService(
 _dataset_service = DatasetOrchestrator(store=_store, data_bridge_adapter=_data_bridge_adapter)
 
 
+def _request_auth_method(request: Request) -> str:
+    raw = getattr(request.state, "auth_method", None)
+    return raw if isinstance(raw, str) else "none"
+
+
+def _normalized_request_path(path: str) -> str:
+    normalized = path.strip()
+    if normalized == "":
+        return "/"
+    return normalized if normalized == "/" else normalized.rstrip("/")
+
+
+def _is_single_resource_path(*, path: str, prefix: str) -> bool:
+    if not path.startswith(prefix):
+        return False
+    candidate = path[len(prefix):]
+    return candidate != "" and "/" not in candidate
+
+
+def _required_cli_scope(*, path: str, method: str) -> str | None:
+    normalized_path = _normalized_request_path(path)
+    if method.upper() != "GET":
+        return None
+    if normalized_path == "/v1/strategies" or _is_single_resource_path(path=normalized_path, prefix="/v1/strategies/"):
+        return "strategy:read"
+    if _is_single_resource_path(path=normalized_path, prefix="/v1/backtests/"):
+        return "backtest:read"
+    if normalized_path == "/v1/deployments" or _is_single_resource_path(path=normalized_path, prefix="/v1/deployments/"):
+        return "deployment:read"
+    return None
+
+
 async def _request_context(
     request: Request,
     x_request_id: str | None = Header(default=None, alias="X-Request-Id"),
@@ -136,6 +169,42 @@ async def _request_context(
     user_id = state_user_id if isinstance(state_user_id, str) and state_user_id.strip() else "user-local"
     request.state.tenant_id = tenant_id
     request.state.user_id = user_id
+
+    if _request_auth_method(request) == "cli_token":
+        raw_scopes = getattr(request.state, "cli_scopes", ())
+        normalized_scopes = {
+            scope.strip().lower()
+            for scope in raw_scopes
+            if isinstance(scope, str) and scope.strip()
+        }
+        required_scope = _required_cli_scope(path=request.url.path, method=request.method)
+        if required_scope is None:
+            raise PlatformAPIError(
+                status_code=403,
+                code="CLI_AUTH_SCOPE_FORBIDDEN",
+                message="CLI token is not authorized for this endpoint.",
+                request_id=request_id,
+                details={
+                    "requiredScope": None,
+                    "scopes": sorted(normalized_scopes),
+                    "path": _normalized_request_path(request.url.path),
+                    "method": request.method.upper(),
+                },
+            )
+        if required_scope not in normalized_scopes:
+            raise PlatformAPIError(
+                status_code=403,
+                code="CLI_AUTH_SCOPE_FORBIDDEN",
+                message=f"CLI token is missing required scope: {required_scope}.",
+                request_id=request_id,
+                details={
+                    "requiredScope": required_scope,
+                    "scopes": sorted(normalized_scopes),
+                    "path": _normalized_request_path(request.url.path),
+                    "method": request.method.upper(),
+                },
+            )
+
     return RequestContext(
         request_id=request_id,
         tenant_id=tenant_id,

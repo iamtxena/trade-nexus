@@ -322,7 +322,12 @@ export interface CreateValidationBotKeyRevocationPayload {
   reason?: string;
 }
 
-export type ValidationCliScope = 'validation:read' | 'validation:write';
+export type ValidationCliScope =
+  | 'validation:read'
+  | 'validation:write'
+  | 'strategy:read'
+  | 'backtest:read'
+  | 'deployment:read';
 
 export interface ValidationCliSession {
   id: string;

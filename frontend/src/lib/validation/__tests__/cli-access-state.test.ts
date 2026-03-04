@@ -3,11 +3,13 @@ import { describe, expect, test } from 'bun:test';
 import type { ValidationCliSession } from '@/lib/validation/types';
 
 import {
+  buildValidationCliPendingApprovalRows,
   formatValidationCliTimestamp,
   mapValidationCliSessionListResponse,
   normalizeValidationCliUserCode,
   readPendingCliDeviceRequests,
   removePendingCliDeviceRequest,
+  resolveValidationCliUserCodeImport,
   upsertPendingCliDeviceRequest,
 } from '../cli-access-state';
 
@@ -76,6 +78,61 @@ describe('pending request storage', () => {
       JSON.stringify([{ userCode: 'invalid', requestedAt: 'not-a-time' }]),
     );
     expect(readPendingCliDeviceRequests('user-123', storage)).toEqual([]);
+  });
+
+  test('auto-queue request appears in pending rows with approve action visible', () => {
+    const storage = new MemoryStorage();
+    upsertPendingCliDeviceRequest('user-123', 'ABCD-2345', storage);
+
+    const pendingRows = buildValidationCliPendingApprovalRows(
+      readPendingCliDeviceRequests('user-123', storage),
+    );
+    expect(pendingRows).toHaveLength(1);
+    expect(pendingRows[0]).toMatchObject({
+      userCode: 'ABCD-2345',
+      showApproveAction: true,
+    });
+  });
+});
+
+describe('resolveValidationCliUserCodeImport', () => {
+  test('re-queues user_code when owner scope changes after sign-in', () => {
+    const importedAsAnonymous = resolveValidationCliUserCodeImport({
+      ownerScope: 'anonymous',
+      urlUserCode: 'ABCD-2345',
+      previousImportedKey: null,
+    });
+    expect(importedAsAnonymous).toMatchObject({
+      normalizedUserCode: 'ABCD-2345',
+      shouldQueue: true,
+    });
+
+    const importedAfterSignIn = resolveValidationCliUserCodeImport({
+      ownerScope: 'user-123',
+      urlUserCode: 'ABCD-2345',
+      previousImportedKey: importedAsAnonymous.nextImportedKey,
+    });
+    expect(importedAfterSignIn).toMatchObject({
+      normalizedUserCode: 'ABCD-2345',
+      shouldQueue: true,
+    });
+  });
+
+  test('skips duplicate queue for same owner scope and code', () => {
+    const firstImport = resolveValidationCliUserCodeImport({
+      ownerScope: 'user-123',
+      urlUserCode: 'ABCD-2345',
+      previousImportedKey: null,
+    });
+    expect(firstImport.shouldQueue).toBe(true);
+
+    const duplicateImport = resolveValidationCliUserCodeImport({
+      ownerScope: 'user-123',
+      urlUserCode: 'ABCD-2345',
+      previousImportedKey: firstImport.nextImportedKey,
+    });
+    expect(duplicateImport.shouldQueue).toBe(false);
+    expect(duplicateImport.nextImportedKey).toBe(firstImport.nextImportedKey);
   });
 });
 

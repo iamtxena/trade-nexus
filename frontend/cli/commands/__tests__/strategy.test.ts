@@ -127,7 +127,7 @@ describe('strategy command backtest flags', () => {
     expect(body.strategy_id).toBe('strat-legacy');
     expect(body.data_ids).toEqual(['sym-legacy']);
 
-    const logOutput = consoleLogSpy.mock.calls.map(([line]) => String(line)).join('\n');
+    const logOutput = consoleLogSpy.mock.calls.map(([line]: [unknown]) => String(line)).join('\n');
     expect(logOutput).toContain('Using legacy --id for backtest strategy. Prefer --strategy-id.');
     expect(logOutput).toContain('Using legacy --data for backtest symbol. Prefer --symbol-id.');
   });
@@ -147,7 +147,9 @@ describe('strategy command backtest flags', () => {
       ]),
     ).rejects.toThrow('process.exit(1)');
 
-    const errorOutput = consoleErrorSpy.mock.calls.map(([line]) => String(line)).join('\n');
+    const errorOutput = consoleErrorSpy.mock.calls
+      .map(([line]: [unknown]) => String(line))
+      .join('\n');
     expect(errorOutput).toContain(
       'Required: --strategy-id <strategyId> (alias: --id) --symbol-id <dataId> (alias: --data) --start YYYY-MM-DD --end YYYY-MM-DD',
     );
@@ -172,7 +174,9 @@ describe('strategy command backtest flags', () => {
       ]),
     ).rejects.toThrow('process.exit(1)');
 
-    const errorOutput = consoleErrorSpy.mock.calls.map(([line]) => String(line)).join('\n');
+    const errorOutput = consoleErrorSpy.mock.calls
+      .map(([line]: [unknown]) => String(line))
+      .join('\n');
     expect(errorOutput).toContain('Conflicting values for --strategy-id and --id');
   });
 
@@ -195,7 +199,9 @@ describe('strategy command backtest flags', () => {
       ]),
     ).rejects.toThrow('process.exit(1)');
 
-    const errorOutput = consoleErrorSpy.mock.calls.map(([line]) => String(line)).join('\n');
+    const errorOutput = consoleErrorSpy.mock.calls
+      .map(([line]: [unknown]) => String(line))
+      .join('\n');
     expect(errorOutput).toContain('Conflicting values for --symbol-id and --data');
   });
 
@@ -238,7 +244,9 @@ describe('strategy command backtest flags', () => {
       ]),
     ).rejects.toThrow('process.exit(1)');
 
-    const errorOutput = consoleErrorSpy.mock.calls.map(([line]) => String(line)).join('\n');
+    const errorOutput = consoleErrorSpy.mock.calls
+      .map(([line]: [unknown]) => String(line))
+      .join('\n');
     expect(errorOutput).toContain('Required:');
   });
 });

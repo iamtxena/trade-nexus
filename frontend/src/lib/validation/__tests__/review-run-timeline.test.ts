@@ -57,6 +57,22 @@ const ARTIFACT: ValidationRunArtifact = {
     status: 'conditional_pass',
     summary: 'Needs tighter risk limits before release.',
     findings: [],
+    budget: {
+      profile: 'STANDARD',
+      limits: {
+        maxRuntimeSeconds: 300,
+        maxTokens: 12_000,
+        maxToolCalls: 40,
+        maxFindings: 20,
+      },
+      usage: {
+        runtimeSeconds: 45,
+        tokensUsed: 2_800,
+        toolCallsUsed: 8,
+      },
+      withinBudget: true,
+      breachReason: null,
+    },
   },
   traderReview: {
     required: true,

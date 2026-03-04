@@ -8,6 +8,16 @@ export interface ValidationCliPendingDeviceRequest {
   requestedAt: string;
 }
 
+export interface ValidationCliPendingApprovalRow extends ValidationCliPendingDeviceRequest {
+  showApproveAction: true;
+}
+
+export interface ValidationCliUserCodeImportResolution {
+  normalizedUserCode: string | null;
+  nextImportedKey: string | null;
+  shouldQueue: boolean;
+}
+
 type CliAccessStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 const CLI_PENDING_REQUEST_KEY_PREFIX = 'trade-nexus.validation.cli-access.pending.v1';
@@ -42,6 +52,10 @@ function normalizeOwnerScope(ownerScope: string | null | undefined): string {
 
 function pendingStorageKey(ownerScope: string | null | undefined): string {
   return `${CLI_PENDING_REQUEST_KEY_PREFIX}:${normalizeOwnerScope(ownerScope)}`;
+}
+
+function importedUserCodeKey(ownerScope: string | null | undefined, userCode: string): string {
+  return `${normalizeOwnerScope(ownerScope)}:${userCode}`;
 }
 
 function isPendingRequest(value: unknown): value is ValidationCliPendingDeviceRequest {
@@ -84,6 +98,45 @@ export function formatValidationCliTimestamp(value: string | null | undefined): 
   return `${iso.slice(0, 19).replace('T', ' ')} UTC`;
 }
 
+export function resolveValidationCliUserCodeImport(params: {
+  ownerScope: string | null | undefined;
+  urlUserCode: string | null | undefined;
+  previousImportedKey: string | null;
+}): ValidationCliUserCodeImportResolution {
+  const { ownerScope, urlUserCode, previousImportedKey } = params;
+  if (!urlUserCode) {
+    return {
+      normalizedUserCode: null,
+      nextImportedKey: null,
+      shouldQueue: false,
+    };
+  }
+
+  const normalizedUserCode = normalizeValidationCliUserCode(urlUserCode);
+  if (!normalizedUserCode) {
+    return {
+      normalizedUserCode: null,
+      nextImportedKey: previousImportedKey,
+      shouldQueue: false,
+    };
+  }
+
+  const nextImportedKey = importedUserCodeKey(ownerScope, normalizedUserCode);
+  if (nextImportedKey === previousImportedKey) {
+    return {
+      normalizedUserCode,
+      nextImportedKey: previousImportedKey,
+      shouldQueue: false,
+    };
+  }
+
+  return {
+    normalizedUserCode,
+    nextImportedKey,
+    shouldQueue: true,
+  };
+}
+
 export function mapValidationCliSessionListResponse(payload: unknown): ValidationCliSession[] {
   if (!payload || typeof payload !== 'object') {
     return [];
@@ -95,6 +148,17 @@ export function mapValidationCliSessionListResponse(payload: unknown): Validatio
   return [...response.sessions].sort(
     (left, right) => toTimestamp(right.createdAt) - toTimestamp(left.createdAt),
   );
+}
+
+export function buildValidationCliPendingApprovalRows(
+  requests: ValidationCliPendingDeviceRequest[],
+): ValidationCliPendingApprovalRow[] {
+  return [...requests]
+    .sort((left, right) => toTimestamp(right.requestedAt) - toTimestamp(left.requestedAt))
+    .map((request) => ({
+      ...request,
+      showApproveAction: true,
+    }));
 }
 
 export function readPendingCliDeviceRequests(

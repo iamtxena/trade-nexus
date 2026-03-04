@@ -37,10 +37,11 @@ def test_canonical_key_takes_precedence_over_legacy() -> None:
 
 
 def test_legacy_key_used_when_canonical_absent() -> None:
-    env_remove = {"PLATFORM_CLI_DEVICE_VERIFICATION_URI": ""}
-    env_set = {"CLI_AUTH_VERIFICATION_URI": "https://legacy.example.com/cli"}
-    combined = {**env_remove, **env_set}
-    with mock.patch.dict(os.environ, combined, clear=False):
+    with mock.patch.dict(
+        os.environ,
+        {"CLI_AUTH_VERIFICATION_URI": "https://legacy.example.com/cli"},
+        clear=False,
+    ):
         os.environ.pop("PLATFORM_CLI_DEVICE_VERIFICATION_URI", None)
         result = _import_uri_resolver()()
     assert result == "https://legacy.example.com/cli"
@@ -91,15 +92,20 @@ def test_no_local_domain_in_any_resolution_path() -> None:
 # ------------------------------------------------------------------
 
 def test_device_start_returns_verification_uri_without_local_domain() -> None:
-    os.environ.setdefault("PLATFORM_AUTH_JWT_HS256_SECRET", "test-uri-contract-secret")
-    from src.main import app
+    secret_patch = {
+        "PLATFORM_AUTH_JWT_HS256_SECRET": os.environ.get(
+            "PLATFORM_AUTH_JWT_HS256_SECRET", "test-uri-contract-secret"
+        ),
+    }
+    with mock.patch.dict(os.environ, secret_patch, clear=False):
+        from src.main import app
 
-    client = TestClient(app)
-    resp = client.post(
-        "/v2/validation-cli-auth/device/start",
-        headers={"X-Request-Id": "req-uri-contract-001"},
-        json={},
-    )
+        client = TestClient(app)
+        resp = client.post(
+            "/v2/validation-cli-auth/device/start",
+            headers={"X-Request-Id": "req-uri-contract-001"},
+            json={},
+        )
     assert resp.status_code == 201
     body = resp.json()
     assert "verificationUri" in body

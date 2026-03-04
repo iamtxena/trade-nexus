@@ -126,6 +126,153 @@ def test_cli_device_flow_issues_token_and_allows_whoami_and_validation_reads() -
     assert list_runs.status_code == 200
 
 
+def test_cli_token_with_core_read_scopes_allows_whoami_and_v1_core_reads() -> None:
+    client = TestClient(app)
+    owner_headers = _user_headers(
+        request_id="req-cli-owner-v1-read-001",
+        tenant_id="tenant-cli-runtime-v1-read-001",
+        user_id="user-cli-runtime-v1-read-001",
+        user_email="owner-cli-runtime-v1-read-001@example.com",
+    )
+    access_token, _ = _issue_cli_token(
+        client,
+        owner_headers=owner_headers,
+        request_suffix="v1-read-001",
+        scopes=["validation:read", "strategy:read", "backtest:read", "deployment:read"],
+    )
+
+    whoami = client.get(
+        "/v2/validation-cli-auth/whoami",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "X-Request-Id": "req-cli-v1-read-whoami-001",
+        },
+    )
+    assert whoami.status_code == 200
+
+    strategy_list = client.get(
+        "/v1/strategies",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "X-Request-Id": "req-cli-v1-read-strategy-list-001",
+        },
+    )
+    assert strategy_list.status_code == 200
+
+    strategy_get = client.get(
+        "/v1/strategies/strat-001",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "X-Request-Id": "req-cli-v1-read-strategy-get-001",
+        },
+    )
+    assert strategy_get.status_code == 200
+
+    backtest_get = client.get(
+        "/v1/backtests/bt-001",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "X-Request-Id": "req-cli-v1-read-backtest-get-001",
+        },
+    )
+    assert backtest_get.status_code == 200
+
+    deployment_list = client.get(
+        "/v1/deployments",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "X-Request-Id": "req-cli-v1-read-deploy-list-001",
+        },
+    )
+    assert deployment_list.status_code == 200
+
+    deployment_get = client.get(
+        "/v1/deployments/dep-001",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "X-Request-Id": "req-cli-v1-read-deploy-get-001",
+        },
+    )
+    assert deployment_get.status_code == 200
+
+
+def test_cli_token_with_validation_only_scope_cannot_list_strategies_v1() -> None:
+    client = TestClient(app)
+    owner_headers = _user_headers(
+        request_id="req-cli-owner-v1-denied-001",
+        tenant_id="tenant-cli-runtime-v1-denied-001",
+        user_id="user-cli-runtime-v1-denied-001",
+    )
+    access_token, _ = _issue_cli_token(
+        client,
+        owner_headers=owner_headers,
+        request_suffix="v1-denied-001",
+        scopes=["validation:read"],
+    )
+
+    strategy_list = client.get(
+        "/v1/strategies",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "X-Request-Id": "req-cli-v1-denied-strategy-list-001",
+        },
+    )
+    assert strategy_list.status_code == 403
+    assert strategy_list.json() == {
+        "requestId": "req-cli-v1-denied-strategy-list-001",
+        "error": {
+            "code": "CLI_AUTH_SCOPE_FORBIDDEN",
+            "message": "CLI token is missing required scope: strategy:read.",
+            "details": {
+                "requiredScope": "strategy:read",
+                "scopes": ["validation:read"],
+            },
+        },
+    }
+
+
+def test_cli_scope_forbidden_error_payload_is_structured_and_deterministic() -> None:
+    client = TestClient(app)
+    owner_headers = _user_headers(
+        request_id="req-cli-owner-v1-forbidden-001",
+        tenant_id="tenant-cli-runtime-v1-forbidden-001",
+        user_id="user-cli-runtime-v1-forbidden-001",
+    )
+    access_token, _ = _issue_cli_token(
+        client,
+        owner_headers=owner_headers,
+        request_suffix="v1-forbidden-001",
+        scopes=["strategy:read"],
+    )
+
+    create_strategy = client.post(
+        "/v1/strategies",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "X-Request-Id": "req-cli-v1-forbidden-write-001",
+        },
+        json={
+            "name": "Forbidden Write CLI",
+            "description": "CLI read scope should fail closed on write",
+            "provider": "xai",
+        },
+    )
+    assert create_strategy.status_code == 403
+    assert create_strategy.json() == {
+        "requestId": "req-cli-v1-forbidden-write-001",
+        "error": {
+            "code": "CLI_AUTH_SCOPE_FORBIDDEN",
+            "message": "CLI token is not authorized for this endpoint.",
+            "details": {
+                "requiredScope": None,
+                "scopes": ["strategy:read"],
+                "path": "/v1/strategies",
+                "method": "POST",
+            },
+        },
+    }
+
+
 def test_cli_token_with_read_scope_cannot_call_validation_writes() -> None:
     client = TestClient(app)
     owner_headers = _user_headers(

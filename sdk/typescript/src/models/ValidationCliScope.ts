@@ -19,7 +19,10 @@
  */
 export enum ValidationCliScope {
     ValidationRead = 'validation:read',
-    ValidationWrite = 'validation:write'
+    ValidationWrite = 'validation:write',
+    StrategyRead = 'strategy:read',
+    BacktestRead = 'backtest:read',
+    DeploymentRead = 'deployment:read'
 }
 
 

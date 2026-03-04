@@ -3,7 +3,16 @@ import { xai } from '@ai-sdk/xai';
 import { generateText } from 'ai';
 
 import { validateConfig } from '../lib/config';
-import { bold, cyan, dim, printError, printHeader, printSuccess, spinner } from '../lib/output';
+import {
+  bold,
+  cyan,
+  dim,
+  printError,
+  printHeader,
+  printSuccess,
+  spinner,
+  wantsHelp,
+} from '../lib/output';
 
 const MARKET_RESEARCH_PROMPT = `You are an elite quantitative market analyst. Analyze market conditions and generate strategy ideas.
 
@@ -26,10 +35,6 @@ Output as JSON:
     { "name": "Strategy Name", "asset_class": "crypto|stocks|forex", "type": "trend|mean_reversion|volatility|arbitrage", "description": "strategy logic", "rationale": "why it fits current conditions" }
   ]
 }`;
-
-function wantsHelp(args: string[]): boolean {
-  return args.includes('--help') || args.includes('-h');
-}
 
 export async function researchCommand(args: string[]) {
   if (wantsHelp(args)) {

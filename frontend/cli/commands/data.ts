@@ -13,11 +13,8 @@ import {
   printSuccess,
   printTable,
   spinner,
+  wantsHelp,
 } from '../lib/output';
-
-function wantsHelp(args: string[]): boolean {
-  return args.includes('--help') || args.includes('-h');
-}
 
 export async function dataCommand(args: string[]) {
   const subcommand = args[0];

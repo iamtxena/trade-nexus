@@ -19,6 +19,7 @@ import {
   printTable,
   red,
   spinner,
+  wantsHelp,
   yellow,
 } from '../lib/output';
 
@@ -51,10 +52,6 @@ interface PipelineResult {
   metrics?: Record<string, number>;
   deployedId?: string;
   portfolioId?: string;
-}
-
-function wantsHelp(args: string[]): boolean {
-  return args.includes('--help') || args.includes('-h');
 }
 
 export async function pipelineCommand(args: string[]) {

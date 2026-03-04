@@ -15,6 +15,7 @@ import {
   printSuccess,
   printWarning,
   spinner,
+  wantsHelp,
 } from '../lib/output';
 
 const WORKSPACE_DIR = process.env.WORKSPACE_PATH || join(homedir(), 'lona', 'workspace');
@@ -229,10 +230,6 @@ function printHelp() {
   console.log(`${bold('Examples:')}`);
   console.log('  nexus moltbook replicate --post-id abc123');
   console.log('  nexus moltbook replicate --author claw-n --strategy-name EMA33');
-}
-
-function wantsHelp(args: string[]): boolean {
-  return args.includes('--help') || args.includes('-h');
 }
 
 async function replicateStrategy(args: string[]) {

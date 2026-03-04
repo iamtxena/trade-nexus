@@ -233,6 +233,14 @@ describe('subcommand --help / -h flags', () => {
     await pipelineCommand(['-h']);
     expect(getLogOutput()).toContain('Pipeline Command');
   });
+
+  test('moltbook replicate --help prints usage', async () => {
+    const { moltbookCommand } = await import('../moltbook');
+    await moltbookCommand(['replicate', '--help']);
+    const output = getLogOutput();
+    expect(output).toContain('Usage:');
+    expect(output).toContain('--post-id');
+  });
 });
 
 describe('strict mode rejects unknown flags', () => {
@@ -264,31 +272,46 @@ describe('strict mode rejects unknown flags', () => {
 
   test('strategy list rejects --unknown-flag', async () => {
     const { strategyCommand } = await import('../strategy');
-    await expect(strategyCommand(['list', '--unknown-flag'])).rejects.toThrow();
+    await expect(strategyCommand(['list', '--unknown-flag'])).rejects.toThrow(/Unknown option/);
   });
 
   test('data list rejects --bogus', async () => {
     const { dataCommand } = await import('../data');
-    await expect(dataCommand(['list', '--bogus'])).rejects.toThrow();
+    await expect(dataCommand(['list', '--bogus'])).rejects.toThrow(/Unknown option/);
+  });
+
+  test('deploy list rejects --foo', async () => {
+    const { deployCommand } = await import('../deploy');
+    await expect(deployCommand(['list', '--foo'])).rejects.toThrow(/Unknown option/);
   });
 
   test('deploy stop rejects --foo', async () => {
     const { deployCommand } = await import('../deploy');
-    await expect(deployCommand(['stop', '--foo'])).rejects.toThrow();
+    await expect(deployCommand(['stop', '--foo'])).rejects.toThrow(/Unknown option/);
+  });
+
+  test('portfolio list rejects --extra', async () => {
+    const { portfolioCommand } = await import('../portfolio');
+    await expect(portfolioCommand(['list', '--extra'])).rejects.toThrow(/Unknown option/);
   });
 
   test('portfolio show rejects --extra', async () => {
     const { portfolioCommand } = await import('../portfolio');
-    await expect(portfolioCommand(['show', '--extra'])).rejects.toThrow();
+    await expect(portfolioCommand(['show', '--extra'])).rejects.toThrow(/Unknown option/);
+  });
+
+  test('report daily rejects --nope', async () => {
+    const { reportCommand } = await import('../report');
+    await expect(reportCommand(['daily', '--nope'])).rejects.toThrow(/Unknown option/);
   });
 
   test('report get rejects --nope', async () => {
     const { reportCommand } = await import('../report');
-    await expect(reportCommand(['get', '--nope'])).rejects.toThrow();
+    await expect(reportCommand(['get', '--nope'])).rejects.toThrow(/Unknown option/);
   });
 
   test('research rejects --invalid', async () => {
     const { researchCommand } = await import('../research');
-    await expect(researchCommand(['--invalid'])).rejects.toThrow();
+    await expect(researchCommand(['--invalid'])).rejects.toThrow(/Unknown option/);
   });
 });

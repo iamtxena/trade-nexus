@@ -19,12 +19,9 @@ import {
   printTable,
   red,
   spinner,
+  wantsHelp,
   yellow,
 } from '../lib/output';
-
-function wantsHelp(args: string[]): boolean {
-  return args.includes('--help') || args.includes('-h');
-}
 
 export async function reportCommand(args: string[]) {
   const subcommand = args[0];
@@ -208,6 +205,7 @@ async function dailyReport(args: string[]) {
     console.log(`Generates a daily trading summary with AI insights. No flags required.\n`);
     return;
   }
+  parseArgs({ args, options: {}, allowPositionals: false, strict: true });
   validateConfig(['LIVE_ENGINE_SERVICE_KEY', 'XAI_API_KEY']);
   const engine = getLiveEngineClient();
 

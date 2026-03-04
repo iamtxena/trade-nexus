@@ -14,6 +14,7 @@ import {
   printSuccess,
   red,
   spinner,
+  wantsHelp,
   yellow,
 } from '../lib/output';
 
@@ -34,10 +35,6 @@ Output as JSON:
   "risk_assessment": "current portfolio risk level and concerns",
   "next_review": "when to review again"
 }`;
-
-function wantsHelp(args: string[]): boolean {
-  return args.includes('--help') || args.includes('-h');
-}
 
 export async function adjustCommand(args: string[]) {
   if (wantsHelp(args)) {

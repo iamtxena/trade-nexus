@@ -15,12 +15,9 @@ import {
   printTable,
   red,
   spinner,
+  wantsHelp,
   yellow,
 } from '../lib/output';
-
-function wantsHelp(args: string[]): boolean {
-  return args.includes('--help') || args.includes('-h');
-}
 
 export async function deployCommand(args: string[]) {
   const subcommand = args[0];
@@ -162,6 +159,7 @@ async function deployList(args: string[]) {
     console.log(`Lists all deployed strategies on live-engine. No flags required.\n`);
     return;
   }
+  parseArgs({ args, options: {}, allowPositionals: false, strict: true });
   validateConfig(['LIVE_ENGINE_SERVICE_KEY']);
   const engine = getLiveEngineClient();
 

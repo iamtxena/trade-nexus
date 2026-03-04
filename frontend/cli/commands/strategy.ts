@@ -11,11 +11,8 @@ import {
   printTable,
   printWarning,
   spinner,
+  wantsHelp,
 } from '../lib/output';
-
-function wantsHelp(args: string[]): boolean {
-  return args.includes('--help') || args.includes('-h');
-}
 
 export async function strategyCommand(args: string[]) {
   const subcommand = args[0];
@@ -66,6 +63,7 @@ async function listStrategies(args: string[]) {
     console.log(`Lists all strategies on Lona. No flags required.\n`);
     return;
   }
+  parseArgs({ args, options: {}, allowPositionals: false, strict: true });
   validateConfig(['LONA_AGENT_TOKEN']);
   const client = getLonaClient();
 

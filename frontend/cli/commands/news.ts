@@ -14,6 +14,7 @@ import {
   printSuccess,
   red,
   spinner,
+  wantsHelp,
   yellow,
 } from '../lib/output';
 
@@ -39,10 +40,6 @@ Output as JSON:
   "risk_factors": ["factor 1", "factor 2"],
   "trading_implications": "actionable summary"
 }`;
-
-function wantsHelp(args: string[]): boolean {
-  return args.includes('--help') || args.includes('-h');
-}
 
 export async function newsCommand(args: string[]) {
   if (wantsHelp(args)) {

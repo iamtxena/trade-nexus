@@ -30,6 +30,10 @@ export function printInfo(msg: string) {
   console.log(`${blue('i')} ${msg}`);
 }
 
+export function wantsHelp(args: string[]): boolean {
+  return args.includes('--help') || args.includes('-h');
+}
+
 export function printTable(headers: string[], rows: string[][]) {
   const colWidths = headers.map((h, i) =>
     Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)),

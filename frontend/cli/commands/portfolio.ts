@@ -12,11 +12,8 @@ import {
   printTable,
   red,
   spinner,
+  wantsHelp,
 } from '../lib/output';
-
-function wantsHelp(args: string[]): boolean {
-  return args.includes('--help') || args.includes('-h');
-}
 
 export async function portfolioCommand(args: string[]) {
   const subcommand = args[0];
@@ -63,6 +60,7 @@ async function listPortfolios(args: string[]) {
     console.log(`Lists all paper portfolios. No flags required.\n`);
     return;
   }
+  parseArgs({ args, options: {}, allowPositionals: false, strict: true });
   validateConfig(['LIVE_ENGINE_SERVICE_KEY']);
   const engine = getLiveEngineClient();
 

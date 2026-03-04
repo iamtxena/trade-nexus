@@ -226,6 +226,8 @@ def test_cli_token_with_validation_only_scope_cannot_list_strategies_v1() -> Non
             "details": {
                 "requiredScope": "strategy:read",
                 "scopes": ["validation:read"],
+                "path": "/v1/strategies",
+                "method": "GET",
             },
         },
     }

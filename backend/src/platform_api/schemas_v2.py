@@ -538,7 +538,13 @@ class ValidationRegressionReplayResponse(BaseModel):
 BotStatus = Literal["active", "suspended", "revoked"]
 BotRegistrationPath = Literal["invite_code_trial", "partner_bootstrap"]
 BotKeyStatus = Literal["active", "rotated", "revoked"]
-ValidationCliScope = Literal["validation:read", "validation:write"]
+ValidationCliScope = Literal[
+    "validation:read",
+    "validation:write",
+    "strategy:read",
+    "backtest:read",
+    "deployment:read",
+]
 ValidationSharePermission = Literal["view", "review"]
 ValidationInviteStatus = Literal["pending", "accepted", "revoked", "expired"]
 ValidationShareStatus = Literal["active", "revoked"]

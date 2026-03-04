@@ -5116,7 +5116,7 @@ components:
 
     ValidationCliScope:
       type: string
-      enum: ["validation:read", "validation:write"]
+      enum: ["validation:read", "validation:write", "strategy:read", "backtest:read", "deployment:read"]
 
     CreateValidationCliDeviceStartRequest:
       type: object

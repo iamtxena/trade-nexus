@@ -24,7 +24,13 @@ ActorType = Literal["user", "bot"]
 RegistrationMethod = Literal["invite", "partner"]
 SharePermission = Literal["view", "review"]
 ShareInviteStatus = Literal["pending", "accepted", "revoked", "expired"]
-CliScope = Literal["validation:read", "validation:write"]
+CliScope = Literal[
+    "validation:read",
+    "validation:write",
+    "strategy:read",
+    "backtest:read",
+    "deployment:read",
+]
 CliDeviceAuthorizationStatus = Literal["pending", "approved", "consumed", "expired"]
 
 
@@ -222,7 +228,13 @@ class ValidationIdentityService:
     _CLI_ACCESS_TOKEN_PREFIX = "tnx.cli"
     _CLI_DEVICE_CODE_PREFIX = "tnx_device"
     _CLI_DEFAULT_SCOPES: tuple[CliScope, ...] = ("validation:read", "validation:write")
-    _CLI_ALLOWED_SCOPES: tuple[CliScope, ...] = ("validation:read", "validation:write")
+    _CLI_ALLOWED_SCOPES: tuple[CliScope, ...] = (
+        "validation:read",
+        "validation:write",
+        "strategy:read",
+        "backtest:read",
+        "deployment:read",
+    )
     _CLI_USER_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     _CLI_USER_CODE_LENGTH = 8
     _CLI_ACCESS_TOKEN_SECRET_BYTES = 24

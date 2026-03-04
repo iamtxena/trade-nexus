@@ -19,6 +19,7 @@ import {
   printTable,
   red,
   spinner,
+  wantsHelp,
   yellow,
 } from '../lib/output';
 
@@ -63,6 +64,15 @@ function printHelp() {
 }
 
 async function getReport(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus report get --id <report-id> [--full] [--timeline] [--output /path]\n`);
+    console.log(`${bold('Flags:')}`);
+    console.log(`  ${dim('--id')}        Report ID (required)`);
+    console.log(`  ${dim('--full')}      Output complete report data`);
+    console.log(`  ${dim('--timeline')}  Output backtest timeline only`);
+    console.log(`  ${dim('--output')}    Write to file instead of stdout\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
@@ -72,6 +82,7 @@ async function getReport(args: string[]) {
       output: { type: 'string' },
     },
     allowPositionals: false,
+    strict: true,
   });
 
   if (!values.id) {
@@ -188,7 +199,13 @@ function formatStatValue(key: string, value: number): string {
   return String(value);
 }
 
-async function dailyReport(_args: string[]) {
+async function dailyReport(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus report daily\n`);
+    console.log(`Generates a daily trading summary with AI insights. No flags required.\n`);
+    return;
+  }
+  parseArgs({ args, options: {}, allowPositionals: false, strict: true });
   validateConfig(['LIVE_ENGINE_SERVICE_KEY', 'XAI_API_KEY']);
   const engine = getLiveEngineClient();
 
@@ -298,10 +315,15 @@ Keep it to 3-5 sentences focusing on actionable insights.`,
 }
 
 async function strategyReport(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus report strategy --id <live-engine-strategy-id>\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: { id: { type: 'string' } },
     allowPositionals: false,
+    strict: true,
   });
 
   if (!values.id) {

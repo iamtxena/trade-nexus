@@ -12,6 +12,7 @@ import {
   printTable,
   red,
   spinner,
+  wantsHelp,
 } from '../lib/output';
 
 export async function portfolioCommand(args: string[]) {
@@ -53,7 +54,13 @@ function printHelp() {
   );
 }
 
-async function listPortfolios(_args: string[]) {
+async function listPortfolios(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus portfolio list\n`);
+    console.log(`Lists all paper portfolios. No flags required.\n`);
+    return;
+  }
+  parseArgs({ args, options: {}, allowPositionals: false, strict: true });
   validateConfig(['LIVE_ENGINE_SERVICE_KEY']);
   const engine = getLiveEngineClient();
 
@@ -79,10 +86,15 @@ async function listPortfolios(_args: string[]) {
 }
 
 async function showPortfolio(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus portfolio show --id <portfolio-id>\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: { id: { type: 'string' } },
     allowPositionals: false,
+    strict: true,
   });
 
   if (!values.id) {
@@ -132,6 +144,17 @@ async function showPortfolio(args: string[]) {
 }
 
 async function executeTrade(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus portfolio trade --portfolio-id <id> --symbol <BTCUSDT> --side <buy|sell> --quantity <amount> [--type market|limit] [--price <n>]\n`);
+    console.log(`${bold('Flags:')}`);
+    console.log(`  ${dim('--portfolio-id')}  Portfolio ID (required)`);
+    console.log(`  ${dim('--symbol')}        Trading symbol (required)`);
+    console.log(`  ${dim('--side')}          buy or sell (required)`);
+    console.log(`  ${dim('--quantity')}      Trade amount (required)`);
+    console.log(`  ${dim('--type')}          Order type (default: market)`);
+    console.log(`  ${dim('--price')}         Limit price (for limit orders)\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
@@ -143,6 +166,7 @@ async function executeTrade(args: string[]) {
       price: { type: 'string' },
     },
     allowPositionals: false,
+    strict: true,
   });
 
   if (!values['portfolio-id'] || !values.symbol || !values.side || !values.quantity) {

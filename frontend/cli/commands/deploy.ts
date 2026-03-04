@@ -15,13 +15,14 @@ import {
   printTable,
   red,
   spinner,
+  wantsHelp,
   yellow,
 } from '../lib/output';
 
 export async function deployCommand(args: string[]) {
   const subcommand = args[0];
 
-  if (subcommand === '--help' || subcommand === '-h') {
+  if (!subcommand || subcommand === '--help' || subcommand === '-h') {
     printHelp();
     return;
   }
@@ -50,6 +51,15 @@ function printHelp() {
 }
 
 async function deployStrategy(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus deploy --strategy-id <lona-id> [--capital 10000] [--asset btcusdt] [--interval 1m]\n`);
+    console.log(`${bold('Flags:')}`);
+    console.log(`  ${dim('--strategy-id')}  Lona strategy ID (required)`);
+    console.log(`  ${dim('--capital')}      Initial capital (default: 10000)`);
+    console.log(`  ${dim('--asset')}        Trading asset (default: btcusdt)`);
+    console.log(`  ${dim('--interval')}     Candle interval (default: 1m)\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
@@ -59,6 +69,7 @@ async function deployStrategy(args: string[]) {
       interval: { type: 'string', default: '1m' },
     },
     allowPositionals: false,
+    strict: true,
   });
 
   if (!values['strategy-id']) {
@@ -142,7 +153,13 @@ async function deployStrategy(args: string[]) {
   }
 }
 
-async function deployList(_args: string[]) {
+async function deployList(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus deploy list\n`);
+    console.log(`Lists all deployed strategies on live-engine. No flags required.\n`);
+    return;
+  }
+  parseArgs({ args, options: {}, allowPositionals: false, strict: true });
   validateConfig(['LIVE_ENGINE_SERVICE_KEY']);
   const engine = getLiveEngineClient();
 
@@ -172,10 +189,15 @@ async function deployList(_args: string[]) {
 }
 
 async function deployStop(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus deploy stop --id <live-engine-strategy-id>\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: { id: { type: 'string' } },
     allowPositionals: false,
+    strict: true,
   });
 
   if (!values.id) {
@@ -192,6 +214,13 @@ async function deployStop(args: string[]) {
 }
 
 async function deployLogs(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus deploy logs --id <live-engine-strategy-id> [--limit 50]\n`);
+    console.log(`${bold('Flags:')}`);
+    console.log(`  ${dim('--id')}     Strategy ID (required)`);
+    console.log(`  ${dim('--limit')}  Max log entries (default: 50)\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
@@ -199,6 +228,7 @@ async function deployLogs(args: string[]) {
       limit: { type: 'string', default: '50' },
     },
     allowPositionals: false,
+    strict: true,
   });
 
   if (!values.id) {

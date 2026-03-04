@@ -11,6 +11,7 @@ import {
   printTable,
   printWarning,
   spinner,
+  wantsHelp,
 } from '../lib/output';
 
 export async function strategyCommand(args: string[]) {
@@ -56,7 +57,13 @@ function printHelp() {
   console.log(`  ${dim('--start YYYY-MM-DD --end YYYY-MM-DD')}\n`);
 }
 
-async function listStrategies(_args: string[]) {
+async function listStrategies(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus strategy list\n`);
+    console.log(`Lists all strategies on Lona. No flags required.\n`);
+    return;
+  }
+  parseArgs({ args, options: {}, allowPositionals: false, strict: true });
   validateConfig(['LONA_AGENT_TOKEN']);
   const client = getLonaClient();
 
@@ -82,6 +89,14 @@ async function listStrategies(_args: string[]) {
 }
 
 async function createStrategy(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus strategy create --description "..." [--name "..."] [--provider xai]\n`);
+    console.log(`${bold('Flags:')}`);
+    console.log(`  ${dim('--description')}  Strategy description (required)`);
+    console.log(`  ${dim('--name')}         Optional strategy name`);
+    console.log(`  ${dim('--provider')}     AI provider (default: xai)\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
@@ -90,6 +105,7 @@ async function createStrategy(args: string[]) {
       provider: { type: 'string', default: 'xai' },
     },
     allowPositionals: false,
+    strict: true,
   });
 
   if (!values.description) {
@@ -131,10 +147,15 @@ async function createStrategy(args: string[]) {
 }
 
 async function getStrategy(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus strategy get --id <strategy-id>\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: { id: { type: 'string' } },
     allowPositionals: false,
+    strict: true,
   });
 
   if (!values.id) {
@@ -159,10 +180,15 @@ async function getStrategy(args: string[]) {
 }
 
 async function getStrategyCode(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus strategy code --id <strategy-id>\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: { id: { type: 'string' } },
     allowPositionals: false,
+    strict: true,
   });
 
   if (!values.id) {
@@ -181,6 +207,16 @@ async function getStrategyCode(args: string[]) {
 }
 
 export async function runBacktest(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus strategy backtest --strategy-id <id> --symbol-id <id> --start YYYY-MM-DD --end YYYY-MM-DD [--capital 100000]\n`);
+    console.log(`${bold('Flags:')}`);
+    console.log(`  ${dim('--strategy-id')}  Strategy ID (primary, alias: --id)`);
+    console.log(`  ${dim('--symbol-id')}    Data symbol ID (primary, alias: --data)`);
+    console.log(`  ${dim('--start')}        Start date (YYYY-MM-DD)`);
+    console.log(`  ${dim('--end')}          End date (YYYY-MM-DD)`);
+    console.log(`  ${dim('--capital')}      Initial capital (default: 100000)\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
@@ -193,6 +229,7 @@ export async function runBacktest(args: string[]) {
       capital: { type: 'string', default: '100000' },
     },
     allowPositionals: false,
+    strict: true,
   });
 
   if (
@@ -289,12 +326,17 @@ export async function runBacktest(args: string[]) {
 }
 
 async function scoreStrategies(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus strategy score --ids <report-id-1>,<report-id-2>\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
       ids: { type: 'string' },
     },
     allowPositionals: false,
+    strict: true,
   });
 
   if (!values.ids) {

@@ -1,9 +1,16 @@
+'use client';
+
+import { resolveSignInForceRedirectUrl } from '@/lib/auth/sign-in-redirect';
 import { SignIn } from '@clerk/nextjs';
+import { useSearchParams } from 'next/navigation';
 
 export default function SignInPage() {
+  const searchParams = useSearchParams();
+  const forceRedirectUrl = resolveSignInForceRedirectUrl(searchParams.get('redirect_url'));
+
   return (
     <div className="flex min-h-screen items-center justify-center">
-      <SignIn forceRedirectUrl="/dashboard" />
+      <SignIn forceRedirectUrl={forceRedirectUrl} />
     </div>
   );
 }

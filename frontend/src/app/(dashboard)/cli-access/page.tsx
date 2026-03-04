@@ -16,12 +16,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
+  buildValidationCliPendingApprovalRows,
   type ValidationCliPendingDeviceRequest,
   formatValidationCliTimestamp,
   mapValidationCliSessionListResponse,
   normalizeValidationCliUserCode,
   readPendingCliDeviceRequests,
   removePendingCliDeviceRequest,
+  resolveValidationCliUserCodeImport,
   upsertPendingCliDeviceRequest,
 } from '@/lib/validation/cli-access-state';
 import type {
@@ -64,7 +66,7 @@ function CliAccessPageContent() {
   const [approvingUserCode, setApprovingUserCode] = useState<string | null>(null);
   const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
 
-  const importedUserCodeRef = useRef<string | null>(null);
+  const importedUserCodeKeyRef = useRef<string | null>(null);
 
   const activeSessionCount = sessions.length;
   const pendingApprovalCount = pendingRequests.length;
@@ -100,31 +102,26 @@ function CliAccessPageContent() {
   }, [loadSessions]);
 
   useEffect(() => {
-    const urlUserCode = searchParams.get('user_code');
-    if (!urlUserCode) {
-      importedUserCodeRef.current = null;
+    const importResolution = resolveValidationCliUserCodeImport({
+      ownerScope: pendingOwnerScope,
+      urlUserCode: searchParams.get('user_code'),
+      previousImportedKey: importedUserCodeKeyRef.current,
+    });
+    importedUserCodeKeyRef.current = importResolution.nextImportedKey;
+    if (!importResolution.shouldQueue || !importResolution.normalizedUserCode) {
       return;
     }
-
-    const normalized = normalizeValidationCliUserCode(urlUserCode);
-    if (!normalized) {
-      return;
-    }
-
-    if (importedUserCodeRef.current === normalized) {
-      return;
-    }
-    importedUserCodeRef.current = normalized;
-    setPendingRequests(upsertPendingCliDeviceRequest(pendingOwnerScope, normalized));
-    setNoticeMessage(`Added pending request ${normalized} from verification link.`);
+    setPendingRequests(
+      upsertPendingCliDeviceRequest(pendingOwnerScope, importResolution.normalizedUserCode),
+    );
+    setNoticeMessage(
+      `Added pending request ${importResolution.normalizedUserCode} from verification link.`,
+    );
     setErrorMessage(null);
   }, [pendingOwnerScope, searchParams]);
 
   const pendingApprovalRows = useMemo(
-    () =>
-      [...pendingRequests].sort(
-        (left, right) => Date.parse(right.requestedAt) - Date.parse(left.requestedAt),
-      ),
+    () => buildValidationCliPendingApprovalRows(pendingRequests),
     [pendingRequests],
   );
 
@@ -350,26 +347,28 @@ function CliAccessPageContent() {
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => {
-                          void handleApprovePendingRequest(request.userCode);
-                        }}
-                        disabled={approvingUserCode === request.userCode}
-                      >
-                        {approvingUserCode === request.userCode ? (
-                          <>
-                            <Loader2 className="size-4 animate-spin" />
-                            Approving...
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="size-4" />
-                            Approve
-                          </>
-                        )}
-                      </Button>
+                      {request.showApproveAction ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            void handleApprovePendingRequest(request.userCode);
+                          }}
+                          disabled={approvingUserCode === request.userCode}
+                        >
+                          {approvingUserCode === request.userCode ? (
+                            <>
+                              <Loader2 className="size-4 animate-spin" />
+                              Approving...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="size-4" />
+                              Approve
+                            </>
+                          )}
+                        </Button>
+                      ) : null}
                       <Button
                         type="button"
                         size="sm"

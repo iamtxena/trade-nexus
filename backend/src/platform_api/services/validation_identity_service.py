@@ -1906,11 +1906,17 @@ def _generate_cli_user_code() -> str:
 
 
 def _cli_device_verification_uri() -> str:
+    # Canonical key (preferred in production Container App config).
     configured = os.getenv("PLATFORM_CLI_DEVICE_VERIFICATION_URI")
     normalized = configured.strip() if isinstance(configured, str) else ""
     if normalized:
         return normalized
-    return "https://trade-nexus.local/cli/device"
+    # Legacy alias kept for backward-compat with .env.example / local dev setups.
+    legacy = os.getenv("CLI_AUTH_VERIFICATION_URI")
+    legacy_normalized = legacy.strip() if isinstance(legacy, str) else ""
+    if legacy_normalized:
+        return legacy_normalized
+    return "https://trade-nexus.lona.agency/cli-access"
 
 
 def _assert_identity_header_match(

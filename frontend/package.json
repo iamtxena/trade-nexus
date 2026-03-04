@@ -11,6 +11,7 @@
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
     "test": "bun test src cli",
+    "ci": "bun run lint && bun run typecheck && bun run test",
     "test:e2e": "playwright test",
     "strategist": "bun run cli/strategist.ts",
     "nexus": "bun run cli/nexus.ts"

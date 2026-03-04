@@ -40,26 +40,28 @@ Output as JSON:
   "trading_implications": "actionable summary"
 }`;
 
+function wantsHelp(args: string[]): boolean {
+  return args.includes('--help') || args.includes('-h');
+}
+
 export async function newsCommand(args: string[]) {
+  if (wantsHelp(args)) {
+    printHeader('News Command');
+    console.log(`${bold('Usage:')}  nexus news [options]\n`);
+    console.log(`${bold('Options:')}`);
+    console.log(`  ${dim('--assets')}        Comma-separated asset classes (default: crypto,stocks)`);
+    console.log(`  ${dim('--strategy-id')}   Analyze news for a specific strategy's assets\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
       assets: { type: 'string', default: 'crypto,stocks' },
       'strategy-id': { type: 'string' },
-      help: { type: 'boolean', default: false },
     },
     allowPositionals: false,
+    strict: true,
   });
-
-  if (values.help) {
-    printHeader('News Command');
-    console.log(`${bold('Usage:')}  nexus news [options]\n`);
-    console.log(`${bold('Options:')}`);
-    console.log('  --assets        Comma-separated asset classes (default: crypto,stocks)');
-    console.log(`  --strategy-id   Analyze news for a specific strategy's assets`);
-    console.log('  --help          Show this help\n');
-    return;
-  }
 
   validateConfig(['XAI_API_KEY']);
 

@@ -231,29 +231,32 @@ function printHelp() {
   console.log('  nexus moltbook replicate --author claw-n --strategy-name EMA33');
 }
 
+function wantsHelp(args: string[]): boolean {
+  return args.includes('--help') || args.includes('-h');
+}
+
 async function replicateStrategy(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')} nexus moltbook replicate [options]\n`);
+    console.log(`${bold('Options:')}`);
+    console.log(`  ${dim('--post-id')}        Moltbook post ID to replicate`);
+    console.log(`  ${dim('--author')}         Filter by author name`);
+    console.log(`  ${dim('--strategy-name')}  Filter by strategy name\n`);
+    console.log(`${bold('Examples:')}`);
+    console.log('  nexus moltbook replicate --post-id 57bc7211-20a0-4c86-8b23-89288bc72f84');
+    console.log('  nexus moltbook replicate --author claw-n');
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
       'post-id': { type: 'string' },
       author: { type: 'string' },
       'strategy-name': { type: 'string' },
-      help: { type: 'boolean', short: 'h' },
     },
+    allowPositionals: false,
+    strict: true,
   });
-
-  if (values.help) {
-    console.log(`${bold('Usage:')} nexus moltbook replicate [options]\n`);
-    console.log(`${bold('Options:')}`);
-    console.log(`  ${cyan('--post-id')}        Moltbook post ID to replicate`);
-    console.log(`  ${cyan('--author')}         Filter by author name`);
-    console.log(`  ${cyan('--strategy-name')}  Filter by strategy name`);
-    console.log();
-    console.log(`${bold('Examples:')}`);
-    console.log('  nexus moltbook replicate --post-id 57bc7211-20a0-4c86-8b23-89288bc72f84');
-    console.log('  nexus moltbook replicate --author claw-n');
-    return;
-  }
 
   validateConfig(['LONA_AGENT_TOKEN']);
 

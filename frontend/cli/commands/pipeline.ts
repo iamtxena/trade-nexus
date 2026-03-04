@@ -53,30 +53,32 @@ interface PipelineResult {
   portfolioId?: string;
 }
 
+function wantsHelp(args: string[]): boolean {
+  return args.includes('--help') || args.includes('-h');
+}
+
 export async function pipelineCommand(args: string[]) {
+  if (wantsHelp(args)) {
+    printHeader('Pipeline Command');
+    console.log(`${bold('Usage:')}  nexus pipeline [options]\n`);
+    console.log(`${bold('Options:')}`);
+    console.log(`  ${dim('--assets')}       Comma-separated asset classes (default: crypto)`);
+    console.log(`  ${dim('--capital')}      Total capital (default: 50000)`);
+    console.log(`  ${dim('--top')}          Number of top strategies to deploy (default: 3)`);
+    console.log(`  ${dim('--skip-deploy')}  Skip deployment to live-engine\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
       assets: { type: 'string', default: 'crypto' },
       capital: { type: 'string', default: '50000' },
       top: { type: 'string', default: '3' },
-      help: { type: 'boolean', default: false },
       'skip-deploy': { type: 'boolean', default: false },
     },
     allowPositionals: false,
+    strict: true,
   });
-
-  if (values.help) {
-    printHeader('Pipeline Command');
-    console.log(`${bold('Usage:')}  nexus pipeline [options]\n`);
-    console.log(`${bold('Options:')}`);
-    console.log('  --assets       Comma-separated asset classes (default: crypto)');
-    console.log('  --capital      Total capital (default: 50000)');
-    console.log('  --top          Number of top strategies to deploy (default: 3)');
-    console.log('  --skip-deploy  Skip deployment to live-engine');
-    console.log('  --help         Show this help\n');
-    return;
-  }
 
   const requiredVars = ['XAI_API_KEY', 'LONA_AGENT_TOKEN'];
   if (!values['skip-deploy']) {

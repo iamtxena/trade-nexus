@@ -35,24 +35,26 @@ Output as JSON:
   "next_review": "when to review again"
 }`;
 
+function wantsHelp(args: string[]): boolean {
+  return args.includes('--help') || args.includes('-h');
+}
+
 export async function adjustCommand(args: string[]) {
+  if (wantsHelp(args)) {
+    printHeader('Adjust Command');
+    console.log(`${bold('Usage:')}  nexus adjust [options]\n`);
+    console.log(`${bold('Options:')}`);
+    console.log(`  ${dim('--portfolio-id')}   Portfolio to analyze (optional, analyzes all if omitted)\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
       'portfolio-id': { type: 'string' },
-      help: { type: 'boolean', default: false },
     },
     allowPositionals: false,
+    strict: true,
   });
-
-  if (values.help) {
-    printHeader('Adjust Command');
-    console.log(`${bold('Usage:')}  nexus adjust [options]\n`);
-    console.log(`${bold('Options:')}`);
-    console.log('  --portfolio-id   Portfolio to analyze (optional, analyzes all if omitted)');
-    console.log('  --help           Show this help\n');
-    return;
-  }
 
   validateConfig(['LIVE_ENGINE_SERVICE_KEY', 'XAI_API_KEY']);
   const engine = getLiveEngineClient();

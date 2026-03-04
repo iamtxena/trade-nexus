@@ -27,26 +27,28 @@ Output as JSON:
   ]
 }`;
 
+function wantsHelp(args: string[]): boolean {
+  return args.includes('--help') || args.includes('-h');
+}
+
 export async function researchCommand(args: string[]) {
+  if (wantsHelp(args)) {
+    printHeader('Research Command');
+    console.log(`${bold('Usage:')}  nexus research [options]\n`);
+    console.log(`${bold('Options:')}`);
+    console.log(`  ${dim('--assets')}    Comma-separated asset classes (default: crypto,stocks,forex)`);
+    console.log(`  ${dim('--capital')}   Total capital (default: 100000)\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
       assets: { type: 'string', default: 'crypto,stocks,forex' },
       capital: { type: 'string', default: '100000' },
-      help: { type: 'boolean', default: false },
     },
     allowPositionals: false,
+    strict: true,
   });
-
-  if (values.help) {
-    printHeader('Research Command');
-    console.log(`${bold('Usage:')}  nexus research [options]\n`);
-    console.log(`${bold('Options:')}`);
-    console.log('  --assets    Comma-separated asset classes (default: crypto,stocks,forex)');
-    console.log('  --capital   Total capital (default: 100000)');
-    console.log('  --help      Show this help\n');
-    return;
-  }
 
   validateConfig(['XAI_API_KEY']);
 

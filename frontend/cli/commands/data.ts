@@ -15,6 +15,10 @@ import {
   spinner,
 } from '../lib/output';
 
+function wantsHelp(args: string[]): boolean {
+  return args.includes('--help') || args.includes('-h');
+}
+
 export async function dataCommand(args: string[]) {
   const subcommand = args[0];
 
@@ -64,6 +68,13 @@ function printHelp() {
 }
 
 async function listSymbols(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus data list [--global] [--limit 50]\n`);
+    console.log(`${bold('Flags:')}`);
+    console.log(`  ${dim('--global')}  List pre-loaded global symbols`);
+    console.log(`  ${dim('--limit')}   Max results (default: 50)\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
@@ -71,6 +82,7 @@ async function listSymbols(args: string[]) {
       limit: { type: 'string', default: '50' },
     },
     allowPositionals: false,
+    strict: true,
   });
 
   validateConfig(['LONA_AGENT_TOKEN']);
@@ -103,6 +115,16 @@ async function listSymbols(args: string[]) {
 }
 
 async function downloadData(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus data download --symbol <SYMBOL> --start YYYY-MM-DD --end YYYY-MM-DD [--interval 1h] [--force]\n`);
+    console.log(`${bold('Flags:')}`);
+    console.log(`  ${dim('--symbol')}    Binance symbol (e.g. BTCUSDT)`);
+    console.log(`  ${dim('--interval')}  Candle interval (default: 1h)`);
+    console.log(`  ${dim('--start')}     Start date (YYYY-MM-DD)`);
+    console.log(`  ${dim('--end')}       End date (YYYY-MM-DD)`);
+    console.log(`  ${dim('--force')}     Delete existing symbol first\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
@@ -113,6 +135,7 @@ async function downloadData(args: string[]) {
       force: { type: 'boolean', default: false },
     },
     allowPositionals: false,
+    strict: true,
   });
 
   if (!values.symbol || !values.start || !values.end) {
@@ -198,6 +221,10 @@ async function downloadData(args: string[]) {
 }
 
 async function exportSymbolData(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus data export --id <symbol-id> [--format json|csv] [--output /path]\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
@@ -206,6 +233,7 @@ async function exportSymbolData(args: string[]) {
       output: { type: 'string' },
     },
     allowPositionals: false,
+    strict: true,
   });
 
   if (!values.id) {
@@ -264,12 +292,17 @@ function ohlcToCsv(data: OhlcDataPoint[]): string {
 }
 
 async function deleteSymbol(args: string[]) {
+  if (wantsHelp(args)) {
+    console.log(`${bold('Usage:')}  nexus data delete --id <symbol-id>\n`);
+    return;
+  }
   const { values } = parseArgs({
     args,
     options: {
       id: { type: 'string' },
     },
     allowPositionals: false,
+    strict: true,
   });
 
   if (!values.id) {

@@ -3,7 +3,7 @@ title: Authenticate CLI
 summary: End-user quickstart for human and bot authentication in trading-cli.
 owners:
   - Gate1 Docs Team
-updated: 2026-03-02
+updated: 2026-03-04
 ---
 
 # Authenticate CLI
@@ -31,6 +31,29 @@ trading-cli bot list
 ```bash
 unset PLATFORM_API_BEARER_TOKEN PLATFORM_API_TOKEN PLATFORM_API_KEY
 ```
+
+## Device Auth Scope Matrix
+
+`/v2/validation-cli-auth/device/start` accepts explicit `scopes` and fails closed on unsupported values (`CLI_AUTH_SCOPE_INVALID`).
+
+Default device-login scopes when `scopes` is omitted:
+- `validation:read`
+- `validation:write`
+
+Supported scopes and command domains:
+
+| Scope | Domain | Representative endpoints | Representative CLI commands |
+| --- | --- | --- | --- |
+| `validation:read` | Validation read | `GET /v2/validation-runs`, `GET /v2/validation-runs/{runId}` | `trading-cli validation run list`, `trading-cli validation run get --run-id <id>` |
+| `validation:write` | Validation write | `POST /v2/validation-runs`, `POST /v2/validation-runs/{runId}/review` | `trading-cli validation run create ...`, `trading-cli validation run review ...` |
+| `strategy:read` | Core strategy read | `GET /v1/strategies`, `GET /v1/strategies/{strategyId}` | `trading-cli strategy list`, `trading-cli strategy get --strategy-id <id>` |
+| `backtest:read` | Core backtest read | `GET /v1/backtests/{backtestId}` | `trading-cli backtest get --backtest-id <id>` |
+| `deployment:read` | Core deployment read | `GET /v1/deployments`, `GET /v1/deployments/{deploymentId}` | `trading-cli deploy list`, `trading-cli deploy get --deployment-id <id>` |
+
+Fail-closed policy for CLI bearer tokens (`tnx.cli...`):
+- Missing required scope: `403 CLI_AUTH_SCOPE_FORBIDDEN`
+- Endpoint outside authorized CLI scope domains: `403 CLI_AUTH_SCOPE_FORBIDDEN`
+- Invalid/revoked/expired CLI token: `401 CLI_ACCESS_TOKEN_INVALID|CLI_ACCESS_TOKEN_REVOKED|CLI_ACCESS_TOKEN_EXPIRED`
 
 ## Bot Auth vs Human Auth
 
